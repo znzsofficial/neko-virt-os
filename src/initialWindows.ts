@@ -1,0 +1,43 @@
+import type { WindowState } from "./types";
+
+export const initialWindows: WindowState[] = [
+  {
+    id: "win-files",
+    appId: "files",
+    title: "Files",
+    icon: "solar:folder-with-files-bold-duotone",
+    x: 72,
+    y: 82,
+    width: 920,
+    height: 540,
+    z: 3,
+    minimized: false,
+    maximized: false,
+  },
+  {
+    id: "win-notes",
+    appId: "notes",
+    title: "Notes",
+    icon: "solar:notes-bold-duotone",
+    x: 770,
+    y: 126,
+    width: 545,
+    height: 410,
+    z: 2,
+    minimized: false,
+    maximized: false,
+  },
+  {
+    id: "win-terminal",
+    appId: "terminal",
+    title: "Terminal",
+    icon: "solar:code-square-bold-duotone",
+    x: 270,
+    y: 548,
+    width: 620,
+    height: 330,
+    z: 1,
+    minimized: false,
+    maximized: false,
+  },
+];

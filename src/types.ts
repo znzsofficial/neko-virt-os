@@ -1,6 +1,7 @@
 import type { FsFile } from "./virtualFs";
+import type { AppId } from "./apps";
 
-export type AppId = "files" | "notes" | "settings" | "terminal" | "about" | "task-manager" | "browser" | "calculator" | "calendar" | "tasks" | "timer" | "palette";
+export type { AppId } from "./apps";
 
 export type WindowBounds = {
   x: number;
@@ -21,15 +22,6 @@ export type WindowState = WindowBounds & {
 };
 
 export type DesktopLayoutMode = "grid" | "free";
-
-export type AppDefinition = {
-  id: AppId;
-  title: string;
-  icon: string;
-  description: string;
-  defaultSize: { width: number; height: number };
-  multiInstance?: boolean;
-};
 
 export type DesktopStore = {
   windows: WindowState[];

@@ -10,6 +10,7 @@ import { useLanguageStore, type TranslationKey } from "./languageStore";
 import { findFileByName, formatFileSize, formatFileTime, sortFiles } from "./fileUtils";
 import { snapWindowBounds, useDesktopStore } from "./windowStore";
 import { appDescriptionKeys, appTitleKeys, getAppIcon } from "./appText";
+import { appComponentRegistry } from "./appRegistry";
 import { clampDesktopIconPosition, findNearestAvailableGridPosition, getDesktopGridKey, getDesktopGridPosition, snapDesktopIconPosition } from "./desktopLayout";
 import { ACCENT_HUES, applyThemeSettings, readThemeSettings, resolveThemeMode, THEME_STORAGE_KEY, WALLPAPERS } from "./theme";
 import { Launcher } from "./components/Launcher";
@@ -1005,6 +1006,9 @@ function SystemWindow({ window }: { window: WindowState }) {
 }
 
 function renderApp(window: WindowState) {
+  const RegisteredApp = appComponentRegistry[window.appId];
+  if (RegisteredApp) return <RegisteredApp />;
+
   switch (window.appId) {
     case "files":
       return <FilesApp />;
@@ -2046,18 +2050,6 @@ async function executeTerminalCommand(command: string, context: TerminalContext)
   const filename = args.join(" ");
 
   switch (verb) {
-    case "help":
-      return [
-        "available commands:",
-        "  ls                 list local files",
-        "  cat <file>         print file content",
-        "  touch <file>       create a text file",
-        "  rm <file>          move a text file to Trash",
-        "  mv <from> <to>     rename a text file",
-        "  open <file>        select a file and open Notes",
-        "  theme              print current design theme",
-        "  clear              clear terminal output",
-      ];
     case "ls":
       return context.files.length
         ? context.files.map((file) => `${file.name.padEnd(22, " ")} ${formatFileSize(file.content).padStart(7, " ")}  ${formatFileTime(file.updatedAt)}`)
@@ -2078,6 +2070,8 @@ async function executeTerminalCommand(command: string, context: TerminalContext)
       return ["nya://local/home"];
     case "date":
       return [new Date().toString()];
+    case "curl":
+      return runCurl(args);
     case "rm": {
       if (!filename) return ["usage: rm <file>"];
       const deleted = await context.deleteFileByName(filename);
@@ -2113,6 +2107,7 @@ async function executeTerminalCommand(command: string, context: TerminalContext)
           case "theme": return ["theme - Print details about system design aesthetic."];
           case "pwd": return ["pwd - Print name of current virtual working directory."];
           case "date": return ["date - Display current local clock time."];
+          case "curl": return ["curl <url> - Fetch an HTTP(S) URL and print the text response. Subject to browser CORS rules."];
           default: return [`No help topic found for '${sub}'`];
         }
       }
@@ -2124,6 +2119,7 @@ async function executeTerminalCommand(command: string, context: TerminalContext)
         "  rm <file>          move a text file to Trash",
         "  mv <from> <to>     rename a text file",
         "  open <file>        select a file and open Notes",
+        "  curl <url>         fetch an HTTP(S) URL",
         "  pwd                print working directory",
         "  date               print current date/time",
         "  theme              print current design theme",
@@ -2132,6 +2128,43 @@ async function executeTerminalCommand(command: string, context: TerminalContext)
         "Type `help <cmd>` to get detailed info on a command."
       ];
     }
+  }
+}
+
+async function runCurl(args: string[]) {
+  const urlArg = args.find((arg) => !arg.startsWith("-"));
+  if (!urlArg) return ["usage: curl <url>"];
+
+  let url: URL;
+  try {
+    url = new URL(urlArg.includes("://") ? urlArg : `https://${urlArg}`);
+  } catch {
+    return [`curl: invalid URL: ${urlArg}`];
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return ["curl: only http:// and https:// URLs are supported"];
+  }
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const response = await fetch(url.toString(), { signal: controller.signal });
+    const contentType = response.headers.get("content-type") ?? "unknown";
+    const text = await response.text();
+    const body = text.length > 8000 ? `${text.slice(0, 8000)}\n... truncated ...` : text;
+    return [
+      `HTTP ${response.status} ${response.statusText}`.trim(),
+      `content-type: ${contentType}`,
+      "",
+      ...(body ? body.split("\n") : ["(empty response)"]),
+    ];
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return ["curl: request timed out after 10s"];
+    return ["curl: request failed. The browser may have blocked it with CORS, mixed-content, or network rules."];
+  } finally {
+    window.clearTimeout(timeout);
   }
 }
 
