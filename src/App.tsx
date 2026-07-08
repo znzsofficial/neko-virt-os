@@ -1,24 +1,25 @@
 import { Icon } from "@iconify-icon/react";
 import { Rnd } from "react-rnd";
 import { clsx } from "clsx";
-import { useEffect, useState, type MouseEvent } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
+import { lazy, Suspense, useEffect, useState, type MouseEvent } from "react";
 import { apps } from "./apps";
 import { useFsStore } from "./fsStore";
 import { useNotificationStore } from "./notificationStore";
 import { useLanguageStore, type TranslationKey } from "./languageStore";
 import { findFileByName, formatFileSize, formatFileTime, sortFiles } from "./fileUtils";
 import { snapWindowBounds, useDesktopStore } from "./windowStore";
+import { appDescriptionKeys, appTitleKeys, getAppIcon } from "./appText";
+import { clampDesktopIconPosition, findNearestAvailableGridPosition, getDesktopGridKey, getDesktopGridPosition, snapDesktopIconPosition } from "./desktopLayout";
+import { ACCENT_HUES, applyThemeSettings, readThemeSettings, resolveThemeMode, THEME_STORAGE_KEY, WALLPAPERS } from "./theme";
+import { Launcher } from "./components/Launcher";
+import { NotificationOverlay } from "./components/NotificationOverlay";
+import { Taskbar } from "./components/Taskbar";
+import { WindowSwitcher } from "./components/WindowSwitcher";
 import type { FsFile } from "./virtualFs";
-import type { AppId, ContextMenuState, FileMutationResult, FileSortMode, ThemeSettings, WindowState } from "./types";
+import type { AppId, ContextMenuState, DesktopLayoutMode, FileMutationResult, FileSortMode, ThemeSettings, WindowState } from "./types";
 
-const THEME_STORAGE_KEY = "neko-virt-os.theme-settings.v1";
-const DEFAULT_THEME_SETTINGS: ThemeSettings = { accentColor: "blue", density: "cozy", theme: "light" };
-const ACCENT_HUES: Record<ThemeSettings["accentColor"], string> = {
-  blue: "250",
-  purple: "300",
-  emerald: "150",
-  amber: "75",
-};
+const CommandPalette = lazy(() => import("./components/CommandPalette").then((module) => ({ default: module.CommandPalette })));
 
 type StorageSnapshot = { usage?: number; quota?: number };
 type DeviceSnapshot = {
@@ -42,34 +43,19 @@ type BrowserNavigator = Navigator & {
 type BrowserPerformance = Performance & {
   memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number };
 };
+type LocalTask = { id: string; text: string; done: boolean };
 
-function normalizeThemeSettings(value: Partial<ThemeSettings> & { accentColor?: string } = {}): ThemeSettings {
-  const accentColor = (["blue", "purple", "emerald", "amber"] as const).includes(value.accentColor as ThemeSettings["accentColor"])
-    ? (value.accentColor as ThemeSettings["accentColor"])
-    : DEFAULT_THEME_SETTINGS.accentColor;
-
-  return {
-    accentColor,
-    density: value.density === "compact" || value.density === "cozy" ? value.density : DEFAULT_THEME_SETTINGS.density,
-    theme: value.theme === "dark" || value.theme === "light" ? value.theme : DEFAULT_THEME_SETTINGS.theme,
-  };
-}
-
-function readThemeSettings(): ThemeSettings {
-  try {
-    const raw = localStorage.getItem(THEME_STORAGE_KEY);
-    return raw ? normalizeThemeSettings(JSON.parse(raw)) : DEFAULT_THEME_SETTINGS;
-  } catch {
-    return DEFAULT_THEME_SETTINGS;
-  }
-}
-
-function applyThemeSettings(theme: ThemeSettings) {
-  const root = document.documentElement;
-  root.setAttribute("data-accent", theme.accentColor);
-  root.setAttribute("data-density", theme.density);
-  root.setAttribute("data-theme", theme.theme);
-}
+const TASKS_STORAGE_KEY = "neko-virt-os.tasks.v1";
+const PALETTE_COLORS = [
+  ["Kernel", "#3467d6"],
+  ["Rose", "#d65b8f"],
+  ["Mint", "#36a66d"],
+  ["Sun", "#d09a27"],
+  ["Sky", "#2f88d8"],
+  ["Violet", "#8a5bd8"],
+  ["Coral", "#d65c45"],
+  ["Ink", "#242733"],
+] as const;
 
 function formatBytes(value?: number) {
   if (!value || Number.isNaN(value)) return "Unavailable";
@@ -133,34 +119,6 @@ function getDeviceRows(storage: StorageSnapshot | null, device: DeviceSnapshot |
   ];
 }
 
-function getAppIcon(appId: AppId, fallback: string) {
-  return apps.find((app) => app.id === appId)?.icon ?? fallback;
-}
-
-const appTitleKeys: Record<AppId, TranslationKey> = {
-  files: "appFiles",
-  notes: "appNotes",
-  browser: "appBrowser",
-  calculator: "appCalculator",
-  calendar: "appCalendar",
-  settings: "appSettings",
-  terminal: "appTerminal",
-  "task-manager": "appTaskManager",
-  about: "appAbout",
-};
-
-const appDescriptionKeys: Record<AppId, TranslationKey> = {
-  files: "descFiles",
-  notes: "descNotes",
-  browser: "descBrowser",
-  calculator: "descCalculator",
-  calendar: "descCalendar",
-  settings: "descSettings",
-  terminal: "descTerminal",
-  "task-manager": "descTaskManager",
-  about: "descAbout",
-};
-
 function setNoteWindowDirty(windowId: string, dirty: boolean) {
   const registry = ((globalThis as any).__notes_dirty_windows ??= {}) as Record<string, boolean>;
   registry[windowId] = dirty;
@@ -177,12 +135,17 @@ function isNoteWindowDirty(windowId: string) {
 }
 
 function requestCloseWindow(windowState: WindowState, closeWindow: (id: string) => void) {
+  const t = useLanguageStore.getState().t;
   if (windowState.appId === "notes" && isNoteWindowDirty(windowState.id)) {
-    const shouldClose = window.confirm("This Notes window has unsaved changes. Close it anyway?");
+    const shouldClose = window.confirm(t("confirmUnsavedNotes"));
     if (!shouldClose) return;
   }
   clearNoteWindowDirty(windowState.id);
   closeWindow(windowState.id);
+}
+
+function phrase(t: (key: TranslationKey) => string, prefix: TranslationKey, value: string | number, suffix: TranslationKey) {
+  return `${t(prefix)}${value}${t(suffix)}`;
 }
 
 applyThemeSettings(readThemeSettings());
@@ -190,6 +153,7 @@ applyThemeSettings(readThemeSettings());
 export function App() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [booting, setBooting] = useState(true);
+  const [commandOpen, setCommandOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switcherIndex, setSwitcherIndex] = useState(0);
   const windows = useDesktopStore((state) => state.windows);
@@ -202,12 +166,21 @@ export function App() {
   const t = useLanguageStore((state) => state.t);
   const switcherWindows = windows.slice().sort((a, b) => b.z - a.z);
 
+  useHotkeys("ctrl+k, meta+k", () => setCommandOpen((open) => !open), { preventDefault: true, enableOnFormTags: true });
+
   // Persist normalized theme settings before the boot screen finishes.
   useEffect(() => {
     const theme = readThemeSettings();
     applyThemeSettings(theme);
     localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(theme));
 
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const updateSystemTheme = () => {
+      const nextTheme = readThemeSettings();
+      if (nextTheme.theme === "system") applyThemeSettings(nextTheme);
+    };
+    media.addEventListener?.("change", updateSystemTheme);
+    return () => media.removeEventListener?.("change", updateSystemTheme);
   }, []);
 
   function openContextMenu(event: MouseEvent<HTMLElement>) {
@@ -289,7 +262,7 @@ export function App() {
       }}
     >
       <Desktop />
-      <section className="window-layer" aria-label="Open windows">
+      <section className="window-layer" aria-label={t("openWindows")}>
         {windows.map((window) => (
           <SystemWindow key={window.id} window={window} />
         ))}
@@ -297,56 +270,14 @@ export function App() {
       {launcherOpen ? <Launcher /> : null}
       {switcherOpen ? <WindowSwitcher windows={switcherWindows} selectedIndex={switcherIndex} /> : null}
       {contextMenu ? <ContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} /> : null}
+      {commandOpen ? (
+        <Suspense fallback={null}>
+          <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+        </Suspense>
+      ) : null}
       <NotificationOverlay />
       <Taskbar />
     </main>
-  );
-}
-
-function NotificationOverlay() {
-  const notifications = useNotificationStore((state) => state.notifications);
-  const removeNotification = useNotificationStore((state) => state.removeNotification);
-
-  return (
-    <div className="notification-overlay" aria-live="assertive">
-      {notifications.map((n) => (
-        <div key={n.id} className={clsx("notification-toast", n.type)}>
-          <div className="notification-icon">
-            {n.type === "success" && <Icon icon="solar:check-circle-bold" width={20} height={20} />}
-            {n.type === "error" && <Icon icon="solar:danger-bold" width={20} height={20} />}
-            {n.type === "warning" && <Icon icon="solar:info-square-bold" width={20} height={20} />}
-            {(!n.type || n.type === "info") && <Icon icon="solar:bell-bold" width={20} height={20} />}
-          </div>
-          <div className="notification-content">
-            <h3>{n.title}</h3>
-            <p>{n.message}</p>
-          </div>
-          <button className="notification-close" onClick={() => removeNotification(n.id)} aria-label="Close notification">
-            <Icon icon="solar:close-circle-bold" width={16} height={16} />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function WindowSwitcher({ windows, selectedIndex }: { windows: WindowState[]; selectedIndex: number }) {
-  const t = useLanguageStore((state) => state.t);
-  return (
-    <section className="window-switcher" aria-label="Window switcher">
-      <div className="window-switcher-panel">
-        <h2>{t("switchWindows")}</h2>
-        <div className="window-switcher-grid">
-          {windows.map((window, index) => (
-            <div key={window.id} className={clsx("window-switcher-item", index === selectedIndex && "is-selected", window.minimized && "is-minimized")}>
-              <Icon icon={getAppIcon(window.appId, window.icon)} width={28} height={28} />
-              <strong>{window.title}</strong>
-              <span>{window.minimized ? t("minimized") : t("running")}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -355,13 +286,15 @@ function Desktop() {
   const [selectionBox, setSelectionBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const openApp = useDesktopStore((state) => state.openApp);
   const updateDesktopIconPosition = useDesktopStore((state) => state.updateDesktopIconPosition);
+  const desktopLayoutMode = useDesktopStore((state) => state.desktopLayoutMode);
+  const setDesktopLayoutMode = useDesktopStore((state) => state.setDesktopLayoutMode);
   const desktopIconPositions = useDesktopStore((state) => state.desktopIconPositions);
   const files = useFsStore((state) => state.files);
   const selectFile = useFsStore((state) => state.selectFile);
   const deleteSelectedFile = useFsStore((state) => state.deleteSelectedFile);
   const addNotification = useNotificationStore((state) => state.addNotification);
   const t = useLanguageStore((state) => state.t);
-  const desktopApps: AppId[] = ["files", "notes", "browser", "calculator", "calendar", "settings", "task-manager", "about"];
+  const desktopApps: AppId[] = ["files", "notes", "browser", "calculator", "calendar", "tasks", "timer", "palette", "settings", "task-manager", "about"];
   const [pinnedDesktopApps, setPinnedDesktopApps] = useState<AppId[]>(desktopApps);
   const [hiddenDesktopApps, setHiddenDesktopApps] = useState<AppId[]>([]);
   const desktopFiles = files.filter((file) => !file.trashed).slice(0, 4);
@@ -376,6 +309,35 @@ function Desktop() {
   };
 
   const visibleApps = pinnedDesktopApps.filter((id) => !hiddenDesktopApps.includes(id));
+  const desktopItems = [
+    ...visibleApps.map((id) => ({ id: `app:${id}`, kind: "app" as const, appId: id })),
+    ...desktopFiles.map((file) => ({ id: `file:${file.id}`, kind: "file" as const, file })),
+  ];
+
+  function getIconPosition(itemId: string, index: number, bounds?: { width: number; height: number }) {
+    const saved = (desktopIconPositions as Record<string, { x: number; y: number }>)[itemId];
+    if (desktopLayoutMode === "free") return saved ?? getDesktopGridPosition(index, bounds);
+    return snapDesktopIconPosition(saved ?? getDesktopGridPosition(index, bounds), bounds);
+  }
+
+  function setLayoutMode(mode: DesktopLayoutMode) {
+    if (mode === "grid") {
+      const desktopEl = document.querySelector(".desktop-icons");
+      const desktopBounds = desktopEl ? desktopEl.getBoundingClientRect() : { width: 1200, height: 700 };
+      const occupiedKeys = new Set<string>();
+      desktopItems.forEach((item, index) => {
+        const position = findNearestAvailableGridPosition(getIconPosition(item.id, index, desktopBounds), occupiedKeys, desktopBounds);
+        occupiedKeys.add(getDesktopGridKey(position));
+        updateDesktopIconPosition(item.id, position.x, position.y);
+      });
+    }
+    setDesktopLayoutMode(mode);
+    addNotification({
+      title: mode === "grid" ? t("desktopGridMode") : t("desktopFreeMode"),
+      message: mode === "grid" ? t("desktopGridModeMessage") : t("desktopFreeModeMessage"),
+      type: "info",
+    });
+  }
 
   // Selection box and delete key logic
   useEffect(() => {
@@ -388,7 +350,7 @@ function Desktop() {
         if (fileIdsToDelete.length > 0) {
           const filesToDelete = files.filter((f) => fileIdsToDelete.includes(f.id));
           const names = filesToDelete.map((f) => f.name).join(", ");
-          if (window.confirm(`Delete ${names}? This cannot be undone.`)) {
+          if (window.confirm(phrase(t, "confirmDeletePrefix", names, "confirmDeleteSuffix"))) {
             void Promise.all(
               filesToDelete.map(async (f) => {
                 selectFile(f.id);
@@ -396,8 +358,8 @@ function Desktop() {
               })
             ).then(() => {
               (globalThis as any).__desktop_state?.addNotification({
-                title: "Files Deleted",
-                message: `Successfully deleted ${filesToDelete.length} files.`,
+                title: t("filesDeleted"),
+                message: phrase(t, "filesDeletedPrefix", filesToDelete.length, "filesDeletedSuffix"),
                 type: "success",
               });
             });
@@ -493,22 +455,17 @@ function Desktop() {
     const startX = event.clientX;
     const startY = event.clientY;
 
-    // Capture initial positions of all currently selected items
-    const allItems = [
-      ...visibleApps.map((id) => `app:${id}`),
-      ...desktopFiles.map((f) => `file:${f.id}`),
-    ];
-    
+    const desktopEl = document.querySelector(".desktop-icons");
+    const desktopBounds = desktopEl ? desktopEl.getBoundingClientRect() : { width: 1200, height: 700 };
+
     const initialPositions = nextSelected.reduce((acc, id) => {
-      const isFile = id.startsWith("file:");
-      const defaultPos = isFile 
-        ? { x: 104, y: desktopFiles.findIndex((f) => `file:${f.id}` === id) * 104 }
-        : { x: 0, y: visibleApps.indexOf(id.replace("app:", "") as AppId) * 104 };
-      acc[id] = (desktopIconPositions as Record<string, { x: number; y: number }>)[id] ?? defaultPos;
+      const index = Math.max(0, desktopItems.findIndex((item) => item.id === id));
+      acc[id] = getIconPosition(id, index, desktopBounds);
       return acc;
     }, {} as Record<string, { x: number; y: number }>);
 
     let hasDragged = false;
+    const livePositions: Record<string, { x: number; y: number }> = {};
 
     function handleMouseMove(e: globalThis.MouseEvent) {
       const deltaX = e.clientX - startX;
@@ -522,13 +479,9 @@ function Desktop() {
         nextSelected.forEach((id) => {
           const initPos = initialPositions[id];
           if (initPos) {
-            // Apply boundary constraints relative to the desktop container size
-            const desktopEl = document.querySelector(".desktop");
-            const bounds = desktopEl ? desktopEl.getBoundingClientRect() : { width: 1200, height: 800 };
-            
-            const nextX = Math.max(0, Math.min(bounds.width - 100, initPos.x + deltaX));
-            const nextY = Math.max(0, Math.min(bounds.height - 150, initPos.y + deltaY));
-            updateDesktopIconPosition(id, nextX, nextY);
+            const nextPosition = clampDesktopIconPosition({ x: initPos.x + deltaX, y: initPos.y + deltaY }, desktopBounds);
+            livePositions[id] = nextPosition;
+            updateDesktopIconPosition(id, nextPosition.x, nextPosition.y);
           }
         });
       }
@@ -541,6 +494,20 @@ function Desktop() {
       // If the mouse up happened without moving, it's a simple selection reset
       if (!hasDragged && !isCtrl) {
         setSelectedDesktopItems([itemId]);
+      } else if (hasDragged && desktopLayoutMode === "grid") {
+        const occupiedKeys = new Set(
+          desktopItems
+            .map((item, index) => ({ item, index }))
+            .filter(({ item }) => !nextSelected.includes(item.id))
+            .map(({ item, index }) => getDesktopGridKey(getIconPosition(item.id, index, desktopBounds)))
+        );
+        nextSelected.forEach((id) => {
+          const current = livePositions[id] ?? initialPositions[id];
+          if (!current) return;
+          const snapped = findNearestAvailableGridPosition(current, occupiedKeys, desktopBounds);
+          occupiedKeys.add(getDesktopGridKey(snapped));
+          updateDesktopIconPosition(id, snapped.x, snapped.y);
+        });
       }
     }
 
@@ -560,7 +527,7 @@ function Desktop() {
   return (
     <section
       className="desktop"
-      aria-label="Desktop"
+      aria-label={t("desktop")}
       data-context-kind="desktop"
       onMouseDown={handleDesktopMouseDown}
     >
@@ -571,23 +538,38 @@ function Desktop() {
           <span>{t("desktopSubtitle")}</span>
         </div>
       </div>
+      <div className="desktop-layout-toggle" onMouseDown={(event) => event.stopPropagation()}>
+        {(["grid", "free"] as const).map((mode) => (
+          <button
+            key={mode}
+            className={clsx(desktopLayoutMode === mode && "is-active")}
+            onClick={() => setLayoutMode(mode)}
+            title={mode === "grid" ? t("desktopGridMode") : t("desktopFreeMode")}
+            aria-pressed={desktopLayoutMode === mode}
+          >
+            <Icon icon={mode === "grid" ? "solar:widget-5-bold-duotone" : "solar:move-to-folder-bold-duotone"} width={15} height={15} />
+            <span>{mode === "grid" ? t("desktopGridMode") : t("desktopFreeMode")}</span>
+          </button>
+        ))}
+      </div>
       <div className="desktop-icons">
         {visibleApps.map((appId, index) => {
           const app = apps.find((item) => item.id === appId)!;
-          const defaultPos = { x: 0, y: index * 104 };
-          const pos = (desktopIconPositions as Record<string, { x: number; y: number }>)[`app:${app.id}`] ?? defaultPos;
+          const itemId = `app:${app.id}`;
+          const pos = getIconPosition(itemId, index);
           return (
             <div
               key={`desktop-app:${app.id}`}
-              className={clsx("desktop-icon", selectedDesktopItems.includes(`app:${app.id}`) && "is-selected")}
+              className={clsx("desktop-icon", selectedDesktopItems.includes(itemId) && "is-selected")}
+              data-app-id={app.id}
               style={{ position: "absolute", left: pos.x, top: pos.y }}
               data-context-kind="desktop-app"
               data-context-id={app.id}
-              data-desktop-icon-id={`app:${app.id}`}
+              data-desktop-icon-id={itemId}
               draggable="false"
               onDragStart={(e) => e.preventDefault()}
-              onMouseDown={(e) => handleIconMouseDown(`app:${app.id}`, e)}
-              onContextMenu={(e) => handleIconContextMenu(`app:${app.id}`, e)}
+              onMouseDown={(e) => handleIconMouseDown(itemId, e)}
+              onContextMenu={(e) => handleIconContextMenu(itemId, e)}
               onDoubleClick={() => openApp(app.id)}
             >
               <Icon icon={app.icon} width={30} height={30} />
@@ -596,20 +578,20 @@ function Desktop() {
           );
         })}
         {desktopFiles.map((file, index) => {
-          const defaultPos = { x: 104, y: index * 104 };
-          const pos = (desktopIconPositions as Record<string, { x: number; y: number }>)[`file:${file.id}`] ?? defaultPos;
+          const itemId = `file:${file.id}`;
+          const pos = getIconPosition(itemId, visibleApps.length + index);
           return (
             <div
               key={`desktop-file:${file.id}`}
-              className={clsx("desktop-icon", "desktop-file", selectedDesktopItems.includes(`file:${file.id}`) && "is-selected")}
+              className={clsx("desktop-icon", "desktop-file", selectedDesktopItems.includes(itemId) && "is-selected")}
               style={{ position: "absolute", left: pos.x, top: pos.y }}
               data-context-kind="file"
               data-context-id={file.id}
-              data-desktop-icon-id={`file:${file.id}`}
+              data-desktop-icon-id={itemId}
               draggable="false"
               onDragStart={(e) => e.preventDefault()}
-              onMouseDown={(e) => handleIconMouseDown(`file:${file.id}`, e)}
-              onContextMenu={(e) => handleIconContextMenu(`file:${file.id}`, e)}
+              onMouseDown={(e) => handleIconMouseDown(itemId, e)}
+              onContextMenu={(e) => handleIconContextMenu(itemId, e)}
               onDoubleClick={() => {
                 selectFile(file.id);
                 openApp("notes");
@@ -678,15 +660,15 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
       window.alert(result.error);
       const modifier = (globalThis as any).__desktop_state;
       modifier?.addNotification?.({
-        title: "Rename Failed",
+        title: t("renameFailed"),
         message: result.error,
         type: "error",
       });
     } else {
       const modifier = (globalThis as any).__desktop_state;
       modifier?.addNotification?.({
-        title: "File Renamed",
-        message: `File successfully renamed to ${nextName}.`,
+        title: t("fileRenamed"),
+        message: phrase(t, "fileRenamedPrefix", nextName, "fileRenamedSuffix"),
         type: "success",
       });
     }
@@ -695,12 +677,12 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
   async function deleteFileFromMenu() {
     if (!file) return;
     selectFile(file.id);
-    if (!window.confirm(`Move ${file.name} to Trash?`)) return;
+    if (!window.confirm(phrase(t, "confirmMoveToTrashPrefix", file.name, "confirmMoveToTrashSuffix"))) return;
     await deleteSelectedFile();
     const modifier = (globalThis as any).__desktop_state;
     modifier?.addNotification?.({
-      title: "File Deleted",
-      message: `${file.name} was moved to Trash.`,
+      title: t("fileDeleted"),
+      message: `${file.name}${t("movedToTrashSuffix")}`,
       type: "success",
     });
   }
@@ -708,14 +690,14 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
   async function restoreFileFromMenu() {
     if (!file) return;
     await restoreFileById(file.id);
-    addNotification({ title: "File Restored", message: `${file.name} was restored.`, type: "success" });
+    addNotification({ title: t("restore"), message: `${file.name}${t("restoredSuffix")}`, type: "success" });
   }
 
   async function permanentlyDeleteFileFromMenu() {
     if (!file) return;
-    if (!window.confirm(`Permanently delete ${file.name}? This cannot be undone.`)) return;
+    if (!window.confirm(phrase(t, "confirmPermanentDeletePrefix", file.name, "confirmPermanentDeleteSuffix"))) return;
     await permanentlyDeleteFileById(file.id);
-    addNotification({ title: "File Deleted", message: `${file.name} was permanently deleted.`, type: "success" });
+    addNotification({ title: t("fileDeleted"), message: `${file.name}${t("permanentlyDeletedSuffix")}`, type: "success" });
   }
 
   async function createFileFromMenu() {
@@ -731,8 +713,8 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
   async function createFileDirectFromMenu() {
     await createFile();
     addNotification({
-      title: "File Created",
-      message: "A new local text file was created.",
+      title: t("fileCreated"),
+      message: t("fileCreatedDefaultMessage"),
       type: "success",
     });
   }
@@ -946,6 +928,7 @@ function SystemWindow({ window }: { window: WindowState }) {
       key={window.id}
       bounds="parent"
       className={clsx("system-window", isActive && "is-active", window.maximized && "is-maximized", isMinimizing && "is-minimizing")}
+      data-app-id={window.appId}
       position={{ x: liveBounds.x, y: liveBounds.y }}
       size={{ width: liveBounds.width, height: liveBounds.height }}
       disableDragging={false}
@@ -1033,6 +1016,12 @@ function renderApp(window: WindowState) {
       return <CalculatorApp />;
     case "calendar":
       return <CalendarApp />;
+    case "tasks":
+      return <TasksApp />;
+    case "timer":
+      return <TimerApp />;
+    case "palette":
+      return <PaletteApp />;
     case "settings":
       return <SettingsApp />;
     case "terminal":
@@ -1085,13 +1074,13 @@ function FilesApp() {
     }
     const result = await createNamedFile(newFileDraft);
     if (result.error) {
-      addNotification({ title: "Create Failed", message: result.error, type: "error" });
+      addNotification({ title: t("createFailed"), message: result.error, type: "error" });
       return;
     }
     setCreatingFile(false);
     setNewFileDraft("Untitled.md");
     if (result.file) selectFile(result.file.id);
-    addNotification({ title: "File Created", message: `${result.file?.name ?? "New file"} created.`, type: "success" });
+    addNotification({ title: t("fileCreated"), message: `${result.file?.name ?? t("newFile")}${t("createdSuffix")}`, type: "success" });
   }
 
   function startCreateFile() {
@@ -1120,15 +1109,15 @@ function FilesApp() {
     if (result.error) {
       window.alert(result.error);
       addNotification({
-        title: "Rename Failed",
+        title: t("renameFailed"),
         message: result.error,
         type: "error",
       });
     } else {
       setRenamingFileId(null);
       addNotification({
-        title: "File Renamed",
-        message: `File renamed successfully to ${renameDraft}.`,
+        title: t("fileRenamed"),
+        message: phrase(t, "fileRenamedPrefix", renameDraft, "fileRenamedSuffix"),
         type: "success",
       });
     }
@@ -1137,11 +1126,11 @@ function FilesApp() {
   async function deleteSelected(fileToDelete = selectedFile) {
     if (!fileToDelete) return;
     selectFile(fileToDelete.id);
-    if (!window.confirm(`Move ${fileToDelete.name} to Trash?`)) return;
+    if (!window.confirm(phrase(t, "confirmMoveToTrashPrefix", fileToDelete.name, "confirmMoveToTrashSuffix"))) return;
     await deleteSelectedFile();
     addNotification({
-      title: "Moved to Trash",
-      message: `${fileToDelete.name} can be restored from Trash.`,
+      title: t("movedToTrash"),
+      message: `${fileToDelete.name}${t("canRestoreFromTrashSuffix")}`,
       type: "success",
     });
   }
@@ -1151,22 +1140,22 @@ function FilesApp() {
     selectFile(fileToRestore.id);
     await restoreSelectedFile();
     setSection("files");
-    addNotification({ title: "File Restored", message: `${fileToRestore.name} was restored.`, type: "success" });
+    addNotification({ title: t("restore"), message: `${fileToRestore.name}${t("restoredSuffix")}`, type: "success" });
   }
 
   async function deleteForever(fileToDelete = selectedFile) {
     if (!fileToDelete) return;
     selectFile(fileToDelete.id);
-    if (!window.confirm(`Permanently delete ${fileToDelete.name}? This cannot be undone.`)) return;
+    if (!window.confirm(phrase(t, "confirmPermanentDeletePrefix", fileToDelete.name, "confirmPermanentDeleteSuffix"))) return;
     await permanentlyDeleteSelectedFile();
-    addNotification({ title: "File Deleted", message: `${fileToDelete.name} was permanently deleted.`, type: "success" });
+    addNotification({ title: t("fileDeleted"), message: `${fileToDelete.name}${t("permanentlyDeletedSuffix")}`, type: "success" });
   }
 
   async function emptyTrashFromFiles() {
     if (!trashedFiles.length) return;
-    if (!window.confirm(`Permanently delete ${trashedFiles.length} trashed file${trashedFiles.length === 1 ? "" : "s"}?`)) return;
+    if (!window.confirm(phrase(t, "confirmEmptyTrashPrefix", trashedFiles.length, "confirmEmptyTrashSuffix"))) return;
     await emptyTrash();
-    addNotification({ title: "Trash Emptied", message: "All trashed files were permanently deleted.", type: "success" });
+    addNotification({ title: t("trashEmptied"), message: t("trashEmptiedMessage"), type: "success" });
   }
 
   return (
@@ -1348,7 +1337,9 @@ function NotesApp({ windowId }: { windowId: string }) {
   const [localFileId, setLocalFileId] = useState<string | null>(() => selectedFileId);
   const selectedFile = files.find((file) => !file.trashed && file.id === localFileId) ?? files.find((file) => !file.trashed && file.id === selectedFileId) ?? null;
   const [draft, setDraft] = useState(() => selectedFile?.content ?? "");
+  const [viewMode, setViewMode] = useState<"edit" | "preview" | "split">("edit");
   const [dirty, setDirty] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState("");
 
   useEffect(() => {
     setNoteWindowDirty(windowId, dirty);
@@ -1360,6 +1351,21 @@ function NotesApp({ windowId }: { windowId: string }) {
     if (!localFileId) setLocalFileId(selectedFile.id);
     if (!dirty) setDraft(selectedFile.content);
   }, [selectedFile?.id, selectedFile?.content, dirty, localFileId]);
+
+  useEffect(() => {
+    if (viewMode === "edit") return;
+    let mounted = true;
+    void Promise.all([import("marked"), import("dompurify")]).then(([markedModule, domPurifyModule]) => {
+      if (!mounted) return;
+      const html = markedModule.marked.parse(draft, { async: false }) as string;
+      setPreviewHtml(domPurifyModule.default.sanitize(html));
+    }).catch(() => {
+      if (mounted) setPreviewHtml(`<p>${t("markdownPreviewUnavailable")}</p>`);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [draft, t, viewMode]);
 
   function updateDraft(value: string) {
     setDraft(value);
@@ -1380,6 +1386,13 @@ function NotesApp({ windowId }: { windowId: string }) {
           <p>{selectedFile ? (dirty ? t("notesUnsaved") : t("notesSaved")) : t("createFileToBegin")}</p>
         </div>
         <div className="toolbar-actions">
+          <div className="notes-view-toggle">
+            {(["edit", "preview", "split"] as const).map((mode) => (
+              <button key={mode} className={clsx(viewMode === mode && "is-active")} onClick={() => setViewMode(mode)} type="button">
+                {mode === "edit" ? t("edit") : mode === "preview" ? t("markdownPreview") : t("splitView")}
+              </button>
+            ))}
+          </div>
           <button className="button-ghost" onClick={() => {
             setLocalFileId(null);
             void createFile();
@@ -1392,7 +1405,10 @@ function NotesApp({ windowId }: { windowId: string }) {
         </div>
       </div>
       {selectedFile ? (
-        <textarea spellCheck="false" value={draft} onChange={(event) => updateDraft(event.target.value)} />
+        <div className={clsx("notes-workspace", `mode-${viewMode}`)}>
+          {viewMode !== "preview" ? <textarea spellCheck="false" value={draft} onChange={(event) => updateDraft(event.target.value)} /> : null}
+          {viewMode !== "edit" ? <article className="markdown-preview" dangerouslySetInnerHTML={{ __html: previewHtml }} /> : null}
+        </div>
       ) : (
         <div className="empty-state notes-empty">
           <Icon icon="solar:notes-bold-duotone" width={34} height={34} />
@@ -1583,6 +1599,118 @@ function CalendarApp() {
   );
 }
 
+function readTasks(): LocalTask[] {
+  try {
+    const raw = localStorage.getItem(TASKS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function TasksApp() {
+  const [tasks, setTasks] = useState<LocalTask[]>(readTasks);
+  const [draft, setDraft] = useState("");
+  const t = useLanguageStore((state) => state.t);
+
+  useEffect(() => {
+    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+  }, [tasks]);
+
+  function addTask() {
+    const text = draft.trim();
+    if (!text) return;
+    setTasks((current) => [{ id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text, done: false }, ...current]);
+    setDraft("");
+  }
+
+  return (
+    <div className="tasks-app">
+      <form className="tasks-form" onSubmit={(event) => { event.preventDefault(); addTask(); }}>
+        <input value={draft} placeholder={t("tasksPlaceholder")} onChange={(event) => setDraft(event.target.value)} />
+        <button className="button-primary" type="submit">{t("addTask")}</button>
+      </form>
+      <div className="tasks-summary">
+        <span>{tasks.filter((task) => !task.done).length} {t("pending")}</span>
+        <button className="button-ghost" onClick={() => setTasks((current) => current.filter((task) => !task.done))}>{t("clearDone")}</button>
+      </div>
+      <div className="tasks-list">
+        {tasks.length ? tasks.map((task) => (
+          <label key={task.id} className={clsx("task-item", task.done && "is-done")}>
+            <input type="checkbox" checked={task.done} onChange={() => setTasks((current) => current.map((item) => item.id === task.id ? { ...item, done: !item.done } : item))} />
+            <span>{task.text}</span>
+            <button type="button" onClick={(event) => { event.preventDefault(); setTasks((current) => current.filter((item) => item.id !== task.id)); }}>×</button>
+          </label>
+        )) : <div className="empty-state"><p>{t("noTasks")}</p></div>}
+      </div>
+    </div>
+  );
+}
+
+function TimerApp() {
+  const [running, setRunning] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [now, setNow] = useState(() => new Date());
+  const t = useLanguageStore((state) => state.t);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!running) return;
+    const interval = setInterval(() => setElapsed((current) => current + 1), 1000);
+    return () => clearInterval(interval);
+  }, [running]);
+
+  const minutes = Math.floor(elapsed / 60).toString().padStart(2, "0");
+  const seconds = (elapsed % 60).toString().padStart(2, "0");
+
+  return (
+    <div className="timer-app">
+      <section>
+        <span>{t("localTime")}</span>
+        <strong>{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</strong>
+      </section>
+      <section>
+        <span>{t("stopwatch")}</span>
+        <strong>{minutes}:{seconds}</strong>
+        <div className="timer-actions">
+          <button className="button-primary" onClick={() => setRunning((current) => !current)}>{running ? t("pause") : t("start")}</button>
+          <button className="button-ghost" onClick={() => { setRunning(false); setElapsed(0); }}>{t("reset")}</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PaletteApp() {
+  const addNotification = useNotificationStore((state) => state.addNotification);
+  const t = useLanguageStore((state) => state.t);
+
+  async function copyColor(color: string) {
+    try {
+      await navigator.clipboard.writeText(color);
+      addNotification({ title: t("copiedToken"), message: `${color}${t("copiedTokenSuffix")}`, type: "success" });
+    } catch {
+      addNotification({ title: t("copyFailed"), message: t("copyFailedMessage"), type: "error" });
+    }
+  }
+
+  return (
+    <div className="palette-app">
+      {PALETTE_COLORS.map(([name, color]) => (
+        <button key={color} className="palette-swatch" onClick={() => void copyColor(color)}>
+          <span style={{ background: color }} />
+          <strong>{name}</strong>
+          <small>{color}</small>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function SettingsApp() {
   const [themeSettings, setThemeSettings] = useState<ThemeSettings>(readThemeSettings);
   const [storage, setStorage] = useState<StorageSnapshot | null>(null);
@@ -1606,24 +1734,24 @@ function SettingsApp() {
 
   async function clearCacheStorage() {
     if (!("caches" in window)) {
-      addNotification({ title: "Cache Unavailable", message: "Cache Storage is not available in this browser.", type: "warning" });
+      addNotification({ title: t("cacheUnavailable"), message: t("cacheUnavailableMessage"), type: "warning" });
       return;
     }
     const keys = await caches.keys();
     await Promise.all(keys.map((key) => caches.delete(key)));
     navigator.storage?.estimate().then(setStorage).catch(() => setStorage(null));
-    addNotification({ title: "Cache Cleared", message: `${keys.length} cache bucket${keys.length === 1 ? "" : "s"} removed.`, type: "success" });
+    addNotification({ title: t("cacheCleared"), message: phrase(t, "cacheClearedPrefix", keys.length, "cacheClearedSuffix"), type: "success" });
   }
 
   async function resetLocalFiles() {
-    if (!window.confirm("Reset the virtual file system to the default files?")) return;
+    if (!window.confirm(t("confirmResetFiles"))) return;
     await resetVirtualFiles();
     navigator.storage?.estimate().then(setStorage).catch(() => setStorage(null));
-    addNotification({ title: "Virtual Storage Reset", message: "Default local files were restored.", type: "success" });
+    addNotification({ title: t("virtualStorageReset"), message: t("virtualStorageResetMessage"), type: "success" });
   }
 
   async function clearSiteData() {
-    if (!window.confirm("Clear NekoVirtOS local data? This resets files, windows, desktop layout, theme settings, and cache storage.")) return;
+    if (!window.confirm(t("confirmClearSiteData"))) return;
     if ("caches" in window) {
       const keys = await caches.keys();
       await Promise.all(keys.map((key) => caches.delete(key)));
@@ -1631,14 +1759,38 @@ function SettingsApp() {
     localStorage.clear();
     resetWindowLayout();
     await resetVirtualFiles();
-    addNotification({ title: "Site Data Cleared", message: "Local data was reset. Reloading...", type: "success" });
+    addNotification({ title: t("siteDataCleared"), message: t("siteDataClearedMessage"), type: "success" });
     window.setTimeout(() => window.location.reload(), 700);
   }
 
+  async function setWallpaper(wallpaperId: ThemeSettings["wallpaperId"]) {
+    const wallpaper = WALLPAPERS[wallpaperId];
+    if (wallpaper.url) {
+      const url = wallpaper.url;
+      const loaded = await new Promise<boolean>((resolve) => {
+        const image = new Image();
+        image.onload = () => resolve(true);
+        image.onerror = () => resolve(false);
+        image.src = url;
+      });
+      if (!loaded) {
+        addNotification({ title: t("wallpaperLoadFailed"), message: t("wallpaperLoadFailedMessage"), type: "warning" });
+        return;
+      }
+    }
+    setThemeSettings((prev: ThemeSettings) => ({ ...prev, wallpaperId }));
+    addNotification({
+      title: t("wallpaperChanged"),
+      message: phrase(t, "wallpaperChangedPrefix", t(wallpaper.labelKey), "wallpaperChangedSuffix"),
+      type: "info",
+    });
+  }
+
+  const effectiveTheme = resolveThemeMode(themeSettings.theme);
   const tokens = [
     ["Primary", `oklch(0.520 0.145 ${ACCENT_HUES[themeSettings.accentColor]})`, "kernel"],
-    ["Accent", `oklch(${themeSettings.theme === "dark" ? "0.760" : "0.650"} 0.115 ${ACCENT_HUES[themeSettings.accentColor]})`, "focus"],
-    ["Panel", themeSettings.theme === "dark" ? "oklch(0.190 0.010 255)" : "oklch(0.910 0.012 255)", "surface"],
+    ["Accent", `oklch(${effectiveTheme === "dark" ? "0.760" : "0.650"} 0.115 ${ACCENT_HUES[themeSettings.accentColor]})`, "focus"],
+    ["Panel", effectiveTheme === "dark" ? "oklch(0.190 0.010 255)" : "oklch(0.910 0.012 255)", "surface"],
   ];
 
   return (
@@ -1659,9 +1811,10 @@ function SettingsApp() {
             className={clsx("settings-btn-pill", language === lang && "is-active")}
             onClick={() => {
               setLanguage(lang);
+              const nextT = useLanguageStore.getState().t;
               addNotification({
-                title: lang === "zh" ? "语言已切换" : "Language Changed",
-                message: lang === "zh" ? "界面语言已设置为中文。" : "Interface language set to English.",
+                title: nextT("languageChanged"),
+                message: lang === "zh" ? nextT("languageChangedZhMessage") : nextT("languageChangedEnMessage"),
                 type: "info",
               });
             }}
@@ -1673,20 +1826,20 @@ function SettingsApp() {
 
       <h3 className="settings-section-title">{t("settingsTheme")}</h3>
       <div className="settings-select-group">
-        {(["light", "dark"] as const).map((mode) => (
+        {(["system", "light", "dark"] as const).map((mode) => (
           <button
             key={mode}
             className={clsx("settings-btn-pill", themeSettings.theme === mode && "is-active")}
             onClick={() => {
               setThemeSettings((prev: ThemeSettings) => ({ ...prev, theme: mode }));
               addNotification({
-                title: "Theme Changed",
-                message: `Color mode set to ${mode} mode.`,
+                title: t("themeChanged"),
+                message: phrase(t, "themeChangedPrefix", mode === "system" ? t("colorSystem") : mode === "light" ? t("colorLight") : t("colorDark"), "themeChangedSuffix"),
                 type: "info",
               });
             }}
           >
-            {mode === "light" ? t("colorLight") : t("colorDark")}
+            {mode === "system" ? t("colorSystem") : mode === "light" ? t("colorLight") : t("colorDark")}
           </button>
         ))}
       </div>
@@ -1700,13 +1853,28 @@ function SettingsApp() {
             onClick={() => {
               setThemeSettings((prev: ThemeSettings) => ({ ...prev, accentColor: color }));
               addNotification({
-                title: "Accent Updated",
-                message: `Identity accent color changed to ${color}.`,
+                title: t("accentUpdated"),
+                message: phrase(t, "accentUpdatedPrefix", color, "accentUpdatedSuffix"),
                 type: "info",
               });
             }}
           >
             {color.charAt(0).toUpperCase() + color.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      <h3 className="settings-section-title">{t("settingsWallpaper")}</h3>
+      <div className="wallpaper-grid">
+        {(Object.entries(WALLPAPERS) as [ThemeSettings["wallpaperId"], (typeof WALLPAPERS)[ThemeSettings["wallpaperId"]]][]).map(([id, wallpaper]) => (
+          <button
+            key={id}
+            className={clsx("wallpaper-option", themeSettings.wallpaperId === id && "is-active")}
+            onClick={() => void setWallpaper(id)}
+            style={wallpaper.url ? { backgroundImage: `linear-gradient(180deg, oklch(0 0 0 / 0.08), oklch(0 0 0 / 0.44)), url("${wallpaper.url}")` } : undefined}
+          >
+            <span>{t(wallpaper.labelKey)}</span>
+            <small>{wallpaper.source === "unsplash" ? t("wallpaperSourceUnsplash") : t("wallpaperSourceBuiltIn")}</small>
           </button>
         ))}
       </div>
@@ -1720,8 +1888,8 @@ function SettingsApp() {
             onClick={() => {
               setThemeSettings((prev: ThemeSettings) => ({ ...prev, density: d }));
               addNotification({
-                title: "Density Switched",
-                message: `Spacing density set to ${d} mode.`,
+                title: t("densitySwitched"),
+                message: phrase(t, "densitySwitchedPrefix", d === "cozy" ? t("densityCozy") : t("densityCompact"), "densitySwitchedSuffix"),
                 type: "info",
               });
             }}
@@ -1746,20 +1914,20 @@ function SettingsApp() {
                 try {
                   await navigator.clipboard.writeText(value);
                   addNotification({
-                    title: "Copied Token",
-                    message: `${label} CSS token copied to clipboard.`,
+                    title: t("copiedToken"),
+                    message: `${label}${t("copiedTokenSuffix")}`,
                     type: "success",
                   });
                 } catch {
                   addNotification({
-                    title: "Copy Failed",
-                    message: "Clipboard access is unavailable in this browser context.",
+                    title: t("copyFailed"),
+                    message: t("copyFailedMessage"),
                     type: "error",
                   });
                 }
               }}
             >
-              Copy
+              {t("copy")}
             </button>
           </div>
         ))}
@@ -1810,6 +1978,7 @@ function TerminalApp() {
   const renameFileByName = useFsStore((state) => state.renameFileByName);
   const selectFileByName = useFsStore((state) => state.selectFileByName);
   const openApp = useDesktopStore((state) => state.openApp);
+  const t = useLanguageStore((state) => state.t);
 
   async function runCommand(rawCommand: string) {
     const trimmed = rawCommand.trim();
@@ -1835,7 +2004,7 @@ function TerminalApp() {
   }
 
   return (
-    <div className="terminal-app" aria-label="Terminal output">
+    <div className="terminal-app" aria-label={t("terminalOutput")}>
       <div className="terminal-lines">
         {lines.map((line, index) => (
           <p key={`${line}-${index}`} className={line.startsWith("neko@virt-os") ? "terminal-prompt-line" : undefined}>
@@ -2033,27 +2202,27 @@ function TaskManagerApp() {
             <p>{windows.length} running windows, {files.length} local files, uptime {Math.floor(uptime / 60)}m {uptime % 60}s</p>
           </div>
           <div className="task-manager-metrics">
-            <span><strong>{navigator.hardwareConcurrency || "-"}</strong> reported threads</span>
+            <span><strong>{navigator.hardwareConcurrency || "-"}</strong> threads</span>
             <span><strong>{appMemory}</strong> JS heap</span>
             <span><strong>{formatBytes(storage?.usage)}</strong> origin storage</span>
           </div>
         </header>
 
-        {activeTab !== "history" ? <section className="performance-grid" aria-label="Performance summary">
+        {activeTab !== "history" ? <section className="performance-grid" aria-label={t("performanceSummary")}>
           <article>
             <span>CPU</span>
-            <strong>{navigator.hardwareConcurrency || "Unavailable"} reported threads</strong>
-            <p>May be capped by browser privacy protections</p>
+            <strong>{navigator.hardwareConcurrency || "Unavailable"} threads</strong>
+            <p>Logical processors</p>
           </article>
           <article>
             <span>JS Heap</span>
             <strong>{appMemory}</strong>
-            <p>{appLimit} heap limit, not physical RAM</p>
+            <p>{appLimit} limit</p>
           </article>
           <article>
             <span>Origin Storage</span>
             <strong>{formatBytes(storage?.usage)}</strong>
-            <p>{formatBytes(storage?.quota)} site quota, not disk size</p>
+            <p>{formatBytes(storage?.quota)} quota</p>
           </article>
           <article>
             <span>Display</span>
@@ -2062,7 +2231,7 @@ function TaskManagerApp() {
           </article>
         </section> : null}
 
-        {activeTab === "processes" ? <section className="process-table" aria-label="Running processes">
+        {activeTab === "processes" ? <section className="process-table" aria-label={t("runningProcesses")}>
           <div className="process-row process-head">
             <span>Name</span>
             <span>Status</span>
@@ -2083,13 +2252,13 @@ function TaskManagerApp() {
           ))}
         </section> : null}
 
-        {activeTab === "performance" ? <section className="device-table" aria-label="Device details">
+        {activeTab === "performance" ? <section className="device-table" aria-label={t("deviceDetails")}>
           {deviceRows.map(([label, value]) => (
             <div key={label}><span>{label}</span><strong title={value}>{value}</strong></div>
           ))}
         </section> : null}
 
-        {activeTab === "history" ? <section className="process-table" aria-label="Application history">
+        {activeTab === "history" ? <section className="process-table" aria-label={t("applicationHistory")}>
           <div className="process-row process-head app-history-row">
             <span>Application</span>
             <span>Status</span>
@@ -2151,91 +2320,5 @@ function NavItem({ icon, label, active = false, disabled = false, onClick }: { i
       <Icon icon={icon} width={18} height={18} />
       {label}
     </button>
-  );
-}
-
-function Launcher() {
-  const openApp = useDesktopStore((state) => state.openApp);
-  const t = useLanguageStore((state) => state.t);
-
-  return (
-    <section className="launcher" onMouseDown={(event) => event.stopPropagation()}>
-      <div className="launcher-header">
-        <div>
-          <h1>{t("launcherTitle")}</h1>
-          <p>{t("launcherSubtitle")}</p>
-        </div>
-        <Icon icon="solar:cat-bold-duotone" width={28} height={28} />
-      </div>
-      <div className="launcher-grid">
-        {apps.map((app) => (
-          <button key={app.id} className="launcher-app" onClick={() => openApp(app.id)}>
-            <Icon icon={app.icon} width={28} height={28} />
-            <strong>{t(appTitleKeys[app.id])}</strong>
-            <span>{t(appDescriptionKeys[app.id])}</span>
-          </button>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function Taskbar() {
-  const windows = useDesktopStore((state) => state.windows);
-  const activeWindowId = useDesktopStore((state) => state.activeWindowId);
-  const toggleLauncher = useDesktopStore((state) => state.toggleLauncher);
-  const toggleTaskbarWindow = useDesktopStore((state) => state.toggleTaskbarWindow);
-  const resetWindowLayout = useDesktopStore((state) => state.resetWindowLayout);
-  const t = useLanguageStore((state) => state.t);
-  
-  const [timeStr, setTimeStr] = useState("");
-
-  useEffect(() => {
-    function updateClock() {
-      const now = new Date();
-      setTimeStr(
-        now.toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        })
-      );
-    }
-    updateClock();
-    const interval = setInterval(updateClock, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <footer className="taskbar" onMouseDown={(event) => event.stopPropagation()}>
-      <button className="start-button" onClick={toggleLauncher} aria-label="Open launcher">
-        <Icon icon="solar:cat-bold-duotone" width={22} height={22} />
-      </button>
-      <div className="taskbar-apps">
-        {windows.map((window) => (
-          <button
-            key={window.id}
-            className={clsx(
-              "taskbar-item",
-              activeWindowId === window.id && !window.minimized && "is-active",
-              window.minimized && "is-minimized",
-            )}
-            data-context-kind="taskbar-window"
-            data-context-id={window.id}
-            onClick={() => toggleTaskbarWindow(window.id)}
-          >
-            <Icon icon={getAppIcon(window.appId, window.icon)} width={18} height={18} />
-            <span>{t(appTitleKeys[window.appId])}</span>
-          </button>
-        ))}
-      </div>
-      <div className="system-tray">
-        <button className="tray-button" onClick={resetWindowLayout} title="Reset window layout" aria-label="Reset window layout">
-          <Icon icon="solar:restart-bold-duotone" width={15} height={15} />
-        </button>
-        <span className="tray-pill"><Icon icon="solar:database-bold-duotone" width={15} height={15} /> local</span>
-        <span>{timeStr}</span>
-      </div>
-    </footer>
   );
 }

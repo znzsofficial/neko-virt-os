@@ -12,13 +12,18 @@
   "dependencies": {
     "@iconify-icon/react": "latest",
     "clsx": "latest",
+    "cmdk": "^1.1.1",
     "dexie": "latest",
+    "dompurify": "^3.4.11",
+    "fuse.js": "^7.4.2",
+    "marked": "^18.0.5",
     "nanoid": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "react-hotkeys-hook": "^5.3.3",
     "react-rnd": "latest",
-    "zustand": "latest",
-    "zod": "latest"
+    "zod": "latest",
+    "zustand": "latest"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "latest",

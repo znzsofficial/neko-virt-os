@@ -1,12 +1,13 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import { apps, initialWindows } from "./apps";
-import type { DesktopStore, WindowBounds, WindowState } from "./types";
+import type { DesktopLayoutMode, DesktopStore, WindowBounds, WindowState } from "./types";
 
 export const WINDOW_LAYOUT_STORAGE_KEY = "neko-virt-os.window-layout.v1";
 export const SNAP_THRESHOLD = 18;
 
 const DESKTOP_ICON_POSITIONS_KEY = "neko-virt-os.desktop-icons.v1";
+const DESKTOP_LAYOUT_MODE_KEY = "neko-virt-os.desktop-layout-mode.v1";
 
 function loadIconPositions(): Record<string, { x: number; y: number }> {
   try {
@@ -17,12 +18,22 @@ function loadIconPositions(): Record<string, { x: number; y: number }> {
   }
 }
 
+function loadDesktopLayoutMode(): DesktopLayoutMode {
+  try {
+    const raw = localStorage.getItem(DESKTOP_LAYOUT_MODE_KEY);
+    return raw === "free" || raw === "grid" ? raw : "grid";
+  } catch {
+    return "grid";
+  }
+}
+
 const initialDesktopSnapshot = loadWindowSnapshot();
 
 export const useDesktopStore = create<DesktopStore>((set, get) => ({
   windows: initialDesktopSnapshot.windows,
   activeWindowId: initialDesktopSnapshot.activeWindowId,
   launcherOpen: false,
+  desktopLayoutMode: loadDesktopLayoutMode(),
   desktopIconPositions: loadIconPositions(),
   openApp: (appId) => {
     const app = apps.find((item) => item.id === appId);
@@ -218,10 +229,15 @@ export const useDesktopStore = create<DesktopStore>((set, get) => ({
       localStorage.setItem(DESKTOP_ICON_POSITIONS_KEY, JSON.stringify(nextPositions));
       return { desktopIconPositions: nextPositions };
     }),
+  setDesktopLayoutMode: (mode) => {
+    localStorage.setItem(DESKTOP_LAYOUT_MODE_KEY, mode);
+    set({ desktopLayoutMode: mode });
+  },
   resetWindowLayout: () => {
     localStorage.removeItem(WINDOW_LAYOUT_STORAGE_KEY);
     localStorage.removeItem(DESKTOP_ICON_POSITIONS_KEY);
-    set({ windows: initialWindows, activeWindowId: "win-files", launcherOpen: false, desktopIconPositions: {} });
+    localStorage.removeItem(DESKTOP_LAYOUT_MODE_KEY);
+    set({ windows: initialWindows, activeWindowId: "win-files", launcherOpen: false, desktopLayoutMode: "grid", desktopIconPositions: {} });
   },
   toggleLauncher: () => set((state) => ({ launcherOpen: !state.launcherOpen })),
   closeLauncher: () => set({ launcherOpen: false }),
@@ -268,6 +284,9 @@ function loadWindowSnapshot() {
     const rawSnapshot = localStorage.getItem(WINDOW_LAYOUT_STORAGE_KEY);
     if (!rawSnapshot) return { windows: initialWindows, activeWindowId: "win-files" };
     const snapshot = JSON.parse(rawSnapshot) as { windows?: WindowState[]; activeWindowId?: string | null };
+    if (Array.isArray(snapshot.windows) && snapshot.windows.length === 0) {
+      return { windows: [], activeWindowId: null };
+    }
     const windows = snapshot.windows?.map(normalizeWindowState).filter(Boolean) as WindowState[] | undefined;
     if (!windows?.length) return { windows: initialWindows, activeWindowId: "win-files" };
     const activeWindowId = windows.some((win) => win.id === snapshot.activeWindowId)

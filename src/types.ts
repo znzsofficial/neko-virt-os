@@ -1,6 +1,6 @@
 import type { FsFile } from "./virtualFs";
 
-export type AppId = "files" | "notes" | "settings" | "terminal" | "about" | "task-manager" | "browser" | "calculator" | "calendar";
+export type AppId = "files" | "notes" | "settings" | "terminal" | "about" | "task-manager" | "browser" | "calculator" | "calendar" | "tasks" | "timer" | "palette";
 
 export type WindowBounds = {
   x: number;
@@ -20,6 +20,8 @@ export type WindowState = WindowBounds & {
   restoreBounds?: WindowBounds;
 };
 
+export type DesktopLayoutMode = "grid" | "free";
+
 export type AppDefinition = {
   id: AppId;
   title: string;
@@ -33,6 +35,7 @@ export type DesktopStore = {
   windows: WindowState[];
   activeWindowId: string | null;
   launcherOpen: boolean;
+  desktopLayoutMode: DesktopLayoutMode;
   desktopIconPositions: Record<string, { x: number; y: number }>;
   openApp: (appId: AppId) => void;
   closeWindow: (id: string) => void;
@@ -47,6 +50,7 @@ export type DesktopStore = {
   tileWindows: () => void;
   updateWindow: (id: string, patch: Partial<WindowState>) => void;
   updateDesktopIconPosition: (id: string, x: number, y: number) => void;
+  setDesktopLayoutMode: (mode: DesktopLayoutMode) => void;
   resetWindowLayout: () => void;
   toggleLauncher: () => void;
   closeLauncher: () => void;
@@ -101,7 +105,8 @@ export type Notification = {
 export type ThemeSettings = {
   accentColor: "blue" | "purple" | "emerald" | "amber";
   density: "compact" | "cozy";
-  theme: "light" | "dark";
+  theme: "system" | "light" | "dark";
+  wallpaperId: "system" | "alpine-lake" | "star-field" | "pacific" | "green-meadow" | "forest" | "cabin";
 };
 
 export type FileSortMode = "updated" | "name" | "size";

@@ -38,6 +38,27 @@ export const apps: AppDefinition[] = [
     defaultSize: { width: 520, height: 430 },
   },
   {
+    id: "tasks",
+    title: "Tasks",
+    icon: "solar:checklist-minimalistic-bold-duotone",
+    description: "Track local to-dos",
+    defaultSize: { width: 460, height: 460 },
+  },
+  {
+    id: "timer",
+    title: "Timer",
+    icon: "solar:stopwatch-bold-duotone",
+    description: "Clock and stopwatch",
+    defaultSize: { width: 430, height: 360 },
+  },
+  {
+    id: "palette",
+    title: "Palette",
+    icon: "solar:pallete-2-bold-duotone",
+    description: "Copy useful colors",
+    defaultSize: { width: 520, height: 420 },
+  },
+  {
     id: "settings",
     title: "Settings",
     icon: "solar:settings-bold-duotone",
