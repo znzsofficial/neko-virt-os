@@ -6,6 +6,7 @@ import {
   listFiles,
   permanentlyDeleteFile,
   renameFile,
+  resetVirtualFiles,
   restoreFile,
   updateFileContent,
 } from "./virtualFs";
@@ -142,6 +143,12 @@ export const useFsStore = create<FsStore>((set, get) => ({
     const files = await listFiles();
     const nextFile = files.find((file) => !file.trashed) ?? null;
     set({ files, selectedFileId: nextFile?.id ?? null, draft: nextFile?.content ?? "", dirty: false });
+  },
+  resetVirtualFiles: async () => {
+    await resetVirtualFiles();
+    const files = await listFiles();
+    const nextFile = files.find((file) => !file.trashed) ?? null;
+    set({ files, selectedFileId: nextFile?.id ?? null, draft: nextFile?.content ?? "", dirty: false, loaded: true });
   },
   selectFileByName: (name) => {
     const file = findFileByName(get().files, name);

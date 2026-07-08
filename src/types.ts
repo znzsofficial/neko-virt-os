@@ -75,6 +75,7 @@ export type FsStore = {
   permanentlyDeleteSelectedFile: () => Promise<void>;
   permanentlyDeleteFileById: (id: string) => Promise<void>;
   emptyTrash: () => Promise<void>;
+  resetVirtualFiles: () => Promise<void>;
   renameSelectedFile: (name: string) => Promise<FileMutationResult>;
   renameFileByName: (fromName: string, toName: string) => Promise<FileMutationResult>;
   selectFileByName: (name: string) => FsFile | null;

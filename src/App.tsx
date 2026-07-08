@@ -5,6 +5,7 @@ import { useEffect, useState, type MouseEvent } from "react";
 import { apps } from "./apps";
 import { useFsStore } from "./fsStore";
 import { useNotificationStore } from "./notificationStore";
+import { useLanguageStore, type TranslationKey } from "./languageStore";
 import { findFileByName, formatFileSize, formatFileTime, sortFiles } from "./fileUtils";
 import { snapWindowBounds, useDesktopStore } from "./windowStore";
 import type { FsFile } from "./virtualFs";
@@ -105,36 +106,60 @@ function getBrowserName(snapshot?: DeviceSnapshot) {
   return match ? `${match[1] === "Edg" ? "Edge" : match[1]} ${match[2]}` : ua;
 }
 
-function getDeviceRows(storage: StorageSnapshot | null, device?: DeviceSnapshot) {
+function getDeviceRows(storage: StorageSnapshot | null, device: DeviceSnapshot | undefined, t: (key: TranslationKey) => string) {
   const nav = navigator as BrowserNavigator;
   const screenInfo = window.screen;
   const connection = nav.connection;
   const heap = (performance as BrowserPerformance).memory;
 
   return [
-    ["CPU Threads", navigator.hardwareConcurrency ? `${navigator.hardwareConcurrency} reported (privacy-capped)` : "Unavailable"],
-    ["Device Memory", nav.deviceMemory ? `${nav.deviceMemory} GB approximate (privacy-rounded)` : "Unavailable"],
-    ["JS Heap", heap ? `${formatBytes(heap.usedJSHeapSize)} used / ${formatBytes(heap.jsHeapSizeLimit)} limit` : "Unavailable"],
-    ["Platform", nav.userAgentData?.platform || navigator.platform || "Unavailable"],
-    ["Architecture", device?.architecture ? `${device.architecture}${device.bitness ? ` ${device.bitness}-bit` : ""}` : "Unavailable"],
-    ["Platform Version", device?.platformVersion || "Unavailable"],
-    ["Browser", getBrowserName(device)],
-    ["Mobile", nav.userAgentData ? (nav.userAgentData.mobile ? "Yes" : "No") : navigator.maxTouchPoints > 1 ? "Possibly" : "No"],
-    ["Language", navigator.language || "Unavailable"],
-    ["Timezone", Intl.DateTimeFormat().resolvedOptions().timeZone || "Unavailable"],
-    ["Screen", `${screenInfo.width} x ${screenInfo.height} @ ${window.devicePixelRatio.toFixed(2)}x`],
-    ["Viewport", `${window.innerWidth} x ${window.innerHeight}`],
-    ["Color Depth", `${screenInfo.colorDepth}-bit`],
-    ["Touch Points", `${navigator.maxTouchPoints || 0}`],
-    ["Network", connection?.effectiveType ? `${connection.effectiveType}${connection.downlink ? `, ${connection.downlink} Mbps estimated` : ""}${connection.rtt ? `, ${connection.rtt}ms RTT` : ""}` : "Unavailable"],
-    ["Origin Storage", `${getStorageLabel(storage)} (site quota, not physical disk)`],
-    ["Secure Context", window.isSecureContext ? "Yes" : "No"],
+    [t("processor"), navigator.hardwareConcurrency ? `${navigator.hardwareConcurrency} threads` : t("unavailable")],
+    [t("memory"), nav.deviceMemory ? `${nav.deviceMemory} GB` : t("unavailable")],
+    [t("jsHeap"), heap ? `${formatBytes(heap.usedJSHeapSize)} / ${formatBytes(heap.jsHeapSizeLimit)}` : t("unavailable")],
+    [t("platform"), nav.userAgentData?.platform || navigator.platform || t("unavailable")],
+    [t("architecture"), device?.architecture ? `${device.architecture}${device.bitness ? ` ${device.bitness}-bit` : ""}` : t("unavailable")],
+    [t("platformVersion"), device?.platformVersion || t("unavailable")],
+    [t("browser"), getBrowserName(device)],
+    [t("mobile"), nav.userAgentData ? (nav.userAgentData.mobile ? t("yes") : t("no")) : navigator.maxTouchPoints > 1 ? t("possibly") : t("no")],
+    [t("language"), navigator.language || t("unavailable")],
+    [t("timezone"), Intl.DateTimeFormat().resolvedOptions().timeZone || t("unavailable")],
+    [t("screen"), `${screenInfo.width} x ${screenInfo.height} @ ${window.devicePixelRatio.toFixed(2)}x`],
+    [t("viewport"), `${window.innerWidth} x ${window.innerHeight}`],
+    [t("colorDepth"), `${screenInfo.colorDepth}-bit`],
+    [t("touchPoints"), `${navigator.maxTouchPoints || 0}`],
+    [t("network"), connection?.effectiveType ? `${connection.effectiveType}${connection.downlink ? `, ${connection.downlink} Mbps` : ""}${connection.rtt ? `, ${connection.rtt}ms` : ""}` : t("unavailable")],
+    [t("storage"), getStorageLabel(storage)],
+    [t("secureContext"), window.isSecureContext ? t("yes") : t("no")],
   ];
 }
 
 function getAppIcon(appId: AppId, fallback: string) {
   return apps.find((app) => app.id === appId)?.icon ?? fallback;
 }
+
+const appTitleKeys: Record<AppId, TranslationKey> = {
+  files: "appFiles",
+  notes: "appNotes",
+  browser: "appBrowser",
+  calculator: "appCalculator",
+  calendar: "appCalendar",
+  settings: "appSettings",
+  terminal: "appTerminal",
+  "task-manager": "appTaskManager",
+  about: "appAbout",
+};
+
+const appDescriptionKeys: Record<AppId, TranslationKey> = {
+  files: "descFiles",
+  notes: "descNotes",
+  browser: "descBrowser",
+  calculator: "descCalculator",
+  calendar: "descCalendar",
+  settings: "descSettings",
+  terminal: "descTerminal",
+  "task-manager": "descTaskManager",
+  about: "descAbout",
+};
 
 function setNoteWindowDirty(windowId: string, dirty: boolean) {
   const registry = ((globalThis as any).__notes_dirty_windows ??= {}) as Record<string, boolean>;
@@ -174,6 +199,7 @@ export function App() {
   const focusWindow = useDesktopStore((state) => state.focusWindow);
   const restoreWindow = useDesktopStore((state) => state.restoreWindow);
   const initFs = useFsStore((state) => state.init);
+  const t = useLanguageStore((state) => state.t);
   const switcherWindows = windows.slice().sort((a, b) => b.z - a.z);
 
   // Persist normalized theme settings before the boot screen finishes.
@@ -182,9 +208,6 @@ export function App() {
     applyThemeSettings(theme);
     localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(theme));
 
-    // Simulate system boot animation
-    const timer = setTimeout(() => setBooting(false), 1600);
-    return () => clearTimeout(timer);
   }, []);
 
   function openContextMenu(event: MouseEvent<HTMLElement>) {
@@ -201,7 +224,14 @@ export function App() {
   }
 
   useEffect(() => {
-    void initFs();
+    let mounted = true;
+    const minBootTime = new Promise((resolve) => window.setTimeout(resolve, 900));
+    void Promise.all([initFs(), minBootTime]).then(() => {
+      if (mounted) setBooting(false);
+    });
+    return () => {
+      mounted = false;
+    };
   }, [initFs]);
 
   useEffect(() => {
@@ -243,7 +273,7 @@ export function App() {
           <div className="boot-progress-track">
             <div className="boot-progress-bar" />
           </div>
-          <span className="boot-status">Quiet local workstation booting...</span>
+          <span className="boot-status">{t("bootStatus")}</span>
         </div>
       </main>
     );
@@ -301,16 +331,17 @@ function NotificationOverlay() {
 }
 
 function WindowSwitcher({ windows, selectedIndex }: { windows: WindowState[]; selectedIndex: number }) {
+  const t = useLanguageStore((state) => state.t);
   return (
     <section className="window-switcher" aria-label="Window switcher">
       <div className="window-switcher-panel">
-        <h2>Switch windows</h2>
+        <h2>{t("switchWindows")}</h2>
         <div className="window-switcher-grid">
           {windows.map((window, index) => (
             <div key={window.id} className={clsx("window-switcher-item", index === selectedIndex && "is-selected", window.minimized && "is-minimized")}>
               <Icon icon={getAppIcon(window.appId, window.icon)} width={28} height={28} />
               <strong>{window.title}</strong>
-              <span>{window.minimized ? "Minimized" : "Running"}</span>
+              <span>{window.minimized ? t("minimized") : t("running")}</span>
             </div>
           ))}
         </div>
@@ -329,6 +360,7 @@ function Desktop() {
   const selectFile = useFsStore((state) => state.selectFile);
   const deleteSelectedFile = useFsStore((state) => state.deleteSelectedFile);
   const addNotification = useNotificationStore((state) => state.addNotification);
+  const t = useLanguageStore((state) => state.t);
   const desktopApps: AppId[] = ["files", "notes", "browser", "calculator", "calendar", "settings", "task-manager", "about"];
   const [pinnedDesktopApps, setPinnedDesktopApps] = useState<AppId[]>(desktopApps);
   const [hiddenDesktopApps, setHiddenDesktopApps] = useState<AppId[]>([]);
@@ -536,7 +568,7 @@ function Desktop() {
         <span className="brand-mark">N</span>
         <div>
           <p>NekoVirtOS</p>
-          <span>Quiet local workstation</span>
+          <span>{t("desktopSubtitle")}</span>
         </div>
       </div>
       <div className="desktop-icons">
@@ -559,7 +591,7 @@ function Desktop() {
               onDoubleClick={() => openApp(app.id)}
             >
               <Icon icon={app.icon} width={30} height={30} />
-              <span>{app.title}</span>
+              <span>{t(appTitleKeys[app.id])}</span>
             </div>
           );
         })}
@@ -617,6 +649,7 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
   const togglePinnedWindowZ = useDesktopStore((state) => state.togglePinnedWindowZ);
   const resetWindowLayout = useDesktopStore((state) => state.resetWindowLayout);
   const addNotification = useNotificationStore((state) => state.addNotification);
+  const t = useLanguageStore((state) => state.t);
   const createFile = useFsStore((state) => state.createFile);
 
   const files = useFsStore((state) => state.files);
@@ -638,7 +671,7 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
   async function renameFileFromMenu() {
     if (!file) return;
     selectFile(file.id);
-    const nextName = window.prompt("Rename file", file.name);
+    const nextName = window.prompt(t("renameFilePrompt"), file.name);
     if (!nextName || nextName.trim() === file.name) return;
     const result = await renameSelectedFile(nextName);
     if (result.error) {
@@ -719,7 +752,7 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
         <>
           <button role="menuitem" onClick={() => run(() => openApp(app.id))}>
             <Icon icon="solar:login-2-bold-duotone" width={16} height={16} />
-            Open {app.title}
+            {t("open")} {t(appTitleKeys[app.id])}
           </button>
           <button
             role="menuitem"
@@ -732,9 +765,9 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
             }
           >
             <Icon icon="solar:eye-closed-bold-duotone" width={16} height={16} />
-            Hide from Desktop
+            {t("hideFromDesktop")}
           </button>
-          <span className="context-menu-note">Pinned application</span>
+          <span className="context-menu-note">{t("pinnedApplication")}</span>
           <div className="context-menu-divider" />
         </>
       ) : null}
@@ -744,11 +777,11 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
             <>
               <button role="menuitem" onClick={() => run(restoreFileFromMenu)}>
                 <Icon icon="solar:undo-left-round-bold-duotone" width={16} height={16} />
-                Restore
+                {t("restore")}
               </button>
               <button role="menuitem" onClick={() => run(permanentlyDeleteFileFromMenu)}>
                 <Icon icon="solar:trash-bin-minimalistic-bold-duotone" width={16} height={16} />
-                Delete forever
+                {t("deleteForever")}
               </button>
             </>
           ) : (
@@ -761,15 +794,15 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
                 })}
               >
                 <Icon icon="solar:document-text-bold-duotone" width={16} height={16} />
-                Open in Notes
+                {t("open")} {t("appNotes")}
               </button>
               <button role="menuitem" onClick={() => run(renameFileFromMenu)}>
                 <Icon icon="solar:pen-new-square-bold-duotone" width={16} height={16} />
-                Rename
+                {t("rename")}
               </button>
               <button role="menuitem" onClick={() => run(deleteFileFromMenu)}>
                 <Icon icon="solar:trash-bin-trash-bold-duotone" width={16} height={16} />
-                Move to Trash
+                {t("moveToTrash")}
               </button>
             </>
           )}
@@ -780,15 +813,15 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
         <>
           <button role="menuitem" onClick={() => run(() => restoreWindow(windowState.id))}>
             <Icon icon="solar:login-2-bold-duotone" width={16} height={16} />
-            Restore
+            {t("restore")}
           </button>
           <button role="menuitem" onClick={() => run(() => minimizeWindow(windowState.id))}>
             <span className="context-glyph">-</span>
-            Minimize
+            {t("minimize")}
           </button>
           <button role="menuitem" onClick={() => run(() => toggleMaximize(windowState.id))}>
             <span className="context-glyph">{windowState.maximized ? "□" : "▢"}</span>
-            {windowState.maximized ? "Restore size" : "Maximize"}
+            {windowState.maximized ? t("restoreSize") : t("maximize")}
           </button>
           <button role="menuitem" onClick={() => run(() => snapWindow(windowState.id, "left"))}>
             <Icon icon="solar:sidebar-minimalistic-bold-duotone" width={16} height={16} />
@@ -805,7 +838,7 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
           <div className="context-menu-divider" />
           <button role="menuitem" onClick={() => run(() => requestCloseWindow(windowState, closeWindow))}>
             <span className="context-glyph">×</span>
-            Close
+            {t("close")}
           </button>
           <div className="context-menu-divider" />
         </>
@@ -814,7 +847,7 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
         <>
           <button role="menuitem" onClick={() => run(createFileFromMenu)}>
             <Icon icon="solar:add-circle-bold-duotone" width={16} height={16} />
-            Create text file
+            {t("createTextFile")}
           </button>
           <div className="context-menu-divider" />
         </>
@@ -832,7 +865,7 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
             }
           >
             <Icon icon="solar:eye-bold-duotone" width={16} height={16} />
-            Show hidden applications
+            {t("showHiddenApplications")}
           </button>
           <div className="context-menu-divider" />
         </>
@@ -840,20 +873,20 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
       {menu.kind !== "window" && menu.kind !== "taskbar-window" && menu.kind !== "files-empty" ? (
         <button role="menuitem" onClick={() => run(createFileDirectFromMenu)}>
           <Icon icon="solar:add-circle-bold-duotone" width={16} height={16} />
-          New text file
+          {t("newFile")}
         </button>
       ) : null}
       <button role="menuitem" onClick={() => run(cascadeWindows)}>
         <Icon icon="solar:layers-bold-duotone" width={16} height={16} />
-        Cascade windows
+        {t("cascadeWindows")}
       </button>
       <button role="menuitem" onClick={() => run(tileWindows)}>
         <Icon icon="solar:widget-5-bold-duotone" width={16} height={16} />
-        Show windows side by side
+        {t("tileWindows")}
       </button>
       <button role="menuitem" onClick={() => run(resetWindowLayout)}>
         <Icon icon="solar:restart-bold-duotone" width={16} height={16} />
-        Reset windows
+        {t("resetWindows")}
       </button>
     </div>
   );
@@ -869,6 +902,8 @@ function SystemWindow({ window }: { window: WindowState }) {
   const updateWindow = useDesktopStore((state) => state.updateWindow);
   const isActive = activeWindowId === window.id;
   const windowIcon = getAppIcon(window.appId, window.icon);
+  const t = useLanguageStore((state) => state.t);
+  const windowTitle = t(appTitleKeys[window.appId]);
   const [isMinimizing, setIsMinimizing] = useState(false);
   const [liveBounds, setLiveBounds] = useState(() => ({ x: window.x, y: window.y, width: window.width, height: window.height }));
 
@@ -884,6 +919,26 @@ function SystemWindow({ window }: { window: WindowState }) {
     }, 170);
   }
 
+  function restoreForDrag(event: MouseEvent | globalThis.MouseEvent) {
+    if (!window.maximized) return;
+    const fallbackWidth = Math.min(760, Math.max(480, globalThis.window.innerWidth * 0.58));
+    const fallbackHeight = Math.min(520, Math.max(320, globalThis.window.innerHeight * 0.58));
+    const restoreBounds = window.restoreBounds ?? {
+      x: Math.max(14, event.clientX - fallbackWidth / 2),
+      y: 48,
+      width: fallbackWidth,
+      height: fallbackHeight,
+    };
+    const pointerRatio = Math.min(Math.max((event.clientX - window.x) / Math.max(window.width, 1), 0.15), 0.85);
+    const restored = snapWindowBounds({
+      ...restoreBounds,
+      x: event.clientX - restoreBounds.width * pointerRatio,
+      y: Math.max(18, event.clientY - 18),
+    });
+    setLiveBounds(restored);
+    updateWindow(window.id, { ...restored, maximized: false, restoreBounds: undefined });
+  }
+
   if (window.minimized) return null;
 
   return (
@@ -893,13 +948,14 @@ function SystemWindow({ window }: { window: WindowState }) {
       className={clsx("system-window", isActive && "is-active", window.maximized && "is-maximized", isMinimizing && "is-minimizing")}
       position={{ x: liveBounds.x, y: liveBounds.y }}
       size={{ width: liveBounds.width, height: liveBounds.height }}
-      disableDragging={window.maximized}
+      disableDragging={false}
       dragHandleClassName="window-titlebar"
       enableResizing={!window.maximized}
       minWidth={380}
       minHeight={250}
       style={{ zIndex: window.z }}
       onMouseDown={() => focusWindow(window.id)}
+      onDragStart={(event) => restoreForDrag(event as globalThis.MouseEvent)}
       onDrag={(_, data) => setLiveBounds((current) => ({ ...current, x: data.x, y: data.y }))}
       onDragStop={(_, data) => {
         if (data.y <= 14) {
@@ -941,20 +997,20 @@ function SystemWindow({ window }: { window: WindowState }) {
         <header className="window-titlebar" onDoubleClick={() => toggleMaximize(window.id)}>
           <div className="window-title">
             <Icon icon={windowIcon} width={18} height={18} />
-            <span>{window.title}</span>
+            <span>{windowTitle}</span>
           </div>
           <div
             className="window-actions"
             onMouseDown={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
           >
-            <button aria-label={`Minimize ${window.title}`} onClick={requestMinimize}>
+            <button aria-label={`Minimize ${windowTitle}`} onClick={requestMinimize}>
               <span aria-hidden="true">-</span>
             </button>
-            <button aria-label={`${window.maximized ? "Restore" : "Maximize"} ${window.title}`} onClick={() => toggleMaximize(window.id)}>
+            <button aria-label={`${window.maximized ? "Restore" : "Maximize"} ${windowTitle}`} onClick={() => toggleMaximize(window.id)}>
               <span aria-hidden="true">{window.maximized ? "□" : "▢"}</span>
             </button>
-            <button aria-label={`Close ${window.title}`} onClick={() => requestCloseWindow(window, closeWindow)}>
+            <button aria-label={`Close ${windowTitle}`} onClick={() => requestCloseWindow(window, closeWindow)}>
               <span aria-hidden="true">×</span>
             </button>
           </div>
@@ -1008,6 +1064,7 @@ function FilesApp() {
   const renameSelectedFile = useFsStore((state) => state.renameSelectedFile);
   const openApp = useDesktopStore((state) => state.openApp);
   const addNotification = useNotificationStore((state) => state.addNotification);
+  const t = useLanguageStore((state) => state.t);
   const selectedFile = files.find((file) => file.id === selectedFileId) ?? null;
   const activeFiles = files.filter((file) => !file.trashed);
   const trashedFiles = files.filter((file) => file.trashed);
@@ -1115,49 +1172,49 @@ function FilesApp() {
   return (
     <div className="files-app app-grid">
       <aside className="app-sidebar">
-        <NavItem icon="solar:home-2-bold-duotone" label="Home" active={section === "home"} onClick={() => setSection("home")} />
-        <NavItem icon="solar:folder-with-files-bold-duotone" label="Files" active={section === "files"} onClick={() => setSection("files")} />
-        <NavItem icon="solar:clock-circle-bold-duotone" label="Recent" active={section === "recent"} onClick={() => setSection("recent")} />
-        <NavItem icon="solar:trash-bin-trash-bold-duotone" label={`Trash${trashedFiles.length ? ` (${trashedFiles.length})` : ""}`} active={section === "trash"} onClick={() => setSection("trash")} />
+        <NavItem icon="solar:home-2-bold-duotone" label={t("home")} active={section === "home"} onClick={() => setSection("home")} />
+        <NavItem icon="solar:folder-with-files-bold-duotone" label={t("appFiles")} active={section === "files"} onClick={() => setSection("files")} />
+        <NavItem icon="solar:clock-circle-bold-duotone" label={t("recent")} active={section === "recent"} onClick={() => setSection("recent")} />
+        <NavItem icon="solar:trash-bin-trash-bold-duotone" label={`${t("trash")}${trashedFiles.length ? ` (${trashedFiles.length})` : ""}`} active={section === "trash"} onClick={() => setSection("trash")} />
       </aside>
       <section className="app-main">
         <div className="app-toolbar">
           <div>
-            <h2>{section === "home" ? "Home" : section === "recent" ? "Recent" : section === "trash" ? "Trash" : "Files"}</h2>
-            <p>{section === "trash" ? `${trashedFiles.length} item${trashedFiles.length === 1 ? "" : "s"} in Trash` : loaded ? `${activeFiles.length} local text files` : "Mounting local filesystem..."}</p>
+            <h2>{section === "home" ? t("home") : section === "recent" ? t("recent") : section === "trash" ? t("trash") : t("appFiles")}</h2>
+            <p>{section === "trash" ? `${trashedFiles.length} ${t("trash")}` : loaded ? `${activeFiles.length} ${t("filesCount")}` : t("mountingFs")}</p>
           </div>
           <div className="toolbar-actions">
             {section === "trash" ? (
               <>
                 <button className="button-ghost" disabled={!selectedFile?.trashed} onClick={() => void restoreSelected()}>
                   <Icon icon="solar:undo-left-round-bold-duotone" width={16} height={16} />
-                  Restore
+                  {t("restore")}
                 </button>
                 <button className="button-ghost" disabled={!selectedFile?.trashed} onClick={() => void deleteForever()}>
                   <Icon icon="solar:trash-bin-minimalistic-bold-duotone" width={16} height={16} />
-                  Delete forever
+                  {t("deleteForever")}
                 </button>
                 <button className="button-primary" disabled={!trashedFiles.length} onClick={() => void emptyTrashFromFiles()}>
-                  Empty Trash
+                  {t("emptyTrash")}
                 </button>
               </>
             ) : (
               <>
                 <button className="button-ghost" disabled={!selectedFileId || selectedFile?.trashed} onClick={() => openApp("notes")}>
                   <Icon icon="solar:login-2-bold-duotone" width={16} height={16} />
-                  Open
+                  {t("open")}
                 </button>
                 <button className="button-ghost" disabled={!selectedFileId || selectedFile?.trashed} onClick={() => startRename()}>
                   <Icon icon="solar:pen-new-square-bold-duotone" width={16} height={16} />
-                  Rename
+                  {t("rename")}
                 </button>
                 <button className="button-ghost" disabled={!selectedFileId || selectedFile?.trashed} onClick={() => void deleteSelected()}>
                   <Icon icon="solar:trash-bin-trash-bold-duotone" width={16} height={16} />
-                  Delete
+                  {t("delete")}
                 </button>
                 <button className="button-primary" onClick={startCreateFile}>
                   <Icon icon="solar:add-circle-bold" width={16} height={16} />
-                  New file
+                  {t("newFile")}
                 </button>
               </>
             )}
@@ -1169,16 +1226,16 @@ function FilesApp() {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search files"
+              placeholder={t("searchFiles")}
               spellCheck="false"
             />
           </label>
           <label className="file-sort">
-            Sort
+            {t("sort")}
             <select value={sortMode} onChange={(event) => setSortMode(event.target.value as FileSortMode)}>
-              <option value="updated">Recently updated</option>
-              <option value="name">Name</option>
-              <option value="size">Size</option>
+              <option value="updated">{t("updatedSort")}</option>
+              <option value="name">{t("nameSort")}</option>
+              <option value="size">{t("sizeSort")}</option>
             </select>
           </label>
         </div>
@@ -1204,7 +1261,7 @@ function FilesApp() {
                   }
                 }}
               />
-              <span>New file</span>
+              <span>{t("newFileLabel")}</span>
               <span>0 B</span>
             </div>
           ) : null}
@@ -1250,31 +1307,31 @@ function FilesApp() {
           {loaded && visibleFiles.length === 0 ? (
             <div className="empty-state">
               <Icon icon="solar:document-add-bold-duotone" width={28} height={28} />
-              <p>{section === "trash" ? "Trash is empty." : activeFiles.length === 0 ? "No files yet. Create a local text file to start." : "No files match this search."}</p>
+              <p>{section === "trash" ? t("trashEmpty") : activeFiles.length === 0 ? t("noFilesYet") : t("noFilesMatch")}</p>
             </div>
           ) : null}
         </div>
       </section>
       <aside className="file-details">
-        <h3>Details</h3>
+        <h3>{t("details")}</h3>
         {selectedFile ? (
           <>
             <strong>{selectedFile.name}</strong>
             <dl>
-              <div><dt>Size</dt><dd>{formatFileSize(selectedFile.content)}</dd></div>
-              <div><dt>Words</dt><dd>{wordCount}</dd></div>
-              <div><dt>Characters</dt><dd>{previewText.length}</dd></div>
-              <div><dt>Charset</dt><dd>{charSetSize} unique</dd></div>
-              <div><dt>Updated</dt><dd>{formatFileTime(selectedFile.updatedAt)}</dd></div>
-              {selectedFile.trashed ? <div><dt>Deleted</dt><dd>{formatFileTime(selectedFile.deletedAt ?? selectedFile.updatedAt)}</dd></div> : null}
+              <div><dt>{t("fileSize")}</dt><dd>{formatFileSize(selectedFile.content)}</dd></div>
+              <div><dt>{t("words")}</dt><dd>{wordCount}</dd></div>
+              <div><dt>{t("characters")}</dt><dd>{previewText.length}</dd></div>
+              <div><dt>{t("charset")}</dt><dd>{charSetSize}</dd></div>
+              <div><dt>{t("updated")}</dt><dd>{formatFileTime(selectedFile.updatedAt)}</dd></div>
+              {selectedFile.trashed ? <div><dt>{t("deleted")}</dt><dd>{formatFileTime(selectedFile.deletedAt ?? selectedFile.updatedAt)}</dd></div> : null}
             </dl>
-            <p>Preview</p>
+            <p>{t("preview")}</p>
             <pre>{previewText.slice(0, 520) || "(empty file)"}</pre>
           </>
         ) : (
           <div className="empty-state compact">
             <Icon icon="solar:document-text-bold-duotone" width={24} height={24} />
-            <p>Select a file to inspect metadata and preview content.</p>
+            <p>{t("noFileDetails")}</p>
           </div>
         )}
       </aside>
@@ -1283,6 +1340,7 @@ function FilesApp() {
 }
 
 function NotesApp({ windowId }: { windowId: string }) {
+  const t = useLanguageStore((state) => state.t);
   const files = useFsStore((state) => state.files);
   const selectedFileId = useFsStore((state) => state.selectedFileId);
   const saveFileDraft = useFsStore((state) => state.saveFileDraft);
@@ -1318,18 +1376,18 @@ function NotesApp({ windowId }: { windowId: string }) {
     <div className="notes-app">
       <div className="app-toolbar compact">
         <div>
-          <h2>{selectedFile?.name ?? "No file selected"}</h2>
-          <p>{selectedFile ? `${dirty ? "Unsaved" : "Saved"} locally via IndexedDB` : "Create a file to begin"}</p>
+          <h2>{selectedFile?.name ?? t("noFileSelected")}</h2>
+          <p>{selectedFile ? (dirty ? t("notesUnsaved") : t("notesSaved")) : t("createFileToBegin")}</p>
         </div>
         <div className="toolbar-actions">
           <button className="button-ghost" onClick={() => {
             setLocalFileId(null);
             void createFile();
           }}>
-            New
+            {t("newFile")}
           </button>
           <button className="button-primary" disabled={!selectedFile || !dirty} onClick={() => void saveLocalDraft()}>
-            Save
+            {t("save")}
           </button>
         </div>
       </div>
@@ -1338,8 +1396,8 @@ function NotesApp({ windowId }: { windowId: string }) {
       ) : (
         <div className="empty-state notes-empty">
           <Icon icon="solar:notes-bold-duotone" width={34} height={34} />
-          <p>No local text file is selected.</p>
-          <button className="button-primary" onClick={() => void createFile()}>Create file</button>
+          <p>{t("noLocalTextSelected")}</p>
+          <button className="button-primary" onClick={() => void createFile()}>{t("createFile")}</button>
         </div>
       )}
     </div>
@@ -1347,6 +1405,7 @@ function NotesApp({ windowId }: { windowId: string }) {
 }
 
 function BrowserApp() {
+  const t = useLanguageStore((state) => state.t);
   const bookmarks = [
     ["Neko Wiki", "https://wiki.nekolaska.vip", "solar:book-2-bold-duotone"],
     ["Neko Games", "https://game.nekolaska.vip", "solar:gamepad-bold-duotone"],
@@ -1404,23 +1463,23 @@ function BrowserApp() {
           <Icon icon="solar:link-bold-duotone" width={16} height={16} />
           <input value={address} onChange={(event) => setAddress(event.target.value)} spellCheck="false" />
         </label>
-        <button className="button-primary" type="submit">Go</button>
-        <button className="button-ghost" type="button" disabled={isHome} onClick={() => window.open(currentUrl, "_blank", "noopener,noreferrer")}>Open</button>
+        <button className="button-primary" type="submit">{t("browserGo")}</button>
+        <button className="button-ghost" type="button" disabled={isHome} onClick={() => window.open(currentUrl, "_blank", "noopener,noreferrer")}>{t("browserOpen")}</button>
       </form>
       <main className="browser-page">
         {isHome ? (
           <section className="browser-home">
             <div className="browser-home-hero">
               <div className="browser-orb"><Icon icon="solar:global-bold-duotone" width={48} height={48} /></div>
-              <h2>Neko Browser</h2>
-              <p>Search the web or open a URL. Embedded mode is tried first, with external tab fallback when a site blocks frames.</p>
+              <h2>{t("appBrowser")}</h2>
+              <p>{t("browserHomeText")}</p>
             </div>
             <form className="browser-home-search" onSubmit={(event) => { event.preventDefault(); navigate(address); }}>
               <Icon icon="solar:magnifer-bold-duotone" width={18} height={18} />
-              <input value={address === "neko://home" ? "" : address} onChange={(event) => setAddress(event.target.value)} placeholder="Search or enter website" spellCheck="false" />
-              <button type="submit">Search</button>
+              <input value={address === "neko://home" ? "" : address} onChange={(event) => setAddress(event.target.value)} placeholder={t("browserSearchPlaceholder")} spellCheck="false" />
+              <button type="submit">{t("browserSearch")}</button>
             </form>
-            <h3>Frequent pages</h3>
+            <h3>{t("browserFrequent")}</h3>
             <div className="browser-bookmarks">
               {bookmarks.map(([label, url, icon]) => (
                 <button key={url} onClick={() => navigate(url)}>
@@ -1437,9 +1496,9 @@ function BrowserApp() {
             {iframeSlow && !iframeLoaded ? (
               <div className="browser-frame-notice">
                 <Icon icon="solar:shield-warning-bold-duotone" width={34} height={34} />
-                <h2>This site may block embedded mode</h2>
+                <h2>{t("browserBlocked")}</h2>
                 <p>{currentUrl}</p>
-                <button className="button-primary" onClick={() => window.open(currentUrl, "_blank", "noopener,noreferrer")}>Open in external tab</button>
+                <button className="button-primary" onClick={() => window.open(currentUrl, "_blank", "noopener,noreferrer")}>{t("browserExternal")}</button>
               </div>
             ) : null}
           </section>
@@ -1488,6 +1547,7 @@ function CalculatorApp() {
 }
 
 function CalendarApp() {
+  const t = useLanguageStore((state) => state.t);
   const [cursor, setCursor] = useState(() => new Date());
   const today = new Date();
   const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -1505,12 +1565,12 @@ function CalendarApp() {
   return (
     <div className="calendar-app">
       <header>
-        <button className="button-ghost" onClick={() => moveMonth(-1)}>Previous</button>
+        <button className="button-ghost" onClick={() => moveMonth(-1)}>{t("previous")}</button>
         <div>
           <h2>{cursor.toLocaleDateString("en", { month: "long", year: "numeric" })}</h2>
           <p>{today.toLocaleDateString("en", { weekday: "long", month: "short", day: "numeric" })}</p>
         </div>
-        <button className="button-ghost" onClick={() => moveMonth(1)}>Next</button>
+        <button className="button-ghost" onClick={() => moveMonth(1)}>{t("next")}</button>
       </header>
       <div className="calendar-grid">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <strong key={day}>{day}</strong>)}
@@ -1525,14 +1585,55 @@ function CalendarApp() {
 
 function SettingsApp() {
   const [themeSettings, setThemeSettings] = useState<ThemeSettings>(readThemeSettings);
+  const [storage, setStorage] = useState<StorageSnapshot | null>(null);
 
   const addNotification = useNotificationStore((state) => state.addNotification);
+  const resetVirtualFiles = useFsStore((state) => state.resetVirtualFiles);
+  const resetWindowLayout = useDesktopStore((state) => state.resetWindowLayout);
+  const language = useLanguageStore((state) => state.language);
+  const setLanguage = useLanguageStore((state) => state.setLanguage);
+  const t = useLanguageStore((state) => state.t);
+
+  useEffect(() => {
+    navigator.storage?.estimate().then(setStorage).catch(() => setStorage(null));
+  }, []);
 
   // Apply theme settings classes to html/body elements
   useEffect(() => {
     applyThemeSettings(themeSettings);
     localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(themeSettings));
   }, [themeSettings]);
+
+  async function clearCacheStorage() {
+    if (!("caches" in window)) {
+      addNotification({ title: "Cache Unavailable", message: "Cache Storage is not available in this browser.", type: "warning" });
+      return;
+    }
+    const keys = await caches.keys();
+    await Promise.all(keys.map((key) => caches.delete(key)));
+    navigator.storage?.estimate().then(setStorage).catch(() => setStorage(null));
+    addNotification({ title: "Cache Cleared", message: `${keys.length} cache bucket${keys.length === 1 ? "" : "s"} removed.`, type: "success" });
+  }
+
+  async function resetLocalFiles() {
+    if (!window.confirm("Reset the virtual file system to the default files?")) return;
+    await resetVirtualFiles();
+    navigator.storage?.estimate().then(setStorage).catch(() => setStorage(null));
+    addNotification({ title: "Virtual Storage Reset", message: "Default local files were restored.", type: "success" });
+  }
+
+  async function clearSiteData() {
+    if (!window.confirm("Clear NekoVirtOS local data? This resets files, windows, desktop layout, theme settings, and cache storage.")) return;
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+    localStorage.clear();
+    resetWindowLayout();
+    await resetVirtualFiles();
+    addNotification({ title: "Site Data Cleared", message: "Local data was reset. Reloading...", type: "success" });
+    window.setTimeout(() => window.location.reload(), 700);
+  }
 
   const tokens = [
     ["Primary", `oklch(0.520 0.145 ${ACCENT_HUES[themeSettings.accentColor]})`, "kernel"],
@@ -1545,32 +1646,52 @@ function SettingsApp() {
       <section className="settings-hero">
         <Icon icon="solar:cat-bold-duotone" width={42} height={42} />
         <div>
-          <h2>Quiet Neko Workstation</h2>
-          <p>Restrained product UI with customizable theme, accent, and density.</p>
+          <h2>{t("settingsHeroTitle")}</h2>
+          <p>{t("settingsHeroDescription")}</p>
         </div>
       </section>
 
-      <h3 className="settings-section-title">Color Mode</h3>
+      <h3 className="settings-section-title">{t("settingsLanguage")}</h3>
       <div className="settings-select-group">
-        {(["light", "dark"] as const).map((t) => (
+        {(["zh", "en"] as const).map((lang) => (
           <button
-            key={t}
-            className={clsx("settings-btn-pill", themeSettings.theme === t && "is-active")}
+            key={lang}
+            className={clsx("settings-btn-pill", language === lang && "is-active")}
             onClick={() => {
-              setThemeSettings((prev: ThemeSettings) => ({ ...prev, theme: t }));
+              setLanguage(lang);
               addNotification({
-                title: "Theme Changed",
-                message: `Color mode set to ${t} mode.`,
+                title: lang === "zh" ? "语言已切换" : "Language Changed",
+                message: lang === "zh" ? "界面语言已设置为中文。" : "Interface language set to English.",
                 type: "info",
               });
             }}
           >
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+            {lang === "zh" ? t("languageChinese") : t("languageEnglish")}
           </button>
         ))}
       </div>
 
-      <h3 className="settings-section-title">Accent Color</h3>
+      <h3 className="settings-section-title">{t("settingsTheme")}</h3>
+      <div className="settings-select-group">
+        {(["light", "dark"] as const).map((mode) => (
+          <button
+            key={mode}
+            className={clsx("settings-btn-pill", themeSettings.theme === mode && "is-active")}
+            onClick={() => {
+              setThemeSettings((prev: ThemeSettings) => ({ ...prev, theme: mode }));
+              addNotification({
+                title: "Theme Changed",
+                message: `Color mode set to ${mode} mode.`,
+                type: "info",
+              });
+            }}
+          >
+            {mode === "light" ? t("colorLight") : t("colorDark")}
+          </button>
+        ))}
+      </div>
+
+      <h3 className="settings-section-title">{t("settingsAccent")}</h3>
       <div className="settings-select-group">
         {(["blue", "purple", "emerald", "amber"] as const).map((color) => (
           <button
@@ -1590,7 +1711,7 @@ function SettingsApp() {
         ))}
       </div>
 
-      <h3 className="settings-section-title">Layout Density</h3>
+      <h3 className="settings-section-title">{t("settingsDensity")}</h3>
       <div className="settings-select-group">
         {(["cozy", "compact"] as const).map((d) => (
           <button
@@ -1605,12 +1726,12 @@ function SettingsApp() {
               });
             }}
           >
-            {d.charAt(0).toUpperCase() + d.slice(1)}
+            {d === "cozy" ? t("densityCozy") : t("densityCompact")}
           </button>
         ))}
       </div>
 
-      <h3 className="settings-section-title">Active CSS Tokens</h3>
+      <h3 className="settings-section-title">{t("settingsTokens")}</h3>
       <div className="settings-list">
         {tokens.map(([label, value, role]) => (
           <div key={label} className="settings-row">
@@ -1642,6 +1763,34 @@ function SettingsApp() {
             </button>
           </div>
         ))}
+      </div>
+
+      <h3 className="settings-section-title">{t("settingsData")}</h3>
+      <div className="settings-list">
+        <div className="settings-row data-row">
+          <span className="swatch swatch-surface" />
+          <div>
+            <strong>{t("dataOriginStorage")}</strong>
+            <p>{getStorageLabel(storage)}</p>
+          </div>
+          <button className="button-ghost" onClick={() => void clearCacheStorage()}>{t("clearCache")}</button>
+        </div>
+        <div className="settings-row data-row">
+          <span className="swatch swatch-focus" />
+          <div>
+            <strong>{t("virtualFiles")}</strong>
+            <p>{t("virtualFilesDescription")}</p>
+          </div>
+          <button className="button-ghost" onClick={() => void resetLocalFiles()}>{t("resetFiles")}</button>
+        </div>
+        <div className="settings-row data-row danger-row">
+          <span className="swatch swatch-danger" />
+          <div>
+            <strong>{t("siteData")}</strong>
+            <p>{t("siteDataDescription")}</p>
+          </div>
+          <button className="button-ghost" onClick={() => void clearSiteData()}>{t("clearSiteData")}</button>
+        </div>
       </div>
     </div>
   );
@@ -1823,6 +1972,7 @@ function splitCommand(command: string) {
 }
 
 function TaskManagerApp() {
+  const t = useLanguageStore((state) => state.t);
   const windows = useDesktopStore((state) => state.windows);
   const activeWindowId = useDesktopStore((state) => state.activeWindowId);
   const focusWindow = useDesktopStore((state) => state.focusWindow);
@@ -1849,7 +1999,7 @@ function TaskManagerApp() {
   const uptime = Math.max(1, Math.floor((tick - performance.timeOrigin) / 1000));
   const appMemory = memory ? formatBytes(memory.usedJSHeapSize) : "Unavailable";
   const appLimit = memory ? formatBytes(memory.jsHeapSizeLimit) : "Unavailable";
-  const deviceRows = getDeviceRows(storage, deviceInfo);
+  const deviceRows = getDeviceRows(storage, deviceInfo, t);
   const processRows = windows
     .slice()
     .sort((a, b) => b.z - a.z)
@@ -1858,7 +2008,7 @@ function TaskManagerApp() {
       return {
         ...window,
         icon: getAppIcon(window.appId, window.icon),
-        description: app?.description ?? "Neko process",
+        description: app ? t(appDescriptionKeys[app.id]) : "Neko process",
         status: window.minimized ? "Suspended" : activeWindowId === window.id ? "Active" : "Background",
         footprint: `${Math.max(12, Math.round((window.width * window.height) / 26000))} UI units`,
       };
@@ -1879,7 +2029,7 @@ function TaskManagerApp() {
       <main className="task-manager-main">
         <header className="task-manager-header">
           <div>
-            <h2>Task Manager</h2>
+            <h2>{t("appTaskManager")}</h2>
             <p>{windows.length} running windows, {files.length} local files, uptime {Math.floor(uptime / 60)}m {uptime % 60}s</p>
           </div>
           <div className="task-manager-metrics">
@@ -1948,7 +2098,7 @@ function TaskManagerApp() {
           </div>
           {appHistoryRows.map((app) => (
             <div key={app.id} className="process-row app-history-row">
-              <span className="process-name"><Icon icon={app.icon} width={18} height={18} /><span><strong>{app.title}</strong><small>{app.description}</small></span></span>
+              <span className="process-name"><Icon icon={app.icon} width={18} height={18} /><span><strong>{t(appTitleKeys[app.id])}</strong><small>{t(appDescriptionKeys[app.id])}</small></span></span>
               <span>{app.status}</span>
               <span>{app.windows}</span>
               <span>{app.defaultSize.width} x {app.defaultSize.height}</span>
@@ -1963,13 +2113,14 @@ function TaskManagerApp() {
 function AboutApp() {
   const [storage, setStorage] = useState<StorageSnapshot | null>(null);
   const [deviceInfo, setDeviceInfo] = useState<DeviceSnapshot | undefined>();
+  const t = useLanguageStore((state) => state.t);
 
   useEffect(() => {
     navigator.storage?.estimate().then(setStorage).catch(() => setStorage(null));
     void readHighEntropyDeviceInfo().then(setDeviceInfo);
   }, []);
 
-  const rows = getDeviceRows(storage, deviceInfo);
+  const rows = getDeviceRows(storage, deviceInfo, t);
 
   return (
     <div className="about-app">
@@ -1979,15 +2130,13 @@ function AboutApp() {
         </div>
         <div>
           <h2>NekoVirtOS</h2>
-          <p>
-            Browser-native system information. Values are reported by Web APIs and may be rounded or unavailable for privacy.
-          </p>
+          <p>{t("systemInfo")}</p>
         </div>
       </div>
       <dl>
-        <div><dt>Register</dt><dd>Product UI</dd></div>
-        <div><dt>Style</dt><dd>Quiet Neko Workstation</dd></div>
-        <div><dt>Storage</dt><dd>Local-first</dd></div>
+        <div><dt>{t("edition")}</dt><dd>NekoVirtOS Web</dd></div>
+        <div><dt>{t("interface")}</dt><dd>Quiet Workstation</dd></div>
+        <div><dt>{t("storageMode")}</dt><dd>Local-first</dd></div>
         {rows.map(([label, value]) => (
           <div key={label}><dt>{label}</dt><dd title={value}>{value}</dd></div>
         ))}
@@ -2007,13 +2156,14 @@ function NavItem({ icon, label, active = false, disabled = false, onClick }: { i
 
 function Launcher() {
   const openApp = useDesktopStore((state) => state.openApp);
+  const t = useLanguageStore((state) => state.t);
 
   return (
     <section className="launcher" onMouseDown={(event) => event.stopPropagation()}>
       <div className="launcher-header">
         <div>
-          <h1>Neko Launcher</h1>
-          <p>Open a quiet workspace tool</p>
+          <h1>{t("launcherTitle")}</h1>
+          <p>{t("launcherSubtitle")}</p>
         </div>
         <Icon icon="solar:cat-bold-duotone" width={28} height={28} />
       </div>
@@ -2021,8 +2171,8 @@ function Launcher() {
         {apps.map((app) => (
           <button key={app.id} className="launcher-app" onClick={() => openApp(app.id)}>
             <Icon icon={app.icon} width={28} height={28} />
-            <strong>{app.title}</strong>
-            <span>{app.description}</span>
+            <strong>{t(appTitleKeys[app.id])}</strong>
+            <span>{t(appDescriptionKeys[app.id])}</span>
           </button>
         ))}
       </div>
@@ -2036,6 +2186,7 @@ function Taskbar() {
   const toggleLauncher = useDesktopStore((state) => state.toggleLauncher);
   const toggleTaskbarWindow = useDesktopStore((state) => state.toggleTaskbarWindow);
   const resetWindowLayout = useDesktopStore((state) => state.resetWindowLayout);
+  const t = useLanguageStore((state) => state.t);
   
   const [timeStr, setTimeStr] = useState("");
 
@@ -2074,7 +2225,7 @@ function Taskbar() {
             onClick={() => toggleTaskbarWindow(window.id)}
           >
             <Icon icon={getAppIcon(window.appId, window.icon)} width={18} height={18} />
-            <span>{window.title}</span>
+            <span>{t(appTitleKeys[window.appId])}</span>
           </button>
         ))}
       </div>

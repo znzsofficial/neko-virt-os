@@ -25,6 +25,10 @@ db.version(2).stores({
 });
 
 db.on("populate", async () => {
+  await seedFiles();
+});
+
+async function seedFiles() {
   const now = Date.now();
   await db.files.bulkAdd([
     {
@@ -35,6 +39,7 @@ db.on("populate", async () => {
         "NekoVirtOS boot note\n\n- Build the shell first.\n- Keep Neko details quiet and useful.\n- Make files feel trustworthy.\n\nnya://local/home/Welcome.txt",
       createdAt: now - 120000,
       updatedAt: now - 90000,
+      trashed: false,
     },
     {
       id: "theme-notes-md",
@@ -44,9 +49,10 @@ db.on("populate", async () => {
         "# Quiet Neko Workstation\n\nA restrained product UI with neutral surfaces, configurable identity accents, and compact desktop density.\n\nAvoid generic SaaS, toy retro OS styling, and excessive anime decoration.",
       createdAt: now - 90000,
       updatedAt: now - 60000,
+      trashed: false,
     },
   ]);
-});
+}
 
 export async function listFiles() {
   return db.files.orderBy("updatedAt").reverse().toArray();
@@ -90,4 +96,9 @@ export async function permanentlyDeleteFile(id: string) {
 export async function emptyTrash() {
   const trashed = await db.files.filter((file) => Boolean(file.trashed)).toArray();
   await db.files.bulkDelete(trashed.map((file) => file.id));
+}
+
+export async function resetVirtualFiles() {
+  await db.files.clear();
+  await seedFiles();
 }
