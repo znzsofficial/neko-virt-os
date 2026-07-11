@@ -64,7 +64,7 @@ export function SettingsApp() {
     window.setTimeout(() => window.location.reload(), 700);
   }
 
-  async function setWallpaper(wallpaperId: ThemeSettings["wallpaperId"]) {
+  async function setWallpaper(target: "light" | "dark", wallpaperId: ThemeSettings["wallpaperId"]) {
     const wallpaper = WALLPAPERS[wallpaperId];
     if (wallpaper.url) {
       const url = wallpaper.url;
@@ -79,7 +79,12 @@ export function SettingsApp() {
         return;
       }
     }
-    setThemeSettings((prev: ThemeSettings) => ({ ...prev, wallpaperId }));
+    setThemeSettings((prev: ThemeSettings) => ({
+      ...prev,
+      wallpaperId,
+      wallpaperLightId: target === "light" ? wallpaperId : prev.wallpaperLightId,
+      wallpaperDarkId: target === "dark" ? wallpaperId : prev.wallpaperDarkId,
+    }));
     addNotification({
       title: t("wallpaperChanged"),
       message: phrase(t, "wallpaperChangedPrefix", t(wallpaper.labelKey), "wallpaperChangedSuffix"),
@@ -93,6 +98,31 @@ export function SettingsApp() {
     ["Accent", `oklch(${effectiveTheme === "dark" ? "0.760" : "0.650"} 0.115 ${ACCENT_HUES[themeSettings.accentColor]})`, "focus"],
     ["Panel", effectiveTheme === "dark" ? "oklch(0.190 0.010 255)" : "oklch(0.910 0.012 255)", "surface"],
   ] as const;
+  const wallpaperEntries = Object.entries(WALLPAPERS) as [ThemeSettings["wallpaperId"], (typeof WALLPAPERS)[ThemeSettings["wallpaperId"]]][];
+  const wallpaperGroups = wallpaperEntries.reduce<Record<string, typeof wallpaperEntries>>((groups, entry) => {
+    const key = entry[1].categoryKey;
+    groups[key] ??= [];
+    groups[key].push(entry);
+    return groups;
+  }, {});
+  const randomWallpaperIds = wallpaperEntries.map(([id]) => id);
+
+  function syncWallpapers() {
+    const sourceId = effectiveTheme === "dark" ? themeSettings.wallpaperDarkId : themeSettings.wallpaperLightId;
+    const nextSettings = {
+      ...themeSettings,
+      wallpaperId: sourceId,
+      wallpaperLightId: sourceId,
+      wallpaperDarkId: sourceId,
+    } satisfies ThemeSettings;
+    setThemeSettings(nextSettings);
+    applyThemeSettings(nextSettings);
+  }
+
+  function randomizeWallpaper(target: "light" | "dark") {
+    const nextId = randomWallpaperIds[Math.floor(Math.random() * randomWallpaperIds.length)] ?? "system";
+    void setWallpaper(target, nextId);
+  }
 
   return (
     <div className="settings-app">
@@ -166,19 +196,37 @@ export function SettingsApp() {
       </div>
 
       <h3 className="settings-section-title">{t("settingsWallpaper")}</h3>
-      <div className="wallpaper-grid">
-        {(Object.entries(WALLPAPERS) as [ThemeSettings["wallpaperId"], (typeof WALLPAPERS)[ThemeSettings["wallpaperId"]]][]).map(([id, wallpaper]) => (
-          <button
-            key={id}
-            className={clsx("wallpaper-option", themeSettings.wallpaperId === id && "is-active")}
-            onClick={() => void setWallpaper(id)}
-            style={wallpaper.url ? { backgroundImage: `linear-gradient(180deg, oklch(0 0 0 / 0.08), oklch(0 0 0 / 0.44)), url("${wallpaper.url}")` } : undefined}
-          >
-            <span>{t(wallpaper.labelKey)}</span>
-            <small>{wallpaper.source === "unsplash" ? t("wallpaperSourceUnsplash") : t("wallpaperSourceBuiltIn")}</small>
-          </button>
-        ))}
+      <div className="settings-select-group wallpaper-quick-actions">
+        <button type="button" className="settings-btn-pill" onClick={syncWallpapers}>{t("settingsWallpaperSync")}</button>
+        <button type="button" className="settings-btn-pill" onClick={() => randomizeWallpaper("light")}>{t("settingsWallpaperRandom")} · {t("colorLight")}</button>
+        <button type="button" className="settings-btn-pill" onClick={() => randomizeWallpaper("dark")}>{t("settingsWallpaperRandom")} · {t("colorDark")}</button>
       </div>
+      {(["light", "dark"] as const).map((target) => (
+        <div key={target} className="settings-subsection wallpaper-mode-section">
+          <h4>{t(target === "light" ? "settingsWallpaperLight" : "settingsWallpaperDark")}</h4>
+          {Object.entries(wallpaperGroups).map(([categoryKey, entries]) => (
+            <section key={`${target}-${categoryKey}`} className="wallpaper-group">
+              <h4>{t(categoryKey as TranslationKey)}</h4>
+              <div className="wallpaper-grid">
+                {entries.map(([id, wallpaper]) => {
+                  const activeWallpaperId = target === "light" ? themeSettings.wallpaperLightId : themeSettings.wallpaperDarkId;
+                  return (
+                    <button
+                      key={`${target}-${id}`}
+                      className={clsx("wallpaper-option", activeWallpaperId === id && "is-active")}
+                      onClick={() => void setWallpaper(target, id)}
+                      style={wallpaper.url ? { backgroundImage: `linear-gradient(180deg, oklch(0 0 0 / 0.08), oklch(0 0 0 / 0.44)), url("${wallpaper.url}")` } : undefined}
+                    >
+                      <span>{t(wallpaper.labelKey)}</span>
+                      <small>{wallpaper.source === "unsplash" ? t("wallpaperSourceUnsplash") : t("wallpaperSourceBuiltIn")}</small>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      ))}
 
       <div className="settings-subsection">
         <h4>{t("wallpaperFit")}</h4>
@@ -187,9 +235,37 @@ export function SettingsApp() {
             <button
               key={fit}
               className={clsx("settings-btn-pill", themeSettings.wallpaperFit === fit && "is-active")}
-              onClick={() => setThemeSettings((prev: ThemeSettings) => ({ ...prev, wallpaperFit: fit }))}
+              onClick={() => {
+                const nextSettings = { ...themeSettings, wallpaperFit: fit } satisfies ThemeSettings;
+                setThemeSettings(nextSettings);
+                applyThemeSettings(nextSettings);
+                addNotification({
+                  title: t("wallpaperChanged"),
+                  message: phrase(t, "wallpaperChangedPrefix", t(fit === "cover" ? "wallpaperFitCover" : fit === "contain" ? "wallpaperFitContain" : fit === "stretch" ? "wallpaperFitStretch" : "wallpaperFitTile"), "wallpaperChangedSuffix"),
+                  type: "info",
+                });
+              }}
             >
               {t(fit === "cover" ? "wallpaperFitCover" : fit === "contain" ? "wallpaperFitContain" : fit === "stretch" ? "wallpaperFitStretch" : "wallpaperFitTile")}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="settings-subsection">
+        <h4>{t("settingsWallpaperOverlay")}</h4>
+        <div className="settings-select-group">
+          {(["off", "soft", "standard"] as const).map((overlay) => (
+            <button
+              key={overlay}
+              className={clsx("settings-btn-pill", themeSettings.wallpaperOverlay === overlay && "is-active")}
+              onClick={() => {
+                const nextSettings = { ...themeSettings, wallpaperOverlay: overlay } satisfies ThemeSettings;
+                setThemeSettings(nextSettings);
+                applyThemeSettings(nextSettings);
+              }}
+            >
+              {t(overlay === "off" ? "wallpaperOverlayOff" : overlay === "soft" ? "wallpaperOverlaySoft" : "wallpaperOverlayStandard")}
             </button>
           ))}
         </div>

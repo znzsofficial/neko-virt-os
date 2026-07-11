@@ -1,6 +1,7 @@
 import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
 import { useEffect, useRef, useState } from "react";
+import { useDownloadStore } from "../downloadStore";
 import { useLanguageStore } from "../languageStore";
 
 export function RecorderApp() {
@@ -14,6 +15,7 @@ export function RecorderApp() {
   const chunksRef = useRef<BlobPart[]>([]);
   const unmountedRef = useRef(false);
   const t = useLanguageStore((state) => state.t);
+  const addDownload = useDownloadStore((state) => state.addDownload);
 
   useEffect(() => {
     if (!recording) return;
@@ -84,6 +86,16 @@ export function RecorderApp() {
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
   }
 
+  function saveRecording() {
+    if (!audioUrl) return;
+    const filename = `neko-recording-${new Date().toISOString().replace(/[:.]/g, "-")}.webm`;
+    addDownload({ name: filename, source: t("appRecorder"), size: chunksRef.current.reduce((total, chunk) => total + (chunk instanceof Blob ? chunk.size : 0), 0), mimeType: "audio/webm", url: audioUrl });
+    const link = document.createElement("a");
+    link.href = audioUrl;
+    link.download = filename;
+    link.click();
+  }
+
   const minutes = Math.floor(elapsed / 60).toString().padStart(2, "0");
   const seconds = (elapsed % 60).toString().padStart(2, "0");
   const status = recording ? t("recorderRecording") : audioUrl ? t("recorderComplete") : t("recorderReady");
@@ -104,7 +116,7 @@ export function RecorderApp() {
         ) : (
           <button className="button-primary" onClick={() => void startRecording()} disabled={starting}>{starting ? t("apiSending") : t("recorderStart")}</button>
         )}
-        <a className={clsx("button-ghost", !audioUrl && "is-disabled")} href={audioUrl ?? undefined} download="neko-recording.webm" aria-disabled={!audioUrl}>{t("recorderDownload")}</a>
+        <button type="button" className={clsx("button-ghost", !audioUrl && "is-disabled")} disabled={!audioUrl} onClick={saveRecording}>{t("recorderDownload")}</button>
       </div>
 
       <div className="recorder-playback">

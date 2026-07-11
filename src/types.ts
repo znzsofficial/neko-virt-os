@@ -48,9 +48,18 @@ export type DesktopStore = {
   closeLauncher: () => void;
 };
 
+export type FileMutationErrorCode =
+  | "empty_name"
+  | "invalid_characters"
+  | "duplicate_name"
+  | "not_found"
+  | "move_into_self"
+  | "move_into_descendant"
+  | "invalid_target_path";
+
 export type FileMutationResult = {
   file: FsFile | null;
-  error?: string;
+  error?: FileMutationErrorCode;
 };
 
 export type FsStore = {
@@ -63,9 +72,11 @@ export type FsStore = {
   selectFile: (id: string) => void;
   setDraft: (draft: string) => void;
   createFile: () => Promise<void>;
-  createNamedFile: (name: string) => Promise<FileMutationResult>;
+  createNamedFile: (name: string, parentId?: string | null) => Promise<FileMutationResult>;
+  createFolder: (name: string, parentId?: string | null) => Promise<FileMutationResult>;
   deleteSelectedFile: () => Promise<void>;
   deleteFileByName: (name: string) => Promise<FsFile | null>;
+  deleteFileById: (id: string) => Promise<FsFile | null>;
   restoreSelectedFile: () => Promise<void>;
   restoreFileById: (id: string) => Promise<void>;
   permanentlyDeleteSelectedFile: () => Promise<void>;
@@ -74,6 +85,8 @@ export type FsStore = {
   resetVirtualFiles: () => Promise<void>;
   renameSelectedFile: (name: string) => Promise<FileMutationResult>;
   renameFileByName: (fromName: string, toName: string) => Promise<FileMutationResult>;
+  renameFileById: (id: string, name: string) => Promise<FileMutationResult>;
+  moveFileById: (id: string, parentId: string | null) => Promise<FileMutationResult>;
   selectFileByName: (name: string) => FsFile | null;
   saveDraft: () => Promise<void>;
   saveFileDraft: (id: string, draft: string) => Promise<void>;
@@ -92,14 +105,37 @@ export type Notification = {
   message: string;
   type?: "info" | "success" | "warning" | "error";
   duration?: number;
+  createdAt?: number;
+  progress?: number;
 };
+
+export type WallpaperId =
+  | "system"
+  | "alpine-lake"
+  | "star-field"
+  | "pacific"
+  | "green-meadow"
+  | "forest"
+  | "cabin"
+  | "desert-dunes"
+  | "aurora-sky"
+  | "snow-peak"
+  | "city-lights"
+  | "sunset-coast"
+  | "misty-forest"
+  | "granite-lake"
+  | "glass-towers"
+  | "neon-street";
 
 export type ThemeSettings = {
   accentColor: "blue" | "purple" | "emerald" | "amber";
   density: "compact" | "cozy";
   theme: "system" | "light" | "dark";
-  wallpaperId: "system" | "alpine-lake" | "star-field" | "pacific" | "green-meadow" | "forest" | "cabin";
+  wallpaperId: WallpaperId;
+  wallpaperLightId: WallpaperId;
+  wallpaperDarkId: WallpaperId;
   wallpaperFit: "cover" | "contain" | "stretch" | "tile";
+  wallpaperOverlay: "off" | "soft" | "standard";
 };
 
 export type FileSortMode = "updated" | "name" | "size";

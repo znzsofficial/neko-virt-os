@@ -1,5 +1,6 @@
 import { Icon } from "@iconify-icon/react";
 import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useDownloadStore } from "../downloadStore";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
 
@@ -22,6 +23,7 @@ export function QrToolApp() {
   const mountedRef = useRef(true);
   const addNotification = useNotificationStore((state) => state.addNotification);
   const t = useLanguageStore((state) => state.t);
+  const addDownload = useDownloadStore((state) => state.addDownload);
   const encodedValue = qrText.trim();
 
   useEffect(() => {
@@ -72,6 +74,18 @@ export function QrToolApp() {
     }
   }
 
+  function saveDecodedText() {
+    if (!decodedText) return;
+    const blob = new Blob([decodedText], { type: "text/plain;charset=utf-8" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const filename = `qr-result-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+    addDownload({ name: filename, source: t("appQrTool"), size: blob.size, mimeType: "text/plain", url: downloadUrl });
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = filename;
+    link.click();
+  }
+
   return (
     <div className="qr-tool-app">
       <section className="qr-panel qr-generate-panel">
@@ -95,7 +109,10 @@ export function QrToolApp() {
         <div className="qr-result">
           <div className="qr-result-heading">
             <h3>{t("qrDecodedText")}</h3>
-            <button className="button-ghost" type="button" disabled={!decodedText} onClick={() => void copyDecodedText()}>{t("qrCopyResult")}</button>
+            <div className="toolbar-actions">
+              <button className="button-ghost" type="button" disabled={!decodedText} onClick={() => void copyDecodedText()}>{t("qrCopyResult")}</button>
+              <button className="button-ghost" type="button" disabled={!decodedText} onClick={saveDecodedText}>{t("downloadsSaveAgain")}</button>
+            </div>
           </div>
           <pre>{decodedText ?? t("qrNoCodeFound")}</pre>
         </div>

@@ -12,6 +12,7 @@ import { snapWindowBounds, useDesktopStore } from "./windowStore";
 import { appDescriptionKeys, appTitleKeys, getAppIcon } from "./appText";
 import { appComponentRegistry } from "./appRegistry";
 import { clampDesktopIconPosition, findNearestAvailableGridPosition, getDesktopGridKey, getDesktopGridPosition, snapDesktopIconPosition } from "./desktopLayout";
+import { translateFileError } from "./fileErrorUtils";
 import { applyThemeSettings, readThemeSettings, THEME_STORAGE_KEY } from "./theme";
 import { requestCloseWindow } from "./notesWindowState";
 import { Launcher } from "./components/Launcher";
@@ -162,6 +163,8 @@ export function App() {
 function Desktop() {
   const [selectedDesktopItems, setSelectedDesktopItems] = useState<string[]>([]);
   const [selectionBox, setSelectionBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const [desktopDragTarget, setDesktopDragTarget] = useState<string | null>(null);
+  const [desktopInvalidDragTarget, setDesktopInvalidDragTarget] = useState<string | null>(null);
   const openApp = useDesktopStore((state) => state.openApp);
   const updateDesktopIconPosition = useDesktopStore((state) => state.updateDesktopIconPosition);
   const desktopLayoutMode = useDesktopStore((state) => state.desktopLayoutMode);
@@ -170,6 +173,8 @@ function Desktop() {
   const files = useFsStore((state) => state.files);
   const selectFile = useFsStore((state) => state.selectFile);
   const deleteSelectedFile = useFsStore((state) => state.deleteSelectedFile);
+  const deleteFileById = useFsStore((state) => state.deleteFileById);
+  const moveFileById = useFsStore((state) => state.moveFileById);
   const addNotification = useNotificationStore((state) => state.addNotification);
   const t = useLanguageStore((state) => state.t);
   const desktopApps: AppId[] = ["files", "notes", "browser", "calculator", "calendar", "tasks", "timer", "palette", "settings", "task-manager", "about"];
@@ -203,7 +208,15 @@ function Desktop() {
       const desktopEl = document.querySelector(".desktop-icons");
       const desktopBounds = desktopEl ? desktopEl.getBoundingClientRect() : { width: 1200, height: 700 };
       const occupiedKeys = new Set<string>();
-      desktopItems.forEach((item, index) => {
+      const sortedItems = [...desktopItems].sort((a, b) => {
+        const aIndex = desktopItems.findIndex((item) => item.id === a.id);
+        const bIndex = desktopItems.findIndex((item) => item.id === b.id);
+        const aPos = getIconPosition(a.id, aIndex, desktopBounds);
+        const bPos = getIconPosition(b.id, bIndex, desktopBounds);
+        return aPos.y - bPos.y || aPos.x - bPos.x;
+      });
+      sortedItems.forEach((item) => {
+        const index = Math.max(0, desktopItems.findIndex((entry) => entry.id === item.id));
         const position = findNearestAvailableGridPosition(getIconPosition(item.id, index, desktopBounds), occupiedKeys, desktopBounds);
         occupiedKeys.add(getDesktopGridKey(position));
         updateDesktopIconPosition(item.id, position.x, position.y);
@@ -228,15 +241,12 @@ function Desktop() {
         if (fileIdsToDelete.length > 0) {
           const filesToDelete = files.filter((f) => fileIdsToDelete.includes(f.id));
           const names = filesToDelete.map((f) => f.name).join(", ");
-          if (window.confirm(phrase(t, "confirmDeletePrefix", names, "confirmDeleteSuffix"))) {
-            void Promise.all(
-              filesToDelete.map(async (f) => {
-                selectFile(f.id);
-                await deleteSelectedFile();
-              })
-            ).then(() => {
-              (globalThis as any).__desktop_state?.addNotification({
-                title: t("filesDeleted"),
+            if (window.confirm(phrase(t, "confirmDeletePrefix", names, "confirmDeleteSuffix"))) {
+              void Promise.all(
+                filesToDelete.map(async (f) => deleteFileById(f.id))
+              ).then(() => {
+                (globalThis as any).__desktop_state?.addNotification({
+                  title: t("filesDeleted"),
                 message: phrase(t, "filesDeletedPrefix", filesToDelete.length, "filesDeletedSuffix"),
                 type: "success",
               });
@@ -248,7 +258,7 @@ function Desktop() {
     }
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [selectedDesktopItems, files, selectFile, deleteSelectedFile]);
+  }, [selectedDesktopItems, files, deleteFileById]);
 
   function handleDesktopMouseDown(event: MouseEvent<HTMLElement>) {
     if (event.button !== 0) return;
@@ -344,16 +354,49 @@ function Desktop() {
 
     let hasDragged = false;
     const livePositions: Record<string, { x: number; y: number }> = {};
+    const draggedFileIds = nextSelected.filter((id) => id.startsWith("file:")).map((id) => id.replace("file:", ""));
+    let lastPointer = { x: startX, y: startY };
+
+    function getDesktopDropTarget(clientX: number, clientY: number) {
+      const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+      if (!target) return { kind: "none" as const, targetId: null };
+      const icon = target.closest<HTMLElement>("[data-desktop-file-id]");
+      if (icon) {
+        const folderId = icon.dataset.desktopFileId ?? null;
+        const folder = files.find((file) => file.id === folderId) ?? null;
+        if (folder?.kind === "folder") return { kind: "folder" as const, targetId: folder.id };
+        return { kind: "invalid" as const, targetId: folderId };
+      }
+      if (target.closest(".desktop-icons") || target.closest(".desktop")) return { kind: "root" as const, targetId: null };
+      return { kind: "none" as const, targetId: null };
+    }
 
     function handleMouseMove(e: globalThis.MouseEvent) {
       const deltaX = e.clientX - startX;
       const deltaY = e.clientY - startY;
+      lastPointer = { x: e.clientX, y: e.clientY };
 
       if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
         hasDragged = true;
       }
 
       if (hasDragged) {
+        if (draggedFileIds.length) {
+          const dropTarget = getDesktopDropTarget(e.clientX, e.clientY);
+          if (dropTarget.kind === "folder") {
+            setDesktopDragTarget(`desktop:${dropTarget.targetId}`);
+            setDesktopInvalidDragTarget(null);
+          } else if (dropTarget.kind === "root") {
+            setDesktopDragTarget("desktop-root");
+            setDesktopInvalidDragTarget(null);
+          } else if (dropTarget.kind === "invalid") {
+            setDesktopDragTarget(null);
+            setDesktopInvalidDragTarget(`desktop:${dropTarget.targetId}`);
+          } else {
+            setDesktopDragTarget(null);
+            setDesktopInvalidDragTarget(null);
+          }
+        }
         nextSelected.forEach((id) => {
           const initPos = initialPositions[id];
           if (initPos) {
@@ -372,6 +415,24 @@ function Desktop() {
       // If the mouse up happened without moving, it's a simple selection reset
       if (!hasDragged && !isCtrl) {
         setSelectedDesktopItems([itemId]);
+      } else if (hasDragged && draggedFileIds.length) {
+        const dropTarget = getDesktopDropTarget(lastPointer.x, lastPointer.y);
+        setDesktopDragTarget(null);
+        setDesktopInvalidDragTarget(null);
+        if (dropTarget.kind === "folder" || dropTarget.kind === "root") {
+          const parentId = dropTarget.kind === "folder" ? dropTarget.targetId : null;
+          void Promise.all(draggedFileIds.map((fileId) => moveFileById(fileId, parentId))).then((results) => {
+            const firstError = results.find((result) => result.error)?.error;
+            if (firstError) {
+              addNotification({ title: t("moveFailed"), message: translateFileError(firstError, t), type: "error" });
+              return;
+            }
+            const movedCount = results.filter((result) => result.file).length;
+            if (movedCount) {
+              addNotification({ title: t("itemMoved"), message: `${movedCount} ${t("itemsCount")}`, type: "success" });
+            }
+          });
+        }
       } else if (hasDragged && desktopLayoutMode === "grid") {
         const occupiedKeys = new Set(
           desktopItems
@@ -387,6 +448,9 @@ function Desktop() {
           updateDesktopIconPosition(id, snapped.x, snapped.y);
         });
       }
+
+      setDesktopDragTarget(null);
+      setDesktopInvalidDragTarget(null);
     }
 
     window.addEventListener("mousemove", handleMouseMove);
@@ -430,6 +494,12 @@ function Desktop() {
           </button>
         ))}
       </div>
+      {desktopDragTarget === "desktop-root" ? (
+        <div className="desktop-root-drop-target" aria-hidden="true">
+          <Icon icon="solar:home-angle-bold-duotone" width={18} height={18} />
+          <span>{t("dropToHome")}</span>
+        </div>
+      ) : null}
       <div className="desktop-icons">
         {visibleApps.map((appId, index) => {
           const app = apps.find((item) => item.id === appId)!;
@@ -461,10 +531,11 @@ function Desktop() {
           return (
             <div
               key={`desktop-file:${file.id}`}
-              className={clsx("desktop-icon", "desktop-file", selectedDesktopItems.includes(itemId) && "is-selected")}
+              className={clsx("desktop-icon", "desktop-file", selectedDesktopItems.includes(itemId) && "is-selected", desktopDragTarget === `desktop:${file.id}` && "is-drag-target", desktopInvalidDragTarget === `desktop:${file.id}` && "is-invalid-drag-target")}
               style={{ position: "absolute", left: pos.x, top: pos.y }}
               data-context-kind="file"
               data-context-id={file.id}
+              data-desktop-file-id={file.id}
               data-desktop-icon-id={itemId}
               draggable="false"
               onDragStart={(e) => e.preventDefault()}
@@ -472,10 +543,16 @@ function Desktop() {
               onContextMenu={(e) => handleIconContextMenu(itemId, e)}
               onDoubleClick={() => {
                 selectFile(file.id);
+                if (file.kind === "folder") {
+                  const openFolder = (globalThis as any).__files_open_folder as ((folderId: string | null) => void) | undefined;
+                  openFolder?.(file.id);
+                  openApp("files");
+                  return;
+                }
                 openApp("notes");
               }}
             >
-              <Icon icon="solar:document-text-bold-duotone" width={30} height={30} />
+              <Icon icon={file.kind === "folder" ? "solar:folder-with-files-bold-duotone" : "solar:document-text-bold-duotone"} width={30} height={30} />
               <span>{file.name}</span>
             </div>
           );
@@ -511,13 +588,14 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
   const addNotification = useNotificationStore((state) => state.addNotification);
   const t = useLanguageStore((state) => state.t);
   const createFile = useFsStore((state) => state.createFile);
+  const createFolder = useFsStore((state) => state.createFolder);
 
   const files = useFsStore((state) => state.files);
   const selectFile = useFsStore((state) => state.selectFile);
-  const deleteSelectedFile = useFsStore((state) => state.deleteSelectedFile);
+  const deleteFileById = useFsStore((state) => state.deleteFileById);
   const restoreFileById = useFsStore((state) => state.restoreFileById);
   const permanentlyDeleteFileById = useFsStore((state) => state.permanentlyDeleteFileById);
-  const renameSelectedFile = useFsStore((state) => state.renameSelectedFile);
+  const renameFileById = useFsStore((state) => state.renameFileById);
   const app = apps.find((item) => item.id === menu.id);
   const file = files.find((item) => item.id === menu.id);
   const windowState = windows.find((item) => item.id === menu.id);
@@ -530,10 +608,9 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
 
   async function renameFileFromMenu() {
     if (!file) return;
-    selectFile(file.id);
     const nextName = window.prompt(t("renameFilePrompt"), file.name);
     if (!nextName || nextName.trim() === file.name) return;
-    const result = await renameSelectedFile(nextName);
+    const result = await renameFileById(file.id, nextName);
     if (result.error) {
       window.alert(result.error);
       const modifier = (globalThis as any).__desktop_state;
@@ -554,9 +631,8 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
 
   async function deleteFileFromMenu() {
     if (!file) return;
-    selectFile(file.id);
     if (!window.confirm(phrase(t, "confirmMoveToTrashPrefix", file.name, "confirmMoveToTrashSuffix"))) return;
-    await deleteSelectedFile();
+    await deleteFileById(file.id);
     const modifier = (globalThis as any).__desktop_state;
     modifier?.addNotification?.({
       title: t("fileDeleted"),
@@ -595,6 +671,35 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
       message: t("fileCreatedDefaultMessage"),
       type: "success",
     });
+  }
+
+  async function createFolderFromMenu() {
+    const startCreateFolder = (globalThis as any).__files_create_folder as (() => void) | undefined;
+    if (startCreateFolder) {
+      startCreateFolder();
+      return;
+    }
+
+    const name = window.prompt(t("createFolderPrompt"), t("newFolderLabel"));
+    if (!name || !name.trim()) return;
+    const result = await createFolder(name);
+    if (result.error) {
+      addNotification({ title: t("createFailed"), message: result.error, type: "error" });
+      return;
+    }
+    addNotification({ title: t("folderCreated"), message: `${result.file?.name ?? t("newFolderLabel")}${t("createdSuffix")}`, type: "success" });
+  }
+
+  function openFileFromMenu() {
+    if (!file || file.trashed) return;
+    selectFile(file.id);
+    if (file.kind === "folder") {
+      const openFolder = (globalThis as any).__files_open_folder as ((folderId: string | null) => void) | undefined;
+      openFolder?.(file.id);
+      openApp("files");
+      return;
+    }
+    openApp("notes");
   }
 
   return (
@@ -648,13 +753,10 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
             <>
               <button
                 role="menuitem"
-                onClick={() => run(() => {
-                  selectFile(file.id);
-                  openApp("notes");
-                })}
+                onClick={() => run(openFileFromMenu)}
               >
-                <Icon icon="solar:document-text-bold-duotone" width={16} height={16} />
-                {t("open")} {t("appNotes")}
+                <Icon icon={file.kind === "folder" ? "solar:folder-with-files-bold-duotone" : "solar:document-text-bold-duotone"} width={16} height={16} />
+                {file.kind === "folder" ? t("openFolder") : `${t("open")} ${t("appNotes")}`}
               </button>
               <button role="menuitem" onClick={() => run(renameFileFromMenu)}>
                 <Icon icon="solar:pen-new-square-bold-duotone" width={16} height={16} />
@@ -709,6 +811,10 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
             <Icon icon="solar:add-circle-bold-duotone" width={16} height={16} />
             {t("createTextFile")}
           </button>
+          <button role="menuitem" onClick={() => run(createFolderFromMenu)}>
+            <Icon icon="solar:folder-add-bold-duotone" width={16} height={16} />
+            {t("createFolder")}
+          </button>
           <div className="context-menu-divider" />
         </>
       ) : null}
@@ -731,10 +837,16 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
         </>
       ) : null}
       {menu.kind !== "window" && menu.kind !== "taskbar-window" && menu.kind !== "files-empty" ? (
-        <button role="menuitem" onClick={() => run(createFileDirectFromMenu)}>
-          <Icon icon="solar:add-circle-bold-duotone" width={16} height={16} />
-          {t("newFile")}
-        </button>
+        <>
+          <button role="menuitem" onClick={() => run(createFileDirectFromMenu)}>
+            <Icon icon="solar:add-circle-bold-duotone" width={16} height={16} />
+            {t("newFile")}
+          </button>
+          <button role="menuitem" onClick={() => run(createFolderFromMenu)}>
+            <Icon icon="solar:folder-add-bold-duotone" width={16} height={16} />
+            {t("createFolder")}
+          </button>
+        </>
       ) : null}
       <button role="menuitem" onClick={() => run(cascadeWindows)}>
         <Icon icon="solar:layers-bold-duotone" width={16} height={16} />
@@ -903,5 +1015,21 @@ function SystemWindow({ window }: { window: WindowState }) {
 
 function renderApp(window: WindowState) {
   const RegisteredApp = appComponentRegistry[window.appId];
-  if (RegisteredApp) return <RegisteredApp windowId={window.id} />;
+  if (RegisteredApp) {
+    return (
+      <Suspense fallback={<WindowLoadingFallback />}>
+        <RegisteredApp windowId={window.id} />
+      </Suspense>
+    );
+  }
+}
+
+function WindowLoadingFallback() {
+  const t = useLanguageStore((state) => state.t);
+
+  return (
+    <div className="empty-state compact">
+      <p>{t("loading")}</p>
+    </div>
+  );
 }

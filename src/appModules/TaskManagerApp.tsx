@@ -46,66 +46,66 @@ export function TaskManagerApp() {
       return {
         ...window,
         icon: getAppIcon(window.appId, window.icon),
-        description: app ? t(appDescriptionKeys[app.id]) : "Neko process",
-        status: window.minimized ? "Suspended" : activeWindowId === window.id ? "Active" : "Background",
-        footprint: `${Math.max(12, Math.round((window.width * window.height) / 26000))} UI units`,
+        description: app ? t(appDescriptionKeys[app.id]) : t("taskManagerFallbackProcess"),
+        status: window.minimized ? t("taskManagerSuspended") : activeWindowId === window.id ? t("taskManagerActive") : t("taskManagerBackground"),
+        footprint: `${Math.max(12, Math.round((window.width * window.height) / 26000))} ${t("taskManagerUiUnits")}`,
       };
     });
   const appHistoryRows = apps.map((app) => ({
     ...app,
     windows: windows.filter((window) => window.appId === app.id).length,
-    status: windows.some((window) => window.appId === app.id && !window.minimized) ? "Running" : windows.some((window) => window.appId === app.id) ? "Suspended" : "Closed",
+    status: windows.some((window) => window.appId === app.id && !window.minimized) ? t("taskManagerRunning") : windows.some((window) => window.appId === app.id) ? t("taskManagerSuspended") : t("taskManagerClosed"),
   }));
 
   return (
     <div className="task-manager-app">
       <aside className="task-manager-sidebar">
-        <button className={clsx("task-manager-tab", activeTab === "processes" && "is-active")} onClick={() => setActiveTab("processes")}><Icon icon="solar:widget-5-bold-duotone" width={17} height={17} /> Processes</button>
-        <button className={clsx("task-manager-tab", activeTab === "performance" && "is-active")} onClick={() => setActiveTab("performance")}><Icon icon="solar:graph-up-bold-duotone" width={17} height={17} /> Performance</button>
-        <button className={clsx("task-manager-tab", activeTab === "history" && "is-active")} onClick={() => setActiveTab("history")}><Icon icon="solar:database-bold-duotone" width={17} height={17} /> App history</button>
+        <button className={clsx("task-manager-tab", activeTab === "processes" && "is-active")} onClick={() => setActiveTab("processes")}><Icon icon="solar:widget-5-bold-duotone" width={17} height={17} /> {t("taskManagerProcesses")}</button>
+        <button className={clsx("task-manager-tab", activeTab === "performance" && "is-active")} onClick={() => setActiveTab("performance")}><Icon icon="solar:graph-up-bold-duotone" width={17} height={17} /> {t("taskManagerPerformance")}</button>
+        <button className={clsx("task-manager-tab", activeTab === "history" && "is-active")} onClick={() => setActiveTab("history")}><Icon icon="solar:database-bold-duotone" width={17} height={17} /> {t("taskManagerHistory")}</button>
       </aside>
       <main className="task-manager-main">
         <header className="task-manager-header">
           <div>
             <h2>{t("appTaskManager")}</h2>
-            <p>{windows.length} running windows, {files.length} local files, uptime {Math.floor(uptime / 60)}m {uptime % 60}s</p>
+            <p>{`${t("taskManagerSummaryPrefix")}${windows.length}${t("taskManagerSummaryMiddle")}${files.length}${t("taskManagerSummarySuffix")}${Math.floor(uptime / 60)}m ${uptime % 60}s`}</p>
           </div>
           <div className="task-manager-metrics">
-            <span><strong>{navigator.hardwareConcurrency || "-"}</strong> threads</span>
-            <span><strong>{appMemory}</strong> JS heap</span>
-            <span><strong>{formatBytes(storage?.usage)}</strong> origin storage</span>
+            <span><strong>{navigator.hardwareConcurrency || "-"}</strong> {t("taskManagerThreads")}</span>
+            <span><strong>{appMemory}</strong> {t("taskManagerJsHeap")}</span>
+            <span><strong>{formatBytes(storage?.usage)}</strong> {t("taskManagerOriginStorage")}</span>
           </div>
         </header>
 
         {activeTab !== "history" ? <section className="performance-grid" aria-label={t("performanceSummary")}>
           <article>
             <span>CPU</span>
-            <strong>{navigator.hardwareConcurrency || "Unavailable"} threads</strong>
-            <p>Logical processors</p>
+            <strong>{navigator.hardwareConcurrency || t("unavailable")} {t("taskManagerThreads")}</strong>
+            <p>{t("taskManagerLogicalProcessors")}</p>
           </article>
           <article>
-            <span>JS Heap</span>
+            <span>{t("taskManagerJsHeap")}</span>
             <strong>{appMemory}</strong>
-            <p>{appLimit} limit</p>
+            <p>{appLimit} {t("taskManagerLimit")}</p>
           </article>
           <article>
-            <span>Origin Storage</span>
+            <span>{t("taskManagerOriginStorage")}</span>
             <strong>{formatBytes(storage?.usage)}</strong>
-            <p>{formatBytes(storage?.quota)} quota</p>
+            <p>{formatBytes(storage?.quota)} {t("taskManagerQuota")}</p>
           </article>
           <article>
-            <span>Display</span>
+            <span>{t("taskManagerDisplay")}</span>
             <strong>{window.screen.width} x {window.screen.height}</strong>
-            <p>{window.devicePixelRatio.toFixed(2)}x pixel ratio</p>
+            <p>{window.devicePixelRatio.toFixed(2)}x {t("taskManagerPixelRatio")}</p>
           </article>
         </section> : null}
 
         {activeTab === "processes" ? <section className="process-table" aria-label={t("runningProcesses")}>
           <div className="process-row process-head">
-            <span>Name</span>
-            <span>Status</span>
-            <span>Footprint</span>
-            <span>Actions</span>
+            <span>{t("taskManagerName")}</span>
+            <span>{t("taskManagerStatus")}</span>
+            <span>{t("taskManagerFootprint")}</span>
+            <span>{t("taskManagerActions")}</span>
           </div>
           {processRows.map((process) => (
             <div key={process.id} className={clsx("process-row", activeWindowId === process.id && !process.minimized && "is-active")}>
@@ -113,9 +113,9 @@ export function TaskManagerApp() {
               <span>{process.status}</span>
               <span>{process.footprint}</span>
               <span className="process-actions">
-                <button onClick={() => process.minimized ? restoreWindow(process.id) : focusWindow(process.id)}>{process.minimized ? "Restore" : "Switch"}</button>
-                <button disabled={process.minimized} onClick={() => minimizeWindow(process.id)}>{process.minimized ? "Minimized" : "Minimize"}</button>
-                <button className="danger" onClick={() => requestCloseWindow(process, closeWindow)}>End task</button>
+                <button onClick={() => process.minimized ? restoreWindow(process.id) : focusWindow(process.id)}>{process.minimized ? t("taskManagerRestore") : t("taskManagerSwitch")}</button>
+                <button disabled={process.minimized} onClick={() => minimizeWindow(process.id)}>{process.minimized ? t("minimized") : t("minimize")}</button>
+                <button className="danger" onClick={() => requestCloseWindow(process, closeWindow)}>{t("taskManagerEndTask")}</button>
               </span>
             </div>
           ))}
@@ -129,10 +129,10 @@ export function TaskManagerApp() {
 
         {activeTab === "history" ? <section className="process-table" aria-label={t("applicationHistory")}>
           <div className="process-row process-head app-history-row">
-            <span>Application</span>
-            <span>Status</span>
-            <span>Windows</span>
-            <span>Default Size</span>
+            <span>{t("taskManagerApplication")}</span>
+            <span>{t("taskManagerStatus")}</span>
+            <span>{t("taskManagerWindows")}</span>
+            <span>{t("taskManagerDefaultSize")}</span>
           </div>
           {appHistoryRows.map((app) => (
             <div key={app.id} className="process-row app-history-row">

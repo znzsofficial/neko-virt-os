@@ -1,16 +1,18 @@
 import { create } from "zustand";
 import {
+  createFolder as createFolderEntry,
   createTextFile,
   deleteFile,
   emptyTrash,
   listFiles,
+  moveFile,
   permanentlyDeleteFile,
   renameFile,
   resetVirtualFiles,
   restoreFile,
   updateFileContent,
 } from "./virtualFs";
-import { findFileByName, getFileNameError } from "./fileUtils";
+import { findFileByName, getFileNameError, getMoveError } from "./fileUtils";
 import type { FsStore } from "./types";
 
 export const useFsStore = create<FsStore>((set, get) => ({
@@ -27,7 +29,7 @@ export const useFsStore = create<FsStore>((set, get) => ({
     set({
       files,
       selectedFileId: selectedFile?.id ?? null,
-      draft: selectedFile?.content ?? "",
+      draft: selectedFile?.kind === "text" ? selectedFile.content : "",
       loaded: true,
       dirty: false,
     });
@@ -35,7 +37,7 @@ export const useFsStore = create<FsStore>((set, get) => ({
   selectFile: (id) => {
     const selectedFile = get().files.find((file) => file.id === id);
     if (!selectedFile) return;
-    set({ selectedFileId: id, draft: selectedFile.content, dirty: false });
+    set({ selectedFileId: id, draft: selectedFile.kind === "text" ? selectedFile.content : "", dirty: false });
   },
   setDraft: (draft) => set({ draft, dirty: true }),
   createFile: async () => {
@@ -43,20 +45,29 @@ export const useFsStore = create<FsStore>((set, get) => ({
     const files = await listFiles();
     set({ files, selectedFileId: file.id, draft: file.content, dirty: false });
   },
-  createNamedFile: async (name) => {
+  createNamedFile: async (name, parentId = null) => {
     const existing = findFileByName(get().files, name);
-    if (existing) {
+    if (existing && (existing.parentId ?? null) === parentId) {
       set({ selectedFileId: existing.id, draft: existing.content, dirty: false });
       return { file: existing };
     }
 
-    const error = getFileNameError(name, get().files);
+    const error = getFileNameError(name, get().files, undefined, parentId);
     if (error) return { file: null, error };
 
-    const file = await createTextFile(name.trim());
+    const file = await createTextFile(name.trim(), "", parentId);
     const files = await listFiles();
     set({ files, selectedFileId: file.id, draft: file.content, dirty: false });
     return { file };
+  },
+  createFolder: async (name, parentId = null) => {
+    const error = getFileNameError(name, get().files, undefined, parentId);
+    if (error) return { file: null, error };
+
+    const folder = await createFolderEntry(name.trim(), parentId);
+    const files = await listFiles();
+    set({ files, selectedFileId: folder.id, draft: "", dirty: false });
+    return { file: folder };
   },
   deleteSelectedFile: async () => {
     const selectedFileId = get().selectedFileId;
@@ -74,7 +85,8 @@ export const useFsStore = create<FsStore>((set, get) => ({
   renameSelectedFile: async (name) => {
     const selectedFileId = get().selectedFileId;
     if (!selectedFileId) return { file: null };
-    const error = getFileNameError(name, get().files, selectedFileId);
+    const selectedFile = get().files.find((file) => file.id === selectedFileId) ?? null;
+    const error = getFileNameError(name, get().files, selectedFileId, selectedFile?.parentId ?? null);
     if (error) return { file: null, error };
 
     const nextName = name.trim();
@@ -86,8 +98,8 @@ export const useFsStore = create<FsStore>((set, get) => ({
   },
   renameFileByName: async (fromName, toName) => {
     const file = findFileByName(get().files, fromName);
-    if (!file) return { file: null, error: `${fromName}: no such file` };
-    const error = getFileNameError(toName, get().files, file.id);
+    if (!file) return { file: null, error: "not_found" };
+    const error = getFileNameError(toName, get().files, file.id, file.parentId ?? null);
     if (error) return { file: null, error };
 
     await renameFile(file.id, toName.trim());
@@ -96,10 +108,47 @@ export const useFsStore = create<FsStore>((set, get) => ({
     set({ files, selectedFileId: file.id, draft: renamed?.content ?? file.content, dirty: false });
     return { file: renamed };
   },
+  renameFileById: async (id, name) => {
+    const file = get().files.find((item) => item.id === id) ?? null;
+    if (!file) return { file: null, error: "not_found" };
+    const error = getFileNameError(name, get().files, file.id, file.parentId ?? null);
+    if (error) return { file: null, error };
+
+    await renameFile(file.id, name.trim());
+    const files = await listFiles();
+    const renamed = files.find((item) => item.id === file.id) ?? null;
+    set({ files, selectedFileId: file.id, draft: renamed?.kind === "text" ? renamed.content : "", dirty: false });
+    return { file: renamed };
+  },
+  moveFileById: async (id, parentId) => {
+    const file = get().files.find((item) => item.id === id) ?? null;
+    const error = getMoveError(get().files, id, parentId);
+    if (error) return { file: null, error };
+
+    await moveFile(id, parentId);
+    const files = await listFiles();
+    const moved = files.find((item) => item.id === id) ?? null;
+    set({ files, selectedFileId: moved?.id ?? get().selectedFileId, draft: moved?.kind === "text" ? moved.content : "", dirty: false });
+    return { file: moved };
+  },
   deleteFileByName: async (name) => {
     const file = findFileByName(get().files, name);
     if (!file) return null;
     await deleteFile(file.id);
+    const files = await listFiles();
+    const nextFile = files.find((item) => !item.trashed) ?? null;
+    set({
+      files,
+      selectedFileId: nextFile?.id ?? null,
+      draft: nextFile?.content ?? "",
+      dirty: false,
+    });
+    return file;
+  },
+  deleteFileById: async (id) => {
+    const file = get().files.find((item) => item.id === id) ?? null;
+    if (!file) return null;
+    await deleteFile(id);
     const files = await listFiles();
     const nextFile = files.find((item) => !item.trashed) ?? null;
     set({
@@ -153,28 +202,37 @@ export const useFsStore = create<FsStore>((set, get) => ({
   selectFileByName: (name) => {
     const file = findFileByName(get().files, name);
     if (!file) return null;
-    set({ selectedFileId: file.id, draft: file.content, dirty: false });
+    set({ selectedFileId: file.id, draft: file.kind === "text" ? file.content : "", dirty: false });
     return file;
   },
   saveDraft: async () => {
     const selectedFileId = get().selectedFileId;
     if (!selectedFileId) return;
+    const selectedFile = get().files.find((file) => file.id === selectedFileId);
+    if (!selectedFile || selectedFile.kind !== "text") return;
     await updateFileContent(selectedFileId, get().draft);
     const files = await listFiles();
     set({ files, dirty: false });
   },
   saveFileDraft: async (id, draft) => {
+    const file = get().files.find((item) => item.id === id);
+    if (!file || file.kind !== "text") return;
     await updateFileContent(id, draft);
     const files = await listFiles();
     const selectedFile = files.find((file) => file.id === get().selectedFileId);
-    set({ files, draft: selectedFile?.content ?? get().draft, dirty: get().selectedFileId === id ? false : get().dirty });
+    set({ files, draft: selectedFile?.kind === "text" ? selectedFile.content : get().draft, dirty: get().selectedFileId === id ? false : get().dirty });
   },
 }));
 
 async function restoreFileWithUniqueName(id: string, files: ReturnType<typeof useFsStore.getState>["files"]) {
   const file = files.find((item) => item.id === id);
   if (!file) return;
-  const activeNames = new Set(files.filter((item) => !item.trashed && item.id !== id).map((item) => item.name.toLowerCase()));
+  const targetParentId = file.parentId ?? null;
+  const activeNames = new Set(
+    files
+      .filter((item) => !item.trashed && item.id !== id && (item.parentId ?? null) === targetParentId)
+      .map((item) => item.name.toLowerCase()),
+  );
   let nextName = file.name;
   if (activeNames.has(nextName.toLowerCase())) {
     const dotIndex = file.name.lastIndexOf(".");

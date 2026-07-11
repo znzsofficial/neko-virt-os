@@ -6,4 +6,18 @@ export default defineConfig(({ mode }) => ({
   define: {
     "process.env.NODE_ENV": JSON.stringify(mode === "production" ? "production" : "development"),
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("react-rnd")) return "vendor-windowing";
+          if (id.includes("dexie") || id.includes("zustand")) return "vendor-state";
+          if (id.includes("@iconify-icon/react") || id.includes("clsx") || id.includes("react-hotkeys-hook")) return "vendor-ui";
+          if (id.includes("nanoid")) return "vendor-utils";
+          return undefined;
+        },
+      },
+    },
+  },
 }));

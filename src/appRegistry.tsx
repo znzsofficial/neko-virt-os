@@ -1,41 +1,34 @@
-import type { ComponentType } from "react";
-import { ApiTesterApp } from "./appModules/ApiTesterApp";
-import { AboutApp } from "./appModules/AboutApp";
-import { BrowserApp } from "./appModules/BrowserApp";
-import { CalculatorApp } from "./appModules/CalculatorApp";
-import { CalendarApp } from "./appModules/CalendarApp";
-import { FilesApp } from "./appModules/FilesApp";
-import { MusicPlayerApp } from "./appModules/MusicPlayerApp";
-import { NotesApp } from "./appModules/NotesApp";
-import { PaletteApp } from "./appModules/PaletteApp";
-import { QrToolApp } from "./appModules/QrToolApp";
-import { RecorderApp } from "./appModules/RecorderApp";
-import { SettingsApp } from "./appModules/SettingsApp";
-import { TaskManagerApp } from "./appModules/TaskManagerApp";
-import { TerminalApp } from "./appModules/TerminalApp";
-import { TasksApp } from "./appModules/TasksApp";
-import { TimerApp } from "./appModules/TimerApp";
-import { VideoPlayerApp } from "./appModules/VideoPlayerApp";
+import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 import type { AppId } from "./types";
 
 export type AppModuleProps = { windowId?: string };
 
-export const appComponentRegistry: Partial<Record<AppId, ComponentType<AppModuleProps>>> = {
-  "api-tester": ApiTesterApp,
-  about: AboutApp,
-  browser: BrowserApp,
-  calculator: CalculatorApp,
-  calendar: CalendarApp,
-  files: FilesApp,
-  "qr-tool": QrToolApp,
-  recorder: RecorderApp,
-  "music-player": MusicPlayerApp,
-  notes: NotesApp,
-  palette: PaletteApp,
-  tasks: TasksApp,
-  settings: SettingsApp,
-  "task-manager": TaskManagerApp,
-  "video-player": VideoPlayerApp,
-  terminal: TerminalApp,
-  timer: TimerApp,
+type AppModuleComponent = ComponentType<AppModuleProps> | LazyExoticComponent<ComponentType<AppModuleProps>>;
+
+function lazyApp(loader: () => Promise<{ default: ComponentType<AppModuleProps> }>) {
+  return lazy(loader);
+}
+
+export const appComponentRegistry: Partial<Record<AppId, AppModuleComponent>> = {
+  "api-tester": lazyApp(() => import("./appModules/ApiTesterApp").then((module) => ({ default: module.ApiTesterApp }))),
+  about: lazyApp(() => import("./appModules/AboutApp").then((module) => ({ default: module.AboutApp }))),
+  browser: lazyApp(() => import("./appModules/BrowserApp").then((module) => ({ default: module.BrowserApp }))),
+  calculator: lazyApp(() => import("./appModules/CalculatorApp").then((module) => ({ default: module.CalculatorApp }))),
+  calendar: lazyApp(() => import("./appModules/CalendarApp").then((module) => ({ default: module.CalendarApp }))),
+  clipboard: lazyApp(() => import("./appModules/ClipboardApp").then((module) => ({ default: module.ClipboardApp }))),
+  downloads: lazyApp(() => import("./appModules/DownloadsApp").then((module) => ({ default: module.DownloadsApp }))),
+  files: lazyApp(() => import("./appModules/FilesApp").then((module) => ({ default: module.FilesApp }))),
+  "qr-tool": lazyApp(() => import("./appModules/QrToolApp").then((module) => ({ default: module.QrToolApp }))),
+  recorder: lazyApp(() => import("./appModules/RecorderApp").then((module) => ({ default: module.RecorderApp }))),
+  "music-player": lazyApp(() => import("./appModules/MusicPlayerApp").then((module) => ({ default: module.MusicPlayerApp }))),
+  notes: lazyApp(() => import("./appModules/NotesApp").then((module) => ({ default: module.NotesApp }))),
+  palette: lazyApp(() => import("./appModules/PaletteApp").then((module) => ({ default: module.PaletteApp }))),
+  tasks: lazyApp(() => import("./appModules/TasksApp").then((module) => ({ default: module.TasksApp }))),
+  settings: lazyApp(() => import("./appModules/SettingsApp").then((module) => ({ default: module.SettingsApp }))),
+  "task-manager": lazyApp(() => import("./appModules/TaskManagerApp").then((module) => ({ default: module.TaskManagerApp }))),
+  trash: lazyApp(() => import("./appModules/TrashApp").then((module) => ({ default: module.TrashApp }))),
+  "video-player": lazyApp(() => import("./appModules/VideoPlayerApp").then((module) => ({ default: module.VideoPlayerApp }))),
+  terminal: lazyApp(() => import("./appModules/TerminalApp").then((module) => ({ default: module.TerminalApp }))),
+  timer: lazyApp(() => import("./appModules/TimerApp").then((module) => ({ default: module.TimerApp }))),
+  "sticky-board": lazyApp(() => import("./appModules/StickyBoardApp").then((module) => ({ default: module.StickyBoardApp }))),
 };

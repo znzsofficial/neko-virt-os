@@ -1,5 +1,6 @@
 import { clsx } from "clsx";
 import { useEffect, useRef, useState } from "react";
+import { useDownloadStore } from "../downloadStore";
 import { useLanguageStore } from "../languageStore";
 
 type ApiTestMethod = "GET" | "POST";
@@ -22,6 +23,7 @@ export function ApiTesterApp() {
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
   const t = useLanguageStore((state) => state.t);
+  const addDownload = useDownloadStore((state) => state.addDownload);
 
   useEffect(() => {
     return () => {
@@ -81,6 +83,31 @@ export function ApiTesterApp() {
     }
   }
 
+  function saveResponse() {
+    if (!result) return;
+    const payload = JSON.stringify(
+      {
+        url,
+        method,
+        status: result.status,
+        statusText: result.statusText,
+        elapsedMs: result.elapsedMs,
+        headers: result.headers,
+        body: result.body,
+      },
+      null,
+      2,
+    );
+    const blob = new Blob([payload], { type: "application/json" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const filename = `api-response-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+    addDownload({ name: filename, source: t("appApiTester"), size: blob.size, mimeType: "application/json", url: downloadUrl });
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = filename;
+    link.click();
+  }
+
   return (
     <div className="api-tester-app">
       <form className="api-request-panel" onSubmit={(event) => { event.preventDefault(); void sendRequest(); }}>
@@ -105,7 +132,10 @@ export function ApiTesterApp() {
       <section className="api-response-panel">
         <div className="api-response-heading">
           <h2>{t("apiResponse")}</h2>
-          {result ? <span className={clsx("api-status", result.status >= 200 && result.status < 300 && "is-ok")}>{result.status} {result.statusText} · {result.elapsedMs}ms</span> : null}
+          <div className="toolbar-actions">
+            {result ? <span className={clsx("api-status", result.status >= 200 && result.status < 300 && "is-ok")}>{result.status} {result.statusText} · {result.elapsedMs}ms</span> : null}
+            <button type="button" className="button-ghost" disabled={!result} onClick={saveResponse}>{t("downloadsSaveAgain")}</button>
+          </div>
         </div>
         {error ? <div className="empty-state compact"><p>{error}</p></div> : null}
         {!error && !result ? <div className="empty-state compact"><p>{t("apiNoResponse")}</p></div> : null}

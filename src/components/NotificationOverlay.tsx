@@ -6,10 +6,19 @@ import { useNotificationStore } from "../notificationStore";
 export function NotificationOverlay() {
   const notifications = useNotificationStore((state) => state.notifications);
   const removeNotification = useNotificationStore((state) => state.removeNotification);
+  const clearNotifications = useNotificationStore((state) => state.clearNotifications);
   const t = useLanguageStore((state) => state.t);
 
   return (
     <div className="notification-overlay" aria-live="assertive">
+      {notifications.length ? (
+        <div className="notification-toolbar">
+          <span>{notifications.length}</span>
+          <button type="button" className="notification-clear" onClick={clearNotifications}>
+            {t("clearNotifications")}
+          </button>
+        </div>
+      ) : null}
       {notifications.map((n) => (
         <div key={n.id} className={clsx("notification-toast", n.type)}>
           <div className="notification-icon">
@@ -25,6 +34,7 @@ export function NotificationOverlay() {
           <button className="notification-close" onClick={() => removeNotification(n.id)} aria-label={t("closeNotification")}>
             <Icon icon="solar:close-circle-bold" width={16} height={16} />
           </button>
+          {n.duration !== 0 && n.createdAt ? <div className="notification-progress" style={{ ["--notification-duration" as string]: `${n.duration ?? 3500}ms` }} /> : null}
         </div>
       ))}
     </div>

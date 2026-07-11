@@ -12,7 +12,7 @@ export function NotesApp({ windowId }: { windowId?: string }) {
   const saveFileDraft = useFsStore((state) => state.saveFileDraft);
   const createFile = useFsStore((state) => state.createFile);
   const [localFileId, setLocalFileId] = useState<string | null>(() => selectedFileId);
-  const selectedFile = files.find((file) => !file.trashed && file.id === localFileId) ?? files.find((file) => !file.trashed && file.id === selectedFileId) ?? null;
+  const selectedFile = files.find((file) => !file.trashed && file.kind === "text" && file.id === localFileId) ?? files.find((file) => !file.trashed && file.kind === "text" && file.id === selectedFileId) ?? null;
   const [draft, setDraft] = useState(() => selectedFile?.content ?? "");
   const [viewMode, setViewMode] = useState<"edit" | "preview" | "split">("edit");
   const [dirty, setDirty] = useState(false);

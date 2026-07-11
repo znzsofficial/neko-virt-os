@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { nanoid } from "nanoid";
 import { apps } from "./apps";
 import { initialWindows } from "./initialWindows";
+import { useLauncherStore } from "./launcherStore";
 import type { DesktopLayoutMode, DesktopStore, WindowBounds, WindowState } from "./types";
 
 export const WINDOW_LAYOUT_STORAGE_KEY = "neko-virt-os.window-layout.v1";
@@ -39,6 +40,7 @@ export const useDesktopStore = create<DesktopStore>((set, get) => ({
   openApp: (appId) => {
     const app = apps.find((item) => item.id === appId);
     if (!app) return;
+    useLauncherStore.getState().recordAppLaunch(appId);
     const allowsMultiple = "multiInstance" in app && app.multiInstance;
 
     const existing = get().windows.find((win) => win.appId === appId);
