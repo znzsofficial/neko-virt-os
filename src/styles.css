@@ -234,8 +234,9 @@ input:focus-visible {
     radial-gradient(circle at 84% 12%, oklch(0.72 0.14 310 / 0.18), transparent 30%),
     var(--os-wallpaper-image),
     linear-gradient(135deg, var(--os-bg), var(--os-wallpaper-end));
-  background-position: center;
-  background-size: cover;
+  background-position: center, center, center, center;
+  background-repeat: no-repeat, no-repeat, var(--os-wallpaper-repeat), no-repeat;
+  background-size: 100% 100%, 100% 100%, var(--os-wallpaper-size), cover;
 }
 
 [data-theme="light"][data-wallpaper="online"] .os {
@@ -529,6 +530,8 @@ input:focus-visible {
 }
 
 .window-titlebar {
+  position: relative;
+  z-index: 2;
   display: flex;
   height: 38px;
   flex: 0 0 auto;
@@ -625,8 +628,11 @@ input:focus-visible {
 }
 
 .window-content {
+  position: relative;
+  z-index: 1;
   min-height: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .app-grid {
@@ -2308,7 +2314,19 @@ input:focus-visible {
 
 .settings-select-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.settings-subsection {
+  margin-top: var(--os-spacing-md);
+}
+
+.settings-subsection h4 {
+  margin: 0 0 var(--os-spacing-xs);
+  color: var(--os-muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .settings-btn-pill {

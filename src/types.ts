@@ -99,6 +99,7 @@ export type ThemeSettings = {
   density: "compact" | "cozy";
   theme: "system" | "light" | "dark";
   wallpaperId: "system" | "alpine-lake" | "star-field" | "pacific" | "green-meadow" | "forest" | "cabin";
+  wallpaperFit: "cover" | "contain" | "stretch" | "tile";
 };
 
 export type FileSortMode = "updated" | "name" | "size";
