@@ -10,9 +10,10 @@ import {
   renameFile,
   resetVirtualFiles,
   restoreFile,
+  touchFile,
   updateFileContent,
 } from "./virtualFs";
-import { findFileByName, getFileNameError, getMoveError } from "./fileUtils";
+import { findEntryByNameInFolder, findFileByName, getFileNameError, getMoveError } from "./fileUtils";
 import type { FsStore } from "./types";
 
 export const useFsStore = create<FsStore>((set, get) => ({
@@ -40,17 +41,19 @@ export const useFsStore = create<FsStore>((set, get) => ({
     set({ selectedFileId: id, draft: selectedFile.kind === "text" ? selectedFile.content : "", dirty: false });
   },
   setDraft: (draft) => set({ draft, dirty: true }),
-  createFile: async () => {
-    const file = await createTextFile();
+  createFile: async (parentId = null) => {
+    const file = await createTextFile(undefined, "", parentId);
     const files = await listFiles();
     set({ files, selectedFileId: file.id, draft: file.content, dirty: false });
+    return file;
   },
   createNamedFile: async (name, parentId = null) => {
-    const existing = findFileByName(get().files, name);
-    if (existing && (existing.parentId ?? null) === parentId) {
+    const existing = findEntryByNameInFolder(get().files, name, parentId);
+    if (existing?.kind === "text") {
       set({ selectedFileId: existing.id, draft: existing.content, dirty: false });
       return { file: existing };
     }
+    if (existing?.kind === "folder") return { file: null, error: "duplicate_name" };
 
     const error = getFileNameError(name, get().files, undefined, parentId);
     if (error) return { file: null, error };
@@ -59,6 +62,15 @@ export const useFsStore = create<FsStore>((set, get) => ({
     const files = await listFiles();
     set({ files, selectedFileId: file.id, draft: file.content, dirty: false });
     return { file };
+  },
+  touchFileById: async (id) => {
+    const file = get().files.find((item) => item.id === id) ?? null;
+    if (!file || file.trashed) return null;
+    await touchFile(id);
+    const files = await listFiles();
+    const next = files.find((item) => item.id === id) ?? null;
+    set({ files });
+    return next;
   },
   createFolder: async (name, parentId = null) => {
     const error = getFileNameError(name, get().files, undefined, parentId);

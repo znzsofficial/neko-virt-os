@@ -30,9 +30,9 @@ export function ClipboardApp() {
     try {
       const text = await navigator.clipboard.readText();
       setDraft(text);
-      addNotification({ title: t("clipboardLoaded"), message: t("clipboardLoadedMessage"), type: "success" });
+      addNotification({ title: t("clipboardLoaded"), message: t("clipboardLoadedMessage"), type: "success", category: "apps", appId: "clipboard" });
     } catch {
-      addNotification({ title: t("copyFailed"), message: t("clipboardReadFailedMessage"), type: "error" });
+      addNotification({ title: t("copyFailed"), message: t("clipboardReadFailedMessage"), type: "error", category: "apps", appId: "clipboard" });
     }
   }
 
@@ -40,9 +40,9 @@ export function ClipboardApp() {
     if (!draft.trim()) return;
     try {
       await navigator.clipboard.writeText(draft);
-      addNotification({ title: t("clipboardCopied"), message: t("clipboardCopiedMessage"), type: "success" });
+      addNotification({ title: t("clipboardCopied"), message: t("clipboardCopiedMessage"), type: "success", category: "apps", appId: "clipboard" });
     } catch {
-      addNotification({ title: t("copyFailed"), message: t("copyFailedMessage"), type: "error" });
+      addNotification({ title: t("copyFailed"), message: t("copyFailedMessage"), type: "error", category: "apps", appId: "clipboard" });
     }
   }
 
@@ -50,7 +50,7 @@ export function ClipboardApp() {
     const text = draft.trim();
     if (!text) return;
     setHistory((current) => [{ id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, text, createdAt: Date.now() }, ...current.filter((entry) => entry.text !== text)].slice(0, 12));
-    addNotification({ title: t("clipboardSaved"), message: t("clipboardSavedMessage"), type: "success" });
+    addNotification({ title: t("clipboardSaved"), message: t("clipboardSavedMessage"), type: "success", category: "apps", appId: "clipboard" });
   }
 
   return (

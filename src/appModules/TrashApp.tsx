@@ -17,6 +17,7 @@ export function TrashApp() {
   const emptyTrash = useFsStore((state) => state.emptyTrash);
   const addNotification = useNotificationStore((state) => state.addNotification);
   const t = useLanguageStore((state) => state.t);
+  const language = useLanguageStore((state) => state.language);
   const trashedFiles = files.filter((file) => file.trashed).sort((a, b) => (b.deletedAt ?? b.updatedAt) - (a.deletedAt ?? a.updatedAt));
   const selectedFile = trashedFiles.find((file) => file.id === selectedFileId) ?? trashedFiles[0] ?? null;
 
@@ -24,7 +25,7 @@ export function TrashApp() {
     const file = trashedFiles.find((entry) => entry.id === id);
     if (!file) return;
     await restoreFileById(id);
-    addNotification({ title: t("restore"), message: `${file.name}${t("restoredSuffix")}`, type: "success" });
+    addNotification({ title: t("restore"), message: `${file.name}${t("restoredSuffix")}`, type: "success", category: "files", appId: "trash" });
   }
 
   async function deleteForever(id: string) {
@@ -32,14 +33,14 @@ export function TrashApp() {
     if (!file) return;
     if (!window.confirm(phrase(t, "confirmPermanentDeletePrefix", file.name, "confirmPermanentDeleteSuffix"))) return;
     await permanentlyDeleteFileById(id);
-    addNotification({ title: t("fileDeleted"), message: `${file.name}${t("permanentlyDeletedSuffix")}`, type: "success" });
+    addNotification({ title: t("fileDeleted"), message: `${file.name}${t("permanentlyDeletedSuffix")}`, type: "success", category: "files", appId: "trash" });
   }
 
   async function clearTrash() {
     if (!trashedFiles.length) return;
     if (!window.confirm(phrase(t, "confirmEmptyTrashPrefix", trashedFiles.length, "confirmEmptyTrashSuffix"))) return;
     await emptyTrash();
-    addNotification({ title: t("trashEmptied"), message: t("trashEmptiedMessage"), type: "success" });
+    addNotification({ title: t("trashEmptied"), message: t("trashEmptiedMessage"), type: "success", category: "files", appId: "trash" });
   }
 
   return (
@@ -75,7 +76,7 @@ export function TrashApp() {
             <Icon icon={file.kind === "folder" ? "solar:folder-with-files-bold-duotone" : "solar:file-text-bold-duotone"} width={18} height={18} />
             <span className="file-name">{file.name}</span>
             <span>{file.kind === "folder" ? t("createFolder") : t("appNotes")}</span>
-            <span>{formatFileTime(file.deletedAt ?? file.updatedAt)}</span>
+            <span>{formatFileTime(file.deletedAt ?? file.updatedAt, language)}</span>
           </button>
         )) : (
           <div className="empty-state">

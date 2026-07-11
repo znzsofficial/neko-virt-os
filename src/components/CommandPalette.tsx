@@ -4,11 +4,11 @@ import Fuse from "fuse.js";
 import { useMemo, useState } from "react";
 import { apps } from "../apps";
 import { appDescriptionKeys, appTitleKeys, getAppIcon } from "../appText";
+import { getFileOpenApp, queueBrowserOpenUrl } from "../fileOpen";
 import { useFsStore } from "../fsStore";
+import { readLocalBookmarks, readLocalCalendarEvents, readLocalTasks } from "../localData";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
 import { useDesktopStore } from "../windowStore";
-import type { AppId } from "../types";
-
 type CommandItem = {
   id: string;
   group: TranslationKey;
@@ -51,15 +51,51 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       },
     }));
 
-    const fileCommands = files.filter((file) => !file.trashed).slice(0, 24).map((file) => ({
+    const fileCommands = files.filter((file) => !file.trashed).slice(0, 40).map((file) => ({
       id: `file:${file.id}`,
       group: "commandFiles" as const,
       title: file.name,
-      subtitle: t("open"),
-      icon: "solar:document-text-bold-duotone",
+      subtitle: file.kind === "folder" ? t("openFolder") : t("openInNotes"),
+      icon: file.kind === "folder" ? "solar:folder-with-files-bold-duotone" : "solar:document-text-bold-duotone",
       run: () => {
+        if (file.kind === "folder") {
+          const openFolder = (globalThis as any).__files_open_folder as ((folderId: string | null) => void) | undefined;
+          openFolder?.(file.id);
+          openApp("files");
+          return;
+        }
         selectFile(file.id);
-        openApp("notes" as AppId);
+        openApp(getFileOpenApp(file));
+      },
+    }));
+
+    const taskCommands = readLocalTasks().filter((task) => !task.done).slice(0, 20).map((task) => ({
+      id: `task:${task.id}`,
+      group: "commandTasks" as const,
+      title: task.text,
+      subtitle: task.due ? `${t("tasksDue")}: ${task.due}` : t("pending"),
+      icon: "solar:checklist-minimalistic-bold-duotone",
+      run: () => openApp("tasks"),
+    }));
+
+    const eventCommands = readLocalCalendarEvents().slice(0, 20).map((event) => ({
+      id: `event:${event.id}`,
+      group: "commandEvents" as const,
+      title: event.title,
+      subtitle: `${event.date}${event.time ? ` ${event.time}` : ""}`,
+      icon: "solar:calendar-bold-duotone",
+      run: () => openApp("calendar"),
+    }));
+
+    const bookmarkCommands = readLocalBookmarks().slice(0, 20).map((bookmark) => ({
+      id: `bookmark:${bookmark.url}`,
+      group: "commandBookmarks" as const,
+      title: bookmark.title,
+      subtitle: bookmark.url,
+      icon: bookmark.icon ?? "solar:bookmark-bold-duotone",
+      run: () => {
+        queueBrowserOpenUrl(bookmark.url);
+        openApp("browser");
       },
     }));
 
@@ -67,6 +103,9 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       ...appCommands,
       ...windowCommands,
       ...fileCommands,
+      ...taskCommands,
+      ...eventCommands,
+      ...bookmarkCommands,
       {
         id: "system:reset-windows",
         group: "commandSystem",
@@ -84,7 +123,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     return fuse.search(query).map((result) => result.item);
   }, [commands, query]);
 
-  const groups = ["commandApps", "commandWindows", "commandFiles", "commandSystem"] as const;
+  const groups = ["commandApps", "commandWindows", "commandFiles", "commandTasks", "commandEvents", "commandBookmarks", "commandSystem"] as const;
 
   function runCommand(command: CommandItem) {
     command.run();

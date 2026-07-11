@@ -10,6 +10,8 @@ export type WindowBounds = {
   height: number;
 };
 
+export type WorkspaceId = 0 | 1 | 2;
+
 export type WindowState = WindowBounds & {
   id: string;
   appId: AppId;
@@ -18,6 +20,7 @@ export type WindowState = WindowBounds & {
   z: number;
   minimized: boolean;
   maximized: boolean;
+  workspaceId?: WorkspaceId;
   restoreBounds?: WindowBounds;
 };
 
@@ -29,7 +32,8 @@ export type DesktopStore = {
   launcherOpen: boolean;
   desktopLayoutMode: DesktopLayoutMode;
   desktopIconPositions: Record<string, { x: number; y: number }>;
-  openApp: (appId: AppId) => void;
+  openApp: (appId: AppId) => string | null;
+  moveWindowToWorkspace: (id: string, workspaceId: WorkspaceId) => void;
   closeWindow: (id: string) => void;
   focusWindow: (id: string) => void;
   minimizeWindow: (id: string) => void;
@@ -71,9 +75,10 @@ export type FsStore = {
   init: () => Promise<void>;
   selectFile: (id: string) => void;
   setDraft: (draft: string) => void;
-  createFile: () => Promise<void>;
+  createFile: (parentId?: string | null) => Promise<FsFile>;
   createNamedFile: (name: string, parentId?: string | null) => Promise<FileMutationResult>;
   createFolder: (name: string, parentId?: string | null) => Promise<FileMutationResult>;
+  touchFileById: (id: string) => Promise<FsFile | null>;
   deleteSelectedFile: () => Promise<void>;
   deleteFileByName: (name: string) => Promise<FsFile | null>;
   deleteFileById: (id: string) => Promise<FsFile | null>;
@@ -99,14 +104,19 @@ export type ContextMenuState = {
   id?: string;
 };
 
+export type NotificationCategory = "system" | "files" | "apps" | "media";
+
 export type Notification = {
   id: string;
   title: string;
   message: string;
   type?: "info" | "success" | "warning" | "error";
+  category?: NotificationCategory;
+  appId?: AppId;
   duration?: number;
   createdAt?: number;
   progress?: number;
+  sticky?: boolean;
 };
 
 export type WallpaperId =

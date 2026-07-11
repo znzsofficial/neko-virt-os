@@ -100,8 +100,8 @@ export function formatFileSize(content: string) {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
-export function formatFileTime(timestamp: number) {
-  return new Intl.DateTimeFormat("en", {
+export function formatFileTime(timestamp: number, locale: "zh" | "en" = "en") {
+  return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en", {
     hour: "2-digit",
     minute: "2-digit",
     month: "short",

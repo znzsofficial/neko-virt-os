@@ -1,21 +1,31 @@
 import { Icon } from "@iconify-icon/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLanguageStore } from "../languageStore";
+import { consumeBrowserOpenUrl } from "../fileOpen";
+import { useLanguageStore, type TranslationKey } from "../languageStore";
+
+const defaultBookmarkSeed = [
+  ["browserBookmarkNekoWiki", "https://wiki.nekolaska.vip", "solar:book-2-bold-duotone"],
+  ["browserBookmarkNekoGames", "https://game.nekolaska.vip", "solar:gamepad-bold-duotone"],
+  ["browserBookmarkSearch", "https://duckduckgo.com", "solar:magnifer-bold-duotone"],
+  ["browserBookmarkMdn", "https://developer.mozilla.org", "solar:code-bold-duotone"],
+  ["browserBookmarkGithub", "https://github.com", "solar:programming-bold-duotone"],
+  ["browserBookmarkWikipedia", "https://wikipedia.org", "solar:book-bookmark-bold-duotone"],
+] as const;
+
+const legacyBookmarkTitleMap = new Map<string, TranslationKey>([
+  ["https://wiki.nekolaska.vip", "browserBookmarkNekoWiki"],
+  ["https://game.nekolaska.vip", "browserBookmarkNekoGames"],
+  ["https://duckduckgo.com", "browserBookmarkSearch"],
+  ["https://developer.mozilla.org", "browserBookmarkMdn"],
+  ["https://github.com", "browserBookmarkGithub"],
+  ["https://wikipedia.org", "browserBookmarkWikipedia"],
+]);
 
 const HOME_URL = "neko://home";
 const BROWSER_SESSION_STORAGE_KEY = "neko-virt-os.browser-session.v1";
 const BROWSER_RECENTS_STORAGE_KEY = "neko-virt-os.browser-recents.v1";
 const BROWSER_BOOKMARKS_STORAGE_KEY = "neko-virt-os.browser-bookmarks.v1";
 const BROWSER_CLOSED_TABS_STORAGE_KEY = "neko-virt-os.browser-closed-tabs.v1";
-
-const defaultBookmarks = [
-  ["Neko Wiki", "https://wiki.nekolaska.vip", "solar:book-2-bold-duotone"],
-  ["Neko Games", "https://game.nekolaska.vip", "solar:gamepad-bold-duotone"],
-  ["Search", "https://duckduckgo.com", "solar:magnifer-bold-duotone"],
-  ["MDN", "https://developer.mozilla.org", "solar:code-bold-duotone"],
-  ["GitHub", "https://github.com", "solar:programming-bold-duotone"],
-  ["Wikipedia", "https://wikipedia.org", "solar:book-bookmark-bold-duotone"],
-] as const;
 
 type BrowserTab = {
   id: string;
@@ -46,6 +56,31 @@ function createTab(initialUrl = HOME_URL): BrowserTab {
     iframeLoaded: initialUrl === HOME_URL,
     iframeSlow: false,
   };
+}
+
+function getDefaultBookmarks() {
+  const t = useLanguageStore.getState().t;
+  return defaultBookmarkSeed.map(([titleKey, url, icon]) => ({ title: t(titleKey), url, icon }));
+}
+
+function migrateLegacyBookmarks(entries: BrowserBookmarkEntry[]) {
+  const t = useLanguageStore.getState().t;
+  return entries.map((entry) => {
+    const titleKey = legacyBookmarkTitleMap.get(entry.url);
+    if (!titleKey) return entry;
+    const normalizedTitle = entry.title.trim().toLowerCase();
+    const legacyTitles = new Set([
+      "neko wiki",
+      "neko games",
+      "search",
+      "mdn",
+      "github",
+      "wikipedia",
+      t(titleKey).trim().toLowerCase(),
+    ]);
+    if (!legacyTitles.has(normalizedTitle)) return entry;
+    return { ...entry, title: t(titleKey) };
+  });
 }
 
 function normalizeAddress(value: string) {
@@ -90,9 +125,9 @@ function readBrowserRecents(): BrowserRecentEntry[] {
 function readBrowserBookmarks(): BrowserBookmarkEntry[] {
   try {
     const raw = localStorage.getItem(BROWSER_BOOKMARKS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : defaultBookmarks.map(([title, url, icon]) => ({ title, url, icon }));
+    return raw ? migrateLegacyBookmarks(JSON.parse(raw)) : getDefaultBookmarks();
   } catch {
-    return defaultBookmarks.map(([title, url, icon]) => ({ title, url, icon }));
+    return getDefaultBookmarks();
   }
 }
 
@@ -143,6 +178,14 @@ export function BrowserApp() {
   useEffect(() => {
     localStorage.setItem(BROWSER_CLOSED_TABS_STORAGE_KEY, JSON.stringify(closedTabs.slice(0, 8)));
   }, [closedTabs]);
+
+  useEffect(() => {
+    const pendingUrl = consumeBrowserOpenUrl();
+    if (!pendingUrl) return;
+    const nextTab = createTab(pendingUrl);
+    setTabs((current) => [...current, nextTab]);
+    setActiveTabId(nextTab.id);
+  }, []);
 
   useEffect(() => {
     if (!activeTab || isHome) return;

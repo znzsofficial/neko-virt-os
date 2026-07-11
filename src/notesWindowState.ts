@@ -6,8 +6,23 @@ export function setNoteWindowDirty(windowId: string, dirty: boolean) {
   registry[windowId] = dirty;
 }
 
+export function setNoteWindowFile(windowId: string, fileId: string) {
+  const registry = ((globalThis as any).__notes_window_files ??= {}) as Record<string, string>;
+  registry[windowId] = fileId;
+}
+
+export function getNoteWindowFile(windowId: string) {
+  const registry = ((globalThis as any).__notes_window_files ?? {}) as Record<string, string>;
+  return registry[windowId] ?? null;
+}
+
 export function clearNoteWindowDirty(windowId: string) {
   const registry = ((globalThis as any).__notes_dirty_windows ??= {}) as Record<string, boolean>;
+  delete registry[windowId];
+}
+
+export function clearNoteWindowFile(windowId: string) {
+  const registry = ((globalThis as any).__notes_window_files ??= {}) as Record<string, string>;
   delete registry[windowId];
 }
 
@@ -23,5 +38,6 @@ export function requestCloseWindow(windowState: WindowState, closeWindow: (id: s
     if (!shouldClose) return;
   }
   clearNoteWindowDirty(windowState.id);
+  clearNoteWindowFile(windowState.id);
   closeWindow(windowState.id);
 }

@@ -3,7 +3,7 @@ import { Rnd } from "react-rnd";
 import { clsx } from "clsx";
 import { flushSync } from "react-dom";
 import { useHotkeys } from "react-hotkeys-hook";
-import { lazy, Suspense, useEffect, useState, type MouseEvent } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { apps } from "./apps";
 import { useFsStore } from "./fsStore";
 import { useNotificationStore } from "./notificationStore";
@@ -11,15 +11,18 @@ import { useLanguageStore, type TranslationKey } from "./languageStore";
 import { snapWindowBounds, useDesktopStore } from "./windowStore";
 import { appDescriptionKeys, appTitleKeys, getAppIcon } from "./appText";
 import { appComponentRegistry } from "./appRegistry";
-import { clampDesktopIconPosition, findNearestAvailableGridPosition, getDesktopGridKey, getDesktopGridPosition, snapDesktopIconPosition } from "./desktopLayout";
+import { clampDesktopIconPosition, getDesktopBoundsSize, getDesktopGridPosition, layoutItemsOnDesktopGrid, snapDesktopIconPosition } from "./desktopLayout";
 import { translateFileError } from "./fileErrorUtils";
 import { applyThemeSettings, readThemeSettings, THEME_STORAGE_KEY } from "./theme";
 import { requestCloseWindow } from "./notesWindowState";
+import { DesktopWidgets } from "./components/DesktopWidgets";
 import { Launcher } from "./components/Launcher";
 import { NotificationOverlay } from "./components/NotificationOverlay";
 import { Taskbar } from "./components/Taskbar";
 import { WindowSwitcher } from "./components/WindowSwitcher";
-import type { AppId, ContextMenuState, DesktopLayoutMode, WindowState } from "./types";
+import { getFileOpenApp } from "./fileOpen";
+import { useOsUiStore } from "./osUiStore";
+import type { AppId, ContextMenuState, DesktopLayoutMode, WindowState, WorkspaceId } from "./types";
 
 const CommandPalette = lazy(() => import("./components/CommandPalette").then((module) => ({ default: module.CommandPalette })));
 
@@ -41,9 +44,11 @@ export function App() {
   const closeLauncher = useDesktopStore((state) => state.closeLauncher);
   const focusWindow = useDesktopStore((state) => state.focusWindow);
   const restoreWindow = useDesktopStore((state) => state.restoreWindow);
+  const activeWorkspace = useOsUiStore((state) => state.activeWorkspace);
   const initFs = useFsStore((state) => state.init);
   const t = useLanguageStore((state) => state.t);
-  const switcherWindows = windows.slice().sort((a, b) => b.z - a.z);
+  const workspaceWindows = windows.filter((window) => (window.workspaceId ?? 0) === activeWorkspace);
+  const switcherWindows = workspaceWindows.slice().sort((a, b) => b.z - a.z);
 
   useHotkeys("ctrl+k, meta+k", () => setCommandOpen((open) => !open), { preventDefault: true, enableOnFormTags: true });
 
@@ -142,7 +147,7 @@ export function App() {
     >
       <Desktop />
       <section className="window-layer" aria-label={t("openWindows")}>
-        {windows.map((window) => (
+        {workspaceWindows.map((window) => (
           <SystemWindow key={window.id} window={window} />
         ))}
       </section>
@@ -165,6 +170,9 @@ function Desktop() {
   const [selectionBox, setSelectionBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
   const [desktopDragTarget, setDesktopDragTarget] = useState<string | null>(null);
   const [desktopInvalidDragTarget, setDesktopInvalidDragTarget] = useState<string | null>(null);
+  const [draggingIconIds, setDraggingIconIds] = useState<string[]>([]);
+  const [desktopBounds, setDesktopBounds] = useState({ width: 1200, height: 700 });
+  const desktopIconsRef = useRef<HTMLDivElement | null>(null);
   const openApp = useDesktopStore((state) => state.openApp);
   const updateDesktopIconPosition = useDesktopStore((state) => state.updateDesktopIconPosition);
   const desktopLayoutMode = useDesktopStore((state) => state.desktopLayoutMode);
@@ -177,10 +185,10 @@ function Desktop() {
   const moveFileById = useFsStore((state) => state.moveFileById);
   const addNotification = useNotificationStore((state) => state.addNotification);
   const t = useLanguageStore((state) => state.t);
-  const desktopApps: AppId[] = ["files", "notes", "browser", "calculator", "calendar", "tasks", "timer", "palette", "settings", "task-manager", "about"];
+  const desktopApps: AppId[] = ["files", "notes", "browser", "calculator", "calendar", "tasks", "timer", "palette", "mmd-studio", "settings", "task-manager", "about"];
   const [pinnedDesktopApps, setPinnedDesktopApps] = useState<AppId[]>(desktopApps);
   const [hiddenDesktopApps, setHiddenDesktopApps] = useState<AppId[]>([]);
-  const desktopFiles = files.filter((file) => !file.trashed).slice(0, 4);
+  const desktopFiles = files.filter((file) => !file.trashed && (file.parentId ?? null) === null).slice(0, 4);
 
   // Expose these modifiers for the right-click menu
   (globalThis as any).__desktop_state = {
@@ -196,37 +204,97 @@ function Desktop() {
     ...visibleApps.map((id) => ({ id: `app:${id}`, kind: "app" as const, appId: id })),
     ...desktopFiles.map((file) => ({ id: `file:${file.id}`, kind: "file" as const, file })),
   ];
+  const desktopItemIdsKey = [
+    ...visibleApps.map((id) => `app:${id}`),
+    ...desktopFiles.map((file) => `file:${file.id}`),
+  ].join("|");
+  const desktopItemIds = useMemo(
+    () => (desktopItemIdsKey ? desktopItemIdsKey.split("|") : []),
+    [desktopItemIdsKey],
+  );
 
-  function getIconPosition(itemId: string, index: number, bounds?: { width: number; height: number }) {
-    const saved = (desktopIconPositions as Record<string, { x: number; y: number }>)[itemId];
-    if (desktopLayoutMode === "free") return saved ?? getDesktopGridPosition(index, bounds);
+  useLayoutEffect(() => {
+    const node = desktopIconsRef.current;
+    if (!node) return;
+
+    function measure() {
+      const next = getDesktopBoundsSize(node);
+      setDesktopBounds((current) => (
+        current.width === next.width && current.height === next.height ? current : next
+      ));
+    }
+
+    measure();
+    const observer = new ResizeObserver(() => measure());
+    observer.observe(node);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  function getDesktopItemIds() {
+    return desktopItemIds;
+  }
+
+  function getIconPosition(itemId: string, index: number, bounds = desktopBounds) {
+    const saved = desktopIconPositions[itemId];
+    if (desktopLayoutMode === "free" || draggingIconIds.includes(itemId)) {
+      return clampDesktopIconPosition(saved ?? getDesktopGridPosition(index, bounds), bounds);
+    }
     return snapDesktopIconPosition(saved ?? getDesktopGridPosition(index, bounds), bounds);
   }
 
+  function applyGridLayout(
+    itemIds: string[],
+    seedPositions: Record<string, { x: number; y: number } | undefined>,
+    bounds = desktopBounds,
+  ) {
+    const laidOut = layoutItemsOnDesktopGrid(itemIds, seedPositions, bounds);
+    Object.entries(laidOut).forEach(([id, position]) => {
+      updateDesktopIconPosition(id, position.x, position.y);
+    });
+    return laidOut;
+  }
+
+  // Repair overlaps / out-of-bounds cells whenever the grid geometry or item set changes.
+  useEffect(() => {
+    if (desktopLayoutMode !== "grid" || draggingIconIds.length) return;
+    if (!desktopItemIds.length) return;
+
+    const seeds = Object.fromEntries(
+      desktopItemIds.map((id, index) => [id, desktopIconPositions[id] ?? getDesktopGridPosition(index, desktopBounds)]),
+    );
+    const laidOut = layoutItemsOnDesktopGrid(desktopItemIds, seeds, desktopBounds);
+    const needsWrite = desktopItemIds.some((id) => {
+      const current = desktopIconPositions[id];
+      const next = laidOut[id];
+      return !current || current.x !== next.x || current.y !== next.y;
+    });
+    if (!needsWrite) return;
+    Object.entries(laidOut).forEach(([id, position]) => {
+      updateDesktopIconPosition(id, position.x, position.y);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reflow on geometry/item-set/mode, not every position write
+  }, [desktopBounds.width, desktopBounds.height, desktopItemIdsKey, desktopLayoutMode, draggingIconIds.length]);
+
   function setLayoutMode(mode: DesktopLayoutMode) {
     if (mode === "grid") {
-      const desktopEl = document.querySelector(".desktop-icons");
-      const desktopBounds = desktopEl ? desktopEl.getBoundingClientRect() : { width: 1200, height: 700 };
-      const occupiedKeys = new Set<string>();
-      const sortedItems = [...desktopItems].sort((a, b) => {
-        const aIndex = desktopItems.findIndex((item) => item.id === a.id);
-        const bIndex = desktopItems.findIndex((item) => item.id === b.id);
-        const aPos = getIconPosition(a.id, aIndex, desktopBounds);
-        const bPos = getIconPosition(b.id, bIndex, desktopBounds);
-        return aPos.y - bPos.y || aPos.x - bPos.x;
-      });
-      sortedItems.forEach((item) => {
-        const index = Math.max(0, desktopItems.findIndex((entry) => entry.id === item.id));
-        const position = findNearestAvailableGridPosition(getIconPosition(item.id, index, desktopBounds), occupiedKeys, desktopBounds);
-        occupiedKeys.add(getDesktopGridKey(position));
-        updateDesktopIconPosition(item.id, position.x, position.y);
-      });
+      const bounds = getDesktopBoundsSize(desktopIconsRef.current);
+      setDesktopBounds(bounds);
+      const itemIds = getDesktopItemIds();
+      const seeds = Object.fromEntries(
+        itemIds.map((id, index) => [id, desktopIconPositions[id] ?? getDesktopGridPosition(index, bounds)]),
+      );
+      applyGridLayout(itemIds, seeds, bounds);
     }
     setDesktopLayoutMode(mode);
     addNotification({
       title: mode === "grid" ? t("desktopGridMode") : t("desktopFreeMode"),
       message: mode === "grid" ? t("desktopGridModeMessage") : t("desktopFreeModeMessage"),
       type: "info",
+      category: "system",
     });
   }
 
@@ -249,6 +317,8 @@ function Desktop() {
                   title: t("filesDeleted"),
                 message: phrase(t, "filesDeletedPrefix", filesToDelete.length, "filesDeletedSuffix"),
                 type: "success",
+                category: "files",
+                appId: "files",
               });
             });
             setSelectedDesktopItems([]);
@@ -343,12 +413,16 @@ function Desktop() {
     const startX = event.clientX;
     const startY = event.clientY;
 
-    const desktopEl = document.querySelector(".desktop-icons");
-    const desktopBounds = desktopEl ? desktopEl.getBoundingClientRect() : { width: 1200, height: 700 };
+    const dragBounds = getDesktopBoundsSize(desktopIconsRef.current);
+    setDesktopBounds(dragBounds);
 
     const initialPositions = nextSelected.reduce((acc, id) => {
       const index = Math.max(0, desktopItems.findIndex((item) => item.id === id));
-      acc[id] = getIconPosition(id, index, desktopBounds);
+      // Use stored/free coords as drag origin (not re-snapped mid-interaction).
+      acc[id] = clampDesktopIconPosition(
+        desktopIconPositions[id] ?? getDesktopGridPosition(index, dragBounds),
+        dragBounds,
+      );
       return acc;
     }, {} as Record<string, { x: number; y: number }>);
 
@@ -377,6 +451,7 @@ function Desktop() {
       lastPointer = { x: e.clientX, y: e.clientY };
 
       if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+        if (!hasDragged) setDraggingIconIds(nextSelected);
         hasDragged = true;
       }
 
@@ -400,7 +475,7 @@ function Desktop() {
         nextSelected.forEach((id) => {
           const initPos = initialPositions[id];
           if (initPos) {
-            const nextPosition = clampDesktopIconPosition({ x: initPos.x + deltaX, y: initPos.y + deltaY }, desktopBounds);
+            const nextPosition = clampDesktopIconPosition({ x: initPos.x + deltaX, y: initPos.y + deltaY }, dragBounds);
             livePositions[id] = nextPosition;
             updateDesktopIconPosition(id, nextPosition.x, nextPosition.y);
           }
@@ -411,42 +486,63 @@ function Desktop() {
     function handleMouseUp() {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
-      
-      // If the mouse up happened without moving, it's a simple selection reset
+      setDraggingIconIds([]);
+
       if (!hasDragged && !isCtrl) {
         setSelectedDesktopItems([itemId]);
-      } else if (hasDragged && draggedFileIds.length) {
+      }
+
+      let movedIntoFolder = false;
+      if (hasDragged && draggedFileIds.length) {
         const dropTarget = getDesktopDropTarget(lastPointer.x, lastPointer.y);
-        setDesktopDragTarget(null);
-        setDesktopInvalidDragTarget(null);
-        if (dropTarget.kind === "folder" || dropTarget.kind === "root") {
-          const parentId = dropTarget.kind === "folder" ? dropTarget.targetId : null;
+        if (dropTarget.kind === "folder") {
+          movedIntoFolder = true;
+          const parentId = dropTarget.targetId;
           void Promise.all(draggedFileIds.map((fileId) => moveFileById(fileId, parentId))).then((results) => {
             const firstError = results.find((result) => result.error)?.error;
             if (firstError) {
-              addNotification({ title: t("moveFailed"), message: translateFileError(firstError, t), type: "error" });
+              addNotification({ title: t("moveFailed"), message: translateFileError(firstError, t), type: "error", category: "files", appId: "files" });
+              if (desktopLayoutMode === "grid") {
+                const dropBounds = getDesktopBoundsSize(desktopIconsRef.current);
+                const itemIds = getDesktopItemIds();
+                const seeds: Record<string, { x: number; y: number } | undefined> = { ...desktopIconPositions };
+                nextSelected.forEach((id) => {
+                  seeds[id] = livePositions[id] ?? initialPositions[id] ?? seeds[id];
+                });
+                applyGridLayout(itemIds, seeds, dropBounds);
+              }
               return;
             }
             const movedCount = results.filter((result) => result.file).length;
             if (movedCount) {
-              addNotification({ title: t("itemMoved"), message: `${movedCount} ${t("itemsCount")}`, type: "success" });
+              addNotification({ title: t("itemMoved"), message: `${movedCount} ${t("itemsCount")}`, type: "success", category: "files", appId: "files" });
+            }
+            if (desktopLayoutMode === "grid") {
+              const dropBounds = getDesktopBoundsSize(desktopIconsRef.current);
+              const remainingIds = getDesktopItemIds().filter((id) => !draggedFileIds.some((fileId) => id === `file:${fileId}`));
+              applyGridLayout(remainingIds, { ...desktopIconPositions }, dropBounds);
+            }
+          });
+        } else if (dropTarget.kind === "root") {
+          void Promise.all(draggedFileIds.map((fileId) => moveFileById(fileId, null))).then((results) => {
+            const firstError = results.find((result) => result.error)?.error;
+            if (firstError) {
+              addNotification({ title: t("moveFailed"), message: translateFileError(firstError, t), type: "error", category: "files", appId: "files" });
             }
           });
         }
-      } else if (hasDragged && desktopLayoutMode === "grid") {
-        const occupiedKeys = new Set(
-          desktopItems
-            .map((item, index) => ({ item, index }))
-            .filter(({ item }) => !nextSelected.includes(item.id))
-            .map(({ item, index }) => getDesktopGridKey(getIconPosition(item.id, index, desktopBounds)))
-        );
+      }
+
+      // Always deconflict after any grid drag (apps + files). File-only path used to skip this and overlap.
+      if (hasDragged && desktopLayoutMode === "grid" && !movedIntoFolder) {
+        const dropBounds = getDesktopBoundsSize(desktopIconsRef.current);
+        setDesktopBounds(dropBounds);
+        const itemIds = getDesktopItemIds();
+        const seeds: Record<string, { x: number; y: number } | undefined> = { ...desktopIconPositions };
         nextSelected.forEach((id) => {
-          const current = livePositions[id] ?? initialPositions[id];
-          if (!current) return;
-          const snapped = findNearestAvailableGridPosition(current, occupiedKeys, desktopBounds);
-          occupiedKeys.add(getDesktopGridKey(snapped));
-          updateDesktopIconPosition(id, snapped.x, snapped.y);
+          seeds[id] = livePositions[id] ?? initialPositions[id] ?? seeds[id];
         });
+        applyGridLayout(itemIds, seeds, dropBounds);
       }
 
       setDesktopDragTarget(null);
@@ -480,6 +576,7 @@ function Desktop() {
           <span>{t("desktopSubtitle")}</span>
         </div>
       </div>
+      <DesktopWidgets />
       <div className="desktop-layout-toggle" onMouseDown={(event) => event.stopPropagation()}>
         {(["grid", "free"] as const).map((mode) => (
           <button
@@ -500,11 +597,11 @@ function Desktop() {
           <span>{t("dropToHome")}</span>
         </div>
       ) : null}
-      <div className="desktop-icons">
+      <div className="desktop-icons" ref={desktopIconsRef}>
         {visibleApps.map((appId, index) => {
           const app = apps.find((item) => item.id === appId)!;
           const itemId = `app:${app.id}`;
-          const pos = getIconPosition(itemId, index);
+          const pos = getIconPosition(itemId, index, desktopBounds);
           return (
             <div
               key={`desktop-app:${app.id}`}
@@ -527,7 +624,7 @@ function Desktop() {
         })}
         {desktopFiles.map((file, index) => {
           const itemId = `file:${file.id}`;
-          const pos = getIconPosition(itemId, visibleApps.length + index);
+          const pos = getIconPosition(itemId, visibleApps.length + index, desktopBounds);
           return (
             <div
               key={`desktop-file:${file.id}`}
@@ -549,7 +646,7 @@ function Desktop() {
                   openApp("files");
                   return;
                 }
-                openApp("notes");
+                openApp(getFileOpenApp(file));
               }}
             >
               <Icon icon={file.kind === "folder" ? "solar:folder-with-files-bold-duotone" : "solar:document-text-bold-duotone"} width={30} height={30} />
@@ -584,6 +681,7 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
   const cascadeWindows = useDesktopStore((state) => state.cascadeWindows);
   const tileWindows = useDesktopStore((state) => state.tileWindows);
   const togglePinnedWindowZ = useDesktopStore((state) => state.togglePinnedWindowZ);
+  const moveWindowToWorkspace = useDesktopStore((state) => state.moveWindowToWorkspace);
   const resetWindowLayout = useDesktopStore((state) => state.resetWindowLayout);
   const addNotification = useNotificationStore((state) => state.addNotification);
   const t = useLanguageStore((state) => state.t);
@@ -644,14 +742,14 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
   async function restoreFileFromMenu() {
     if (!file) return;
     await restoreFileById(file.id);
-    addNotification({ title: t("restore"), message: `${file.name}${t("restoredSuffix")}`, type: "success" });
+    addNotification({ title: t("restore"), message: `${file.name}${t("restoredSuffix")}`, type: "success", category: "files", appId: "trash" });
   }
 
   async function permanentlyDeleteFileFromMenu() {
     if (!file) return;
     if (!window.confirm(phrase(t, "confirmPermanentDeletePrefix", file.name, "confirmPermanentDeleteSuffix"))) return;
     await permanentlyDeleteFileById(file.id);
-    addNotification({ title: t("fileDeleted"), message: `${file.name}${t("permanentlyDeletedSuffix")}`, type: "success" });
+    addNotification({ title: t("fileDeleted"), message: `${file.name}${t("permanentlyDeletedSuffix")}`, type: "success", category: "files", appId: "trash" });
   }
 
   async function createFileFromMenu() {
@@ -670,6 +768,8 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
       title: t("fileCreated"),
       message: t("fileCreatedDefaultMessage"),
       type: "success",
+      category: "files",
+      appId: "files",
     });
   }
 
@@ -684,10 +784,10 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
     if (!name || !name.trim()) return;
     const result = await createFolder(name);
     if (result.error) {
-      addNotification({ title: t("createFailed"), message: result.error, type: "error" });
+      addNotification({ title: t("createFailed"), message: result.error, type: "error", category: "files", appId: "files" });
       return;
     }
-    addNotification({ title: t("folderCreated"), message: `${result.file?.name ?? t("newFolderLabel")}${t("createdSuffix")}`, type: "success" });
+    addNotification({ title: t("folderCreated"), message: `${result.file?.name ?? t("newFolderLabel")}${t("createdSuffix")}`, type: "success", category: "files", appId: "files" });
   }
 
   function openFileFromMenu() {
@@ -699,7 +799,7 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
       openApp("files");
       return;
     }
-    openApp("notes");
+    openApp(getFileOpenApp(file));
   }
 
   return (
@@ -715,7 +815,7 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
     >
       {menu.kind === "desktop-app" && app ? (
         <>
-          <button role="menuitem" onClick={() => run(() => openApp(app.id))}>
+          <button role="menuitem" onClick={() => run(() => { openApp(app.id); })}>
             <Icon icon="solar:login-2-bold-duotone" width={16} height={16} />
             {t("open")} {t(appTitleKeys[app.id])}
           </button>
@@ -798,6 +898,17 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
             {t("bringToFront")}
           </button>
           <div className="context-menu-divider" />
+          {([0, 1, 2] as WorkspaceId[]).map((workspace) => (
+            <button
+              key={workspace}
+              role="menuitem"
+              onClick={() => run(() => moveWindowToWorkspace(windowState.id, workspace))}
+            >
+              <Icon icon="solar:layers-minimalistic-bold-duotone" width={16} height={16} />
+              {t("moveToWorkspace")} {workspace + 1}
+            </button>
+          ))}
+          <div className="context-menu-divider" />
           <button role="menuitem" onClick={() => run(() => requestCloseWindow(windowState, closeWindow))}>
             <span className="context-glyph">×</span>
             {t("close")}
@@ -812,7 +923,7 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
             {t("createTextFile")}
           </button>
           <button role="menuitem" onClick={() => run(createFolderFromMenu)}>
-            <Icon icon="solar:folder-add-bold-duotone" width={16} height={16} />
+            <Icon icon="solar:folder-with-files-bold-duotone" width={16} height={16} />
             {t("createFolder")}
           </button>
           <div className="context-menu-divider" />
@@ -843,7 +954,7 @@ function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose: () =>
             {t("newFile")}
           </button>
           <button role="menuitem" onClick={() => run(createFolderFromMenu)}>
-            <Icon icon="solar:folder-add-bold-duotone" width={16} height={16} />
+            <Icon icon="solar:folder-with-files-bold-duotone" width={16} height={16} />
             {t("createFolder")}
           </button>
         </>
@@ -992,17 +1103,17 @@ function SystemWindow({ window }: { window: WindowState }) {
             onClick={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
           >
-            <button type="button" aria-label={`Minimize ${windowTitle}`} onClick={requestMinimize}>
+            <button type="button" aria-label={`${t("minimizeWindowLabel")}${windowTitle}`} onClick={requestMinimize}>
               <span aria-hidden="true">-</span>
             </button>
             <button
               type="button"
-              aria-label={`${window.maximized ? "Restore" : "Maximize"} ${windowTitle}`}
+              aria-label={`${window.maximized ? t("restoreWindowLabel") : t("maximizeWindowLabel")}${windowTitle}`}
               onClick={() => toggleMaximize(window.id)}
             >
               <span aria-hidden="true">{window.maximized ? "□" : "▢"}</span>
             </button>
-            <button type="button" aria-label={`Close ${windowTitle}`} onClick={() => requestCloseWindow(window, closeWindow)}>
+            <button type="button" aria-label={`${t("closeWindowLabel")}${windowTitle}`} onClick={() => requestCloseWindow(window, closeWindow)}>
               <span aria-hidden="true">×</span>
             </button>
           </div>

@@ -68,9 +68,9 @@ export function QrToolApp() {
     if (!decodedText) return;
     try {
       await navigator.clipboard.writeText(decodedText);
-      addNotification({ title: t("copiedToken"), message: t("qrCopyResult"), type: "success" });
+      addNotification({ title: t("copiedToken"), message: t("qrCopyResult"), type: "success", category: "apps", appId: "qr-tool" });
     } catch {
-      addNotification({ title: t("copyFailed"), message: t("copyFailedMessage"), type: "error" });
+      addNotification({ title: t("copyFailed"), message: t("copyFailedMessage"), type: "error", category: "apps", appId: "qr-tool" });
     }
   }
 

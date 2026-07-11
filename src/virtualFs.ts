@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from "dexie";
 import { nanoid } from "nanoid";
+import { useLanguageStore } from "./languageStore";
 
 export type FsFile = {
   id: string;
@@ -35,10 +36,11 @@ db.on("populate", async () => {
 
 async function seedFiles() {
   const now = Date.now();
+  const t = useLanguageStore.getState().t;
   await db.files.bulkAdd([
     {
       id: "workspace-folder",
-      name: "Workspace",
+      name: t("seededWorkspaceFolder"),
       kind: "folder",
       content: "",
       parentId: null,
@@ -48,10 +50,9 @@ async function seedFiles() {
     },
     {
       id: "welcome-txt",
-      name: "Welcome.txt",
+      name: t("seededWelcomeFile"),
       kind: "text",
-      content:
-        "NekoVirtOS boot note\n\n- Build the shell first.\n- Keep Neko details quiet and useful.\n- Make files feel trustworthy.\n\nnya://local/home/Welcome.txt",
+      content: t("seededWelcomeContent"),
       parentId: null,
       createdAt: now - 120000,
       updatedAt: now - 90000,
@@ -59,10 +60,9 @@ async function seedFiles() {
     },
     {
       id: "theme-notes-md",
-      name: "Theme Notes.md",
+      name: t("seededThemeNotesFile"),
       kind: "text",
-      content:
-        "# Quiet Neko Workstation\n\nA restrained product UI with neutral surfaces, configurable identity accents, and compact desktop density.\n\nAvoid generic SaaS, toy retro OS styling, and excessive anime decoration.",
+      content: t("seededThemeNotesContent"),
       parentId: "workspace-folder",
       createdAt: now - 90000,
       updatedAt: now - 60000,
@@ -77,9 +77,10 @@ export async function listFiles() {
 
 export async function createTextFile(name?: string, content = "", parentId: string | null = null) {
   const now = Date.now();
+  const t = useLanguageStore.getState().t;
   const file: FsFile = {
     id: nanoid(10),
-    name: name?.trim() || `Untitled-${new Date(now).toLocaleTimeString("en-GB").replaceAll(":", "")}.txt`,
+    name: name?.trim() || `${t("defaultUntitledPrefix")}${new Date(now).toLocaleTimeString("en-GB").replaceAll(":", "")}.txt`,
     kind: "text",
     content,
     parentId,
@@ -109,6 +110,10 @@ export async function createFolder(name: string, parentId: string | null = null)
 
 export async function updateFileContent(id: string, content: string) {
   await db.files.update(id, { content, updatedAt: Date.now(), trashed: false, deletedAt: undefined });
+}
+
+export async function touchFile(id: string) {
+  await db.files.update(id, { updatedAt: Date.now() });
 }
 
 export async function renameFile(id: string, name: string) {

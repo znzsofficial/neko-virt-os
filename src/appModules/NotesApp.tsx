@@ -3,7 +3,8 @@ import { clsx } from "clsx";
 import { useEffect, useState } from "react";
 import { useFsStore } from "../fsStore";
 import { useLanguageStore } from "../languageStore";
-import { clearNoteWindowDirty, setNoteWindowDirty } from "../notesWindowState";
+import { clearNoteWindowDirty, getNoteWindowFile, setNoteWindowDirty, setNoteWindowFile } from "../notesWindowState";
+import { useDesktopStore } from "../windowStore";
 
 export function NotesApp({ windowId }: { windowId?: string }) {
   const t = useLanguageStore((state) => state.t);
@@ -11,7 +12,8 @@ export function NotesApp({ windowId }: { windowId?: string }) {
   const selectedFileId = useFsStore((state) => state.selectedFileId);
   const saveFileDraft = useFsStore((state) => state.saveFileDraft);
   const createFile = useFsStore((state) => state.createFile);
-  const [localFileId, setLocalFileId] = useState<string | null>(() => selectedFileId);
+  const openApp = useDesktopStore((state) => state.openApp);
+  const [localFileId, setLocalFileId] = useState<string | null>(() => windowId ? getNoteWindowFile(windowId) : selectedFileId);
   const selectedFile = files.find((file) => !file.trashed && file.kind === "text" && file.id === localFileId) ?? files.find((file) => !file.trashed && file.kind === "text" && file.id === selectedFileId) ?? null;
   const [draft, setDraft] = useState(() => selectedFile?.content ?? "");
   const [viewMode, setViewMode] = useState<"edit" | "preview" | "split">("edit");
@@ -25,10 +27,19 @@ export function NotesApp({ windowId }: { windowId?: string }) {
   }, [windowId, dirty]);
 
   useEffect(() => {
+    if (!windowId) return;
+    const mappedFileId = getNoteWindowFile(windowId);
+    if (mappedFileId && mappedFileId !== localFileId) {
+      setLocalFileId(mappedFileId);
+    }
+  }, [windowId, localFileId]);
+
+  useEffect(() => {
     if (!selectedFile) return;
     if (!localFileId) setLocalFileId(selectedFile.id);
+    if (windowId) setNoteWindowFile(windowId, selectedFile.id);
     if (!dirty) setDraft(selectedFile.content);
-  }, [selectedFile?.id, selectedFile?.content, dirty, localFileId]);
+  }, [selectedFile?.id, selectedFile?.content, dirty, localFileId, windowId]);
 
   useEffect(() => {
     if (viewMode === "edit") return;
@@ -56,6 +67,13 @@ export function NotesApp({ windowId }: { windowId?: string }) {
     setDirty(false);
   }
 
+  async function createFileInCurrentFolder() {
+    const parentId = selectedFile?.parentId ?? null;
+    const file = await createFile(parentId);
+    const nextWindowId = openApp("notes");
+    if (nextWindowId) setNoteWindowFile(nextWindowId, file.id);
+  }
+
   return (
     <div className="notes-app">
       <div className="app-toolbar compact">
@@ -72,8 +90,7 @@ export function NotesApp({ windowId }: { windowId?: string }) {
             ))}
           </div>
           <button className="button-ghost" onClick={() => {
-            setLocalFileId(null);
-            void createFile();
+            void createFileInCurrentFolder();
           }}>
             {t("newFile")}
           </button>
@@ -91,7 +108,7 @@ export function NotesApp({ windowId }: { windowId?: string }) {
         <div className="empty-state notes-empty">
           <Icon icon="solar:notes-bold-duotone" width={34} height={34} />
           <p>{t("noLocalTextSelected")}</p>
-          <button className="button-primary" onClick={() => void createFile()}>{t("createFile")}</button>
+          <button className="button-primary" onClick={() => void createFileInCurrentFolder()}>{t("createFile")}</button>
         </div>
       )}
     </div>

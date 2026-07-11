@@ -2,8 +2,10 @@ import { create } from "zustand";
 import { nanoid } from "nanoid";
 import { apps } from "./apps";
 import { initialWindows } from "./initialWindows";
+import { useLanguageStore } from "./languageStore";
 import { useLauncherStore } from "./launcherStore";
-import type { DesktopLayoutMode, DesktopStore, WindowBounds, WindowState } from "./types";
+import { useOsUiStore } from "./osUiStore";
+import type { DesktopLayoutMode, DesktopStore, WindowBounds, WindowState, WorkspaceId } from "./types";
 
 export const WINDOW_LAYOUT_STORAGE_KEY = "neko-virt-os.window-layout.v1";
 export const SNAP_THRESHOLD = 18;
@@ -39,16 +41,19 @@ export const useDesktopStore = create<DesktopStore>((set, get) => ({
   desktopIconPositions: loadIconPositions(),
   openApp: (appId) => {
     const app = apps.find((item) => item.id === appId);
-    if (!app) return;
+    if (!app) return null;
+    const t = useLanguageStore.getState().t;
     useLauncherStore.getState().recordAppLaunch(appId);
     const allowsMultiple = "multiInstance" in app && app.multiInstance;
 
     const existing = get().windows.find((win) => win.appId === appId);
     if (existing && !allowsMultiple) {
+      const existingWorkspace = (existing.workspaceId ?? 0) as WorkspaceId;
+      useOsUiStore.getState().setActiveWorkspace(existingWorkspace);
       get().restoreWindow(existing.id);
       get().focusWindow(existing.id);
       set({ launcherOpen: false });
-      return;
+      return existing.id;
     }
 
     const z = nextZ(get().windows);
@@ -62,13 +67,14 @@ export const useDesktopStore = create<DesktopStore>((set, get) => ({
       height: app.defaultSize.height,
     });
 
+    const workspaceId = useOsUiStore.getState().activeWorkspace as WorkspaceId;
     set((state) => ({
       windows: [
         ...state.windows,
         {
           id: windowId,
           appId,
-          title: allowsMultiple && instanceCount > 1 ? `${app.title} ${instanceCount}` : app.title,
+          title: allowsMultiple && instanceCount > 1 ? `${t(app.titleKey)} ${instanceCount}` : t(app.titleKey),
           icon: app.icon,
           x: bounds.x,
           y: bounds.y,
@@ -77,12 +83,19 @@ export const useDesktopStore = create<DesktopStore>((set, get) => ({
           z,
           minimized: false,
           maximized: false,
+          workspaceId,
         },
       ],
       activeWindowId: windowId,
       launcherOpen: false,
     }));
+    return windowId;
   },
+  moveWindowToWorkspace: (id, workspaceId) =>
+    set((state) => ({
+      windows: state.windows.map((win) => win.id === id ? { ...win, workspaceId } : win),
+      activeWindowId: state.activeWindowId === id ? null : state.activeWindowId,
+    })),
   closeWindow: (id) =>
     set((state) => ({
       windows: state.windows.filter((win) => win.id !== id),
@@ -305,15 +318,17 @@ function loadWindowSnapshot() {
 function normalizeWindowState(windowState: WindowState): WindowState | null {
   const app = apps.find((item) => item.id === windowState.appId);
   if (!app) return null;
+  const t = useLanguageStore.getState().t;
   const normalized = snapWindowBounds({
     width: Math.max(380, Number(windowState.width) || app.defaultSize.width),
     height: Math.max(250, Number(windowState.height) || app.defaultSize.height),
     x: Number.isFinite(Number(windowState.x)) ? Number(windowState.x) : 72,
     y: Number.isFinite(Number(windowState.y)) ? Number(windowState.y) : 82,
   });
+  const workspaceId = windowState.workspaceId === 1 || windowState.workspaceId === 2 ? windowState.workspaceId : 0;
   return {
     ...windowState,
-    title: app.title,
+    title: t(app.titleKey),
     icon: app.icon,
     width: normalized.width,
     height: normalized.height,
@@ -322,6 +337,7 @@ function normalizeWindowState(windowState: WindowState): WindowState | null {
     z: Number(windowState.z) || 1,
     minimized: Boolean(windowState.minimized),
     maximized: Boolean(windowState.maximized),
+    workspaceId,
   };
 }
 

@@ -35,20 +35,20 @@ export function SettingsApp() {
 
   async function clearCacheStorage() {
     if (!("caches" in window)) {
-      addNotification({ title: t("cacheUnavailable"), message: t("cacheUnavailableMessage"), type: "warning" });
+      addNotification({ title: t("cacheUnavailable"), message: t("cacheUnavailableMessage"), type: "warning", category: "system", appId: "settings" });
       return;
     }
     const keys = await caches.keys();
     await Promise.all(keys.map((key) => caches.delete(key)));
     navigator.storage?.estimate().then(setStorage).catch(() => setStorage(null));
-    addNotification({ title: t("cacheCleared"), message: phrase(t, "cacheClearedPrefix", keys.length, "cacheClearedSuffix"), type: "success" });
+    addNotification({ title: t("cacheCleared"), message: phrase(t, "cacheClearedPrefix", keys.length, "cacheClearedSuffix"), type: "success", category: "system", appId: "settings" });
   }
 
   async function resetLocalFiles() {
     if (!window.confirm(t("confirmResetFiles"))) return;
     await resetVirtualFiles();
     navigator.storage?.estimate().then(setStorage).catch(() => setStorage(null));
-    addNotification({ title: t("virtualStorageReset"), message: t("virtualStorageResetMessage"), type: "success" });
+    addNotification({ title: t("virtualStorageReset"), message: t("virtualStorageResetMessage"), type: "success", category: "system", appId: "settings" });
   }
 
   async function clearSiteData() {
@@ -60,7 +60,7 @@ export function SettingsApp() {
     localStorage.clear();
     resetWindowLayout();
     await resetVirtualFiles();
-    addNotification({ title: t("siteDataCleared"), message: t("siteDataClearedMessage"), type: "success" });
+    addNotification({ title: t("siteDataCleared"), message: t("siteDataClearedMessage"), type: "success", category: "system", appId: "settings" });
     window.setTimeout(() => window.location.reload(), 700);
   }
 
@@ -75,7 +75,7 @@ export function SettingsApp() {
         image.src = url;
       });
       if (!loaded) {
-        addNotification({ title: t("wallpaperLoadFailed"), message: t("wallpaperLoadFailedMessage"), type: "warning" });
+        addNotification({ title: t("wallpaperLoadFailed"), message: t("wallpaperLoadFailedMessage"), type: "warning", category: "system", appId: "settings" });
         return;
       }
     }
@@ -89,6 +89,8 @@ export function SettingsApp() {
       title: t("wallpaperChanged"),
       message: phrase(t, "wallpaperChangedPrefix", t(wallpaper.labelKey), "wallpaperChangedSuffix"),
       type: "info",
+      category: "system",
+      appId: "settings",
     });
   }
 
@@ -147,6 +149,8 @@ export function SettingsApp() {
                 title: nextT("languageChanged"),
                 message: lang === "zh" ? nextT("languageChangedZhMessage") : nextT("languageChangedEnMessage"),
                 type: "info",
+                category: "system",
+                appId: "settings",
               });
             }}
           >
@@ -167,6 +171,8 @@ export function SettingsApp() {
                 title: t("themeChanged"),
                 message: phrase(t, "themeChangedPrefix", mode === "system" ? t("colorSystem") : mode === "light" ? t("colorLight") : t("colorDark"), "themeChangedSuffix"),
                 type: "info",
+                category: "system",
+                appId: "settings",
               });
             }}
           >
@@ -187,6 +193,8 @@ export function SettingsApp() {
                 title: t("accentUpdated"),
                 message: phrase(t, "accentUpdatedPrefix", color, "accentUpdatedSuffix"),
                 type: "info",
+                category: "system",
+                appId: "settings",
               });
             }}
           >
@@ -243,6 +251,8 @@ export function SettingsApp() {
                   title: t("wallpaperChanged"),
                   message: phrase(t, "wallpaperChangedPrefix", t(fit === "cover" ? "wallpaperFitCover" : fit === "contain" ? "wallpaperFitContain" : fit === "stretch" ? "wallpaperFitStretch" : "wallpaperFitTile"), "wallpaperChangedSuffix"),
                   type: "info",
+                  category: "system",
+                  appId: "settings",
                 });
               }}
             >
@@ -283,6 +293,8 @@ export function SettingsApp() {
                 title: t("densitySwitched"),
                 message: phrase(t, "densitySwitchedPrefix", d === "cozy" ? t("densityCozy") : t("densityCompact"), "densitySwitchedSuffix"),
                 type: "info",
+                category: "system",
+                appId: "settings",
               });
             }}
           >
@@ -309,12 +321,16 @@ export function SettingsApp() {
                     title: t("copiedToken"),
                     message: `${label}${t("copiedTokenSuffix")}`,
                     type: "success",
+                    category: "system",
+                    appId: "settings",
                   });
                 } catch {
                   addNotification({
                     title: t("copyFailed"),
                     message: t("copyFailedMessage"),
                     type: "error",
+                    category: "system",
+                    appId: "settings",
                   });
                 }
               }}
