@@ -1,6 +1,209 @@
-import { useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { useLanguageStore } from "../../languageStore";
 import { DEFAULT_MATERIAL_OVERRIDE, type MmdMaterialOverride } from "./mmdStudioStore";
+
+export type MmdSelectOption<T extends string = string> = {
+  value: T;
+  label: string;
+  disabled?: boolean;
+};
+
+export function MmdSelect<T extends string = string>({
+  value,
+  options,
+  disabled = false,
+  onChange,
+  ariaLabel,
+  className,
+}: {
+  value: T;
+  options: readonly MmdSelectOption<T>[];
+  disabled?: boolean;
+  onChange: (value: T) => void;
+  ariaLabel?: string;
+  className?: string;
+}) {
+  const listId = useId();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties | undefined>();
+  const [highlight, setHighlight] = useState(() =>
+    Math.max(0, options.findIndex((item) => item.value === value)),
+  );
+
+  const selected = useMemo(
+    () => options.find((item) => item.value === value) ?? options[0] ?? null,
+    [options, value],
+  );
+
+  const enabledIndexes = useMemo(
+    () => options.map((item, index) => (item.disabled ? -1 : index)).filter((index) => index >= 0),
+    [options],
+  );
+
+  const close = useCallback(() => setOpen(false), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) close();
+    };
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [close, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const index = options.findIndex((item) => item.value === value);
+    setHighlight(index >= 0 ? index : enabledIndexes[0] ?? 0);
+  }, [enabledIndexes, open, options, value]);
+
+  useLayoutEffect(() => {
+    if (!open || !rootRef.current) {
+      setMenuStyle(undefined);
+      return;
+    }
+    const rect = rootRef.current.getBoundingClientRect();
+    const maxH = Math.min(240, window.innerHeight * 0.42);
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    const openUp = spaceBelow < 120 && rect.top > spaceBelow;
+    setMenuStyle({
+      position: "fixed",
+      left: rect.left,
+      width: Math.max(rect.width, 120),
+      zIndex: 200,
+      maxHeight: maxH,
+      ...(openUp
+        ? { bottom: window.innerHeight - rect.top + 4, top: "auto" }
+        : { top: rect.bottom + 4, bottom: "auto" }),
+    });
+  }, [open, options.length, value]);
+
+  useEffect(() => {
+    if (!open || !listRef.current) return;
+    const el = listRef.current.querySelector<HTMLElement>(`[data-index="${highlight}"]`);
+    el?.scrollIntoView({ block: "nearest" });
+  }, [highlight, open]);
+
+  function moveHighlight(delta: number) {
+    if (!enabledIndexes.length) return;
+    const currentPos = enabledIndexes.indexOf(highlight);
+    const start = currentPos >= 0 ? currentPos : 0;
+    const nextPos = (start + delta + enabledIndexes.length) % enabledIndexes.length;
+    setHighlight(enabledIndexes[nextPos] ?? 0);
+  }
+
+  function commit(index: number) {
+    const option = options[index];
+    if (!option || option.disabled) return;
+    onChange(option.value);
+    close();
+  }
+
+  function onTriggerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (disabled) return;
+    if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      if (!open) {
+        setOpen(true);
+        return;
+      }
+      if (event.key === "Enter" || event.key === " ") commit(highlight);
+      if (event.key === "ArrowDown") moveHighlight(1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!open) setOpen(true);
+      else moveHighlight(-1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      if (enabledIndexes.length) setHighlight(enabledIndexes[0]!);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      if (enabledIndexes.length) setHighlight(enabledIndexes[enabledIndexes.length - 1]!);
+    }
+  }
+
+  return (
+    <div
+      ref={rootRef}
+      className={["mmd-select", open ? "is-open" : "", disabled ? "is-disabled" : "", className ?? ""].filter(Boolean).join(" ")}
+    >
+      <button
+        type="button"
+        className="mmd-select-trigger"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-label={ariaLabel}
+        onClick={() => {
+          if (!disabled) setOpen((prev) => !prev);
+        }}
+        onKeyDown={onTriggerKeyDown}
+      >
+        <span className="mmd-select-value">{selected?.label ?? "—"}</span>
+        <span className="mmd-select-chevron" aria-hidden>▾</span>
+      </button>
+      {open ? (
+        <div
+          ref={listRef}
+          id={listId}
+          className="mmd-select-menu"
+          style={menuStyle}
+          role="listbox"
+          aria-activedescendant={`${listId}-opt-${highlight}`}
+        >
+          {options.map((option, index) => {
+            const isSelected = option.value === value;
+            const isActive = index === highlight;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                id={`${listId}-opt-${index}`}
+                data-index={index}
+                role="option"
+                aria-selected={isSelected}
+                disabled={option.disabled}
+                className={[
+                  "mmd-select-option",
+                  isSelected ? "is-selected" : "",
+                  isActive ? "is-active" : "",
+                ].filter(Boolean).join(" ")}
+                onMouseEnter={() => {
+                  if (!option.disabled) setHighlight(index);
+                }}
+                onClick={() => commit(index)}
+              >
+                <span>{option.label}</span>
+                {isSelected ? <span className="mmd-select-check" aria-hidden>✓</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export function PanelSection({
   title,
@@ -184,18 +387,28 @@ export function MaterialOverrideEditor({
         <SliderField label={t("mmdMatRoughness")} value={value.roughness} min={0} max={1} step={0.01} display={value.roughness.toFixed(2)} onChange={(roughness) => onChange({ roughness })} />
         <label className="mmd-field">
           <span>{t("mmdMatLightingModel")}</span>
-          <select value={value.lightingModel} onChange={(event) => onChange({ lightingModel: event.target.value as MmdMaterialOverride["lightingModel"] })}>
-            <option value="toon">{t("mmdMatLightingToon")}</option>
-            <option value="pbr">{t("mmdMatLightingPbr")}</option>
-          </select>
+          <MmdSelect
+            value={value.lightingModel}
+            ariaLabel={t("mmdMatLightingModel")}
+            onChange={(next) => onChange({ lightingModel: next as MmdMaterialOverride["lightingModel"] })}
+            options={[
+              { value: "toon", label: t("mmdMatLightingToon") },
+              { value: "pbr", label: t("mmdMatLightingPbr") },
+            ]}
+          />
         </label>
         <label className="mmd-field">
           <span>{t("mmdMatSpecularMode")}</span>
-          <select value={value.specularMode} onChange={(event) => onChange({ specularMode: event.target.value as MmdMaterialOverride["specularMode"] })}>
-            <option value="mmd">{t("mmdMatSpecularMmd")}</option>
-            <option value="mmd+env">{t("mmdMatSpecularHybrid")}</option>
-            <option value="env">{t("mmdMatSpecularEnv")}</option>
-          </select>
+          <MmdSelect
+            value={value.specularMode}
+            ariaLabel={t("mmdMatSpecularMode")}
+            onChange={(next) => onChange({ specularMode: next as MmdMaterialOverride["specularMode"] })}
+            options={[
+              { value: "mmd", label: t("mmdMatSpecularMmd") },
+              { value: "mmd+env", label: t("mmdMatSpecularHybrid") },
+              { value: "env", label: t("mmdMatSpecularEnv") },
+            ]}
+          />
         </label>
         <label className="mmd-field">
           <span>{t("mmdMatEmissionColor")}</span>

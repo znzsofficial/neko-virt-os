@@ -56,11 +56,19 @@ function applyProjectSettings(settings: MmdProjectSettings, options?: { applyBac
   store.setEnvIntensity(settings.envIntensity);
   store.setLights(sanitizeLights(settings.lights));
   store.setExportResolution(settings.exportResolution);
+  if (settings.exportCustomWidth && settings.exportCustomHeight) {
+    store.setExportCustomSize(settings.exportCustomWidth, settings.exportCustomHeight, false);
+  }
   store.setExportFps(settings.exportFps);
   store.setExportCodec(settings.exportCodec);
   store.setExportBitrate(settings.exportBitrate);
+  if (settings.exportCustomVideoMbps != null) store.setExportCustomVideoMbps(settings.exportCustomVideoMbps);
+  if (settings.exportAudioBitrate) store.setExportAudioBitrate(settings.exportAudioBitrate);
+  if (settings.exportCustomAudioKbps != null) store.setExportCustomAudioKbps(settings.exportCustomAudioKbps);
+  if (settings.exportMode) store.setExportMode(settings.exportMode);
   store.setExportIncludeAudio(settings.exportIncludeAudio);
   store.setExportHideGrid(settings.exportHideGrid);
+  if (settings.exportForceOneX != null) store.setExportForceOneX(settings.exportForceOneX);
   store.setExportFilePrefix(settings.exportFilePrefix);
   store.setExportIn(settings.exportIn);
   store.setExportOut(settings.exportOut);
@@ -86,11 +94,18 @@ function collectProjectSettings(): MmdProjectSettings {
     envIntensity: s.envIntensity,
     lights: { ...s.lights },
     exportResolution: s.exportResolution,
+    exportCustomWidth: s.exportCustomWidth,
+    exportCustomHeight: s.exportCustomHeight,
     exportFps: s.exportFps,
     exportCodec: s.exportCodec,
     exportBitrate: s.exportBitrate,
+    exportCustomVideoMbps: s.exportCustomVideoMbps,
+    exportAudioBitrate: s.exportAudioBitrate,
+    exportCustomAudioKbps: s.exportCustomAudioKbps,
+    exportMode: s.exportMode,
     exportIncludeAudio: s.exportIncludeAudio,
     exportHideGrid: s.exportHideGrid,
+    exportForceOneX: s.exportForceOneX,
     exportFilePrefix: s.exportFilePrefix,
     exportIn: s.exportIn,
     exportOut: s.exportOut,
@@ -124,6 +139,7 @@ export function useMmdProjectController({
   const lastProjectId = useMmdStudioStore((state) => state.lastProjectId);
   const setLastProjectId = useMmdStudioStore((state) => state.setLastProjectId);
   const recording = useMmdStudioStore((state) => state.recording);
+  const exportingOffline = useMmdStudioStore((state) => state.exportingOffline);
   const status = useMmdStudioStore((state) => state.status);
   const models = useMmdStudioStore((state) => state.models);
   const lights = useMmdStudioStore((state) => state.lights);
@@ -251,6 +267,7 @@ export function useMmdProjectController({
         companionFiles: model.companionFiles,
         bodyMotionFile: model.bodyMotionFile,
         faceMotionFile: model.faceMotionFile,
+        cameraMotionFile: model.cameraMotionFile,
       })),
       audioFile: audioFileRef.current,
       audioName: useMmdStudioStore.getState().audioName,
@@ -303,6 +320,9 @@ export function useMmdProjectController({
         const faceMotionFile = model.faceMotionAssetId
           ? await loadMmdProjectAsset(model.faceMotionAssetId)
           : null;
+        const cameraMotionFile = model.cameraMotionAssetId
+          ? await loadMmdProjectAsset(model.cameraMotionAssetId)
+          : null;
         hydrateModels.push({
           id: model.id,
           name: model.name,
@@ -317,6 +337,7 @@ export function useMmdProjectController({
           companionFiles: companions.length ? companions : [modelFile],
           bodyMotionFile,
           faceMotionFile,
+          cameraMotionFile,
         });
       }
       await hydrateMmdModels(api, hydrateModels, {
@@ -471,7 +492,7 @@ export function useMmdProjectController({
 
   useEffect(() => {
     if (autosaveTimerRef.current != null) window.clearTimeout(autosaveTimerRef.current);
-    if (!editorActive || recording || projectBusy || status === "loading") return;
+    if (!editorActive || recording || exportingOffline || projectBusy || status === "loading") return;
     autosaveTimerRef.current = window.setTimeout(() => {
       void saveCurrentProject({ autosave: true }).catch(() => undefined);
     }, 8000);
@@ -488,6 +509,7 @@ export function useMmdProjectController({
     audioName,
     projectName,
     recording,
+    exportingOffline,
     projectBusy,
     status,
     currentTime,

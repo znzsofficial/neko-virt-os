@@ -7,6 +7,7 @@ import {
   classifyMorph,
   MaterialOverrideEditor,
   morphGroupLabel,
+  MmdSelect,
   NumberField,
   PanelSection,
   SliderField,
@@ -15,12 +16,16 @@ import {
   DEFAULT_MATERIAL_OVERRIDE,
   DEFAULT_MODEL_TRANSFORM,
   formatMmdTime,
+  getExportAudioBits,
   getExportSize,
   getExportVideoBits,
+  isExportMp4Supported,
   resolveExportMimeType,
   useMmdStudioStore,
+  type MmdExportAudioBitrate,
   type MmdExportBitrate,
   type MmdExportCodec,
+  type MmdExportMode,
   type MmdExportResolution,
   type MmdLutLook,
   type MmdMsaaSamples,
@@ -38,10 +43,13 @@ export type MmdSidePanelProps = {
   folderInputRef: RefObject<HTMLInputElement | null>;
   bodyMotionInputRef: RefObject<HTMLInputElement | null>;
   faceMotionInputRef: RefObject<HTMLInputElement | null>;
+  cameraMotionInputRef: RefObject<HTMLInputElement | null>;
   audioInputRef: RefObject<HTMLInputElement | null>;
   hdrInputRef: RefObject<HTMLInputElement | null>;
   textureInfo: string;
   recording: boolean;
+  onCaptureStill?: () => void | Promise<void>;
+  onExportSequence?: () => void | Promise<void>;
   projectList: MmdProjectRecord[];
   projectBusy: boolean;
   projectName: string;
@@ -56,6 +64,7 @@ export type MmdSidePanelProps = {
   importProject?: (file: File) => Promise<MmdProjectRecord | null> | MmdProjectRecord | null;
   onBackToProjects?: () => void;
   onPhysicsToggle: (enabled: boolean) => Promise<void> | void;
+  onPhysicsReset?: () => void;
 };
 
 function postFxLabel(option: MmdPostFxPreset, t: ReturnType<typeof useLanguageStore.getState>["t"]) {
@@ -76,16 +85,18 @@ function lutLabel(look: MmdLutLook, t: ReturnType<typeof useLanguageStore.getSta
   return t("mmdLutNone");
 }
 
-function bitrateLabel(value: MmdExportBitrate, t: ReturnType<typeof useLanguageStore.getState>["t"]) {
+function bitrateLabel(value: MmdExportBitrate | MmdExportAudioBitrate, t: ReturnType<typeof useLanguageStore.getState>["t"]) {
   if (value === "low") return t("mmdBitrateLow");
   if (value === "medium") return t("mmdBitrateMedium");
   if (value === "ultra") return t("mmdBitrateUltra");
+  if (value === "custom") return t("mmdBitrateCustom");
   return t("mmdBitrateHigh");
 }
 
 function codecLabel(value: MmdExportCodec, t: ReturnType<typeof useLanguageStore.getState>["t"]) {
-  if (value === "vp8") return "VP8";
-  if (value === "vp9") return "VP9";
+  if (value === "h264") return t("mmdCodecH264");
+  if (value === "vp8") return "VP8 (WebM)";
+  if (value === "vp9") return "VP9 (WebM)";
   return t("mmdCodecAuto");
 }
 
@@ -96,10 +107,13 @@ export function MmdSidePanel({
   folderInputRef,
   bodyMotionInputRef,
   faceMotionInputRef,
+  cameraMotionInputRef,
   audioInputRef,
   hdrInputRef,
   textureInfo,
   recording,
+  onCaptureStill,
+  onExportSequence,
   projectList,
   projectBusy,
   projectName,
@@ -114,6 +128,7 @@ export function MmdSidePanel({
   importProject,
   onBackToProjects,
   onPhysicsToggle,
+  onPhysicsReset,
 }: MmdSidePanelProps) {
   const t = useLanguageStore((state) => state.t);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -162,16 +177,30 @@ export function MmdSidePanel({
   const status = useMmdStudioStore((state) => state.status);
   const exportResolution = useMmdStudioStore((state) => state.exportResolution);
   const setExportResolution = useMmdStudioStore((state) => state.setExportResolution);
+  const exportCustomWidth = useMmdStudioStore((state) => state.exportCustomWidth);
+  const exportCustomHeight = useMmdStudioStore((state) => state.exportCustomHeight);
+  const setExportCustomSize = useMmdStudioStore((state) => state.setExportCustomSize);
   const exportFps = useMmdStudioStore((state) => state.exportFps);
   const setExportFps = useMmdStudioStore((state) => state.setExportFps);
   const exportCodec = useMmdStudioStore((state) => state.exportCodec);
   const setExportCodec = useMmdStudioStore((state) => state.setExportCodec);
   const exportBitrate = useMmdStudioStore((state) => state.exportBitrate);
   const setExportBitrate = useMmdStudioStore((state) => state.setExportBitrate);
+  const exportCustomVideoMbps = useMmdStudioStore((state) => state.exportCustomVideoMbps);
+  const setExportCustomVideoMbps = useMmdStudioStore((state) => state.setExportCustomVideoMbps);
+  const exportAudioBitrate = useMmdStudioStore((state) => state.exportAudioBitrate);
+  const setExportAudioBitrate = useMmdStudioStore((state) => state.setExportAudioBitrate);
+  const exportCustomAudioKbps = useMmdStudioStore((state) => state.exportCustomAudioKbps);
+  const setExportCustomAudioKbps = useMmdStudioStore((state) => state.setExportCustomAudioKbps);
+  const exportMode = useMmdStudioStore((state) => state.exportMode);
+  const setExportMode = useMmdStudioStore((state) => state.setExportMode);
+  const exportProgress = useMmdStudioStore((state) => state.exportProgress);
   const exportIncludeAudio = useMmdStudioStore((state) => state.exportIncludeAudio);
   const setExportIncludeAudio = useMmdStudioStore((state) => state.setExportIncludeAudio);
   const exportHideGrid = useMmdStudioStore((state) => state.exportHideGrid);
   const setExportHideGrid = useMmdStudioStore((state) => state.setExportHideGrid);
+  const exportForceOneX = useMmdStudioStore((state) => state.exportForceOneX);
+  const setExportForceOneX = useMmdStudioStore((state) => state.setExportForceOneX);
   const exportFilePrefix = useMmdStudioStore((state) => state.exportFilePrefix);
   const setExportFilePrefix = useMmdStudioStore((state) => state.setExportFilePrefix);
   const exportIn = useMmdStudioStore((state) => state.exportIn);
@@ -179,7 +208,6 @@ export function MmdSidePanel({
   const setExportIn = useMmdStudioStore((state) => state.setExportIn);
   const setExportOut = useMmdStudioStore((state) => state.setExportOut);
 
-  const [fxOpen, setFxOpen] = useState(true);
   const [sideTab, setSideTab] = useState<"assets" | "model" | "look" | "export" | "project">("assets");
 
   const postFxOptions: MmdPostFxPreset[] = ["off", "clean", "soft", "cinema", "dreamy", "film", "anime", "custom"];
@@ -189,8 +217,19 @@ export function MmdSidePanel({
   const rangeLabel = duration > 0
     ? `${formatMmdTime(exportIn)} – ${formatMmdTime(rangeEnd || duration)}`
     : "—";
-  const exportBitsMbps = (getExportVideoBits(exportResolution, exportBitrate) / 1_000_000).toFixed(1);
-  const exportSize = getExportSize(exportResolution);
+  const exportBitsMbps = (
+    getExportVideoBits(
+      exportResolution,
+      exportBitrate,
+      exportCustomWidth,
+      exportCustomHeight,
+      exportCustomVideoMbps,
+    ) / 1_000_000
+  ).toFixed(1);
+  const exportAudioKbps = Math.round(
+    getExportAudioBits(exportAudioBitrate, exportCustomAudioKbps) / 1000,
+  );
+  const exportSize = getExportSize(exportResolution, exportCustomWidth, exportCustomHeight);
 
   return (
       <aside className="mmd-side">
@@ -260,6 +299,7 @@ export function MmdSidePanel({
           </div>
           <AssetRow label={t("mmdBodyMotion")} value={selectedModel?.bodyMotionName ?? null} onPick={() => bodyMotionInputRef.current?.click()} pickLabel={t("mmdLoadBodyMotion")} />
           <AssetRow label={t("mmdFaceMotion")} value={selectedModel?.faceMotionName ?? null} onPick={() => faceMotionInputRef.current?.click()} pickLabel={t("mmdLoadFaceMotion")} />
+          <AssetRow label={t("mmdCameraMotionFile")} value={selectedModel?.cameraMotionName ?? null} onPick={() => cameraMotionInputRef.current?.click()} pickLabel={t("mmdLoadCameraMotion")} />
           <AssetRow label={t("mmdAudio")} value={audioName} onPick={() => audioInputRef.current?.click()} pickLabel={t("mmdLoadAudio")} />
           <div className="mmd-meta-line">
             <span>{t("mmdTextures")}</span>
@@ -284,12 +324,27 @@ export function MmdSidePanel({
               <span>{t("mmdLoop")}</span>
             </label>
           </div>
+          {physicsEnabled ? (
+            <button
+              type="button"
+              className="button-ghost mmd-mini-btn"
+              disabled={!physicsReady || status === "loading" || recording || !onPhysicsReset}
+              onClick={() => onPhysicsReset?.()}
+            >
+              {t("mmdPhysicsReset")}
+            </button>
+          ) : null}
           <label className="mmd-field">
             <span>{t("mmdCamera")}</span>
-            <select value={cameraMode} onChange={(event) => setCameraMode(event.target.value as "free" | "motion")}>
-              <option value="free">{t("mmdCameraFree")}</option>
-              <option value="motion">{t("mmdCameraMotion")}</option>
-            </select>
+            <MmdSelect
+              value={cameraMode}
+              ariaLabel={t("mmdCamera")}
+              onChange={(next) => setCameraMode(next as "free" | "motion")}
+              options={[
+                { value: "free", label: t("mmdCameraFree") },
+                { value: "motion", label: t("mmdCameraMotion") },
+              ]}
+            />
           </label>
           {cameraMode === "free" ? <p className="mmd-note">{t("mmdCameraKeys")}</p> : null}
           {cameraMode === "free" ? (
@@ -519,14 +574,7 @@ export function MmdSidePanel({
 
         {sideTab === "look" ? (
           <>
-        <PanelSection
-          title={t("mmdSectionLook")}
-          actions={(
-            <button type="button" className="button-ghost mmd-mini-btn" onClick={() => setFxOpen((open) => !open)}>
-              {fxOpen ? t("mmdCollapse") : t("mmdExpand")}
-            </button>
-          )}
-        >
+        <PanelSection title={t("mmdSectionEnvironment")}>
           <AssetRow
             label={t("mmdSkyHdr")}
             value={skyHdrName}
@@ -564,6 +612,9 @@ export function MmdSidePanel({
             <input type="checkbox" checked={showGrid} onChange={(event) => setShowGrid(event.target.checked)} />
             <span>{t("mmdShowGrid")}</span>
           </label>
+        </PanelSection>
+
+        <PanelSection title={t("mmdSectionLights")}>
           <SliderField
             label={t("mmdAmbientIntensity")}
             value={lights.ambientIntensity}
@@ -600,58 +651,82 @@ export function MmdSidePanel({
             display={`${lights.sunElevation.toFixed(0)}°`}
             onChange={(sunElevation) => setLights({ sunElevation })}
           />
-          <SliderField
-            label={t("mmdSunDistance")}
-            value={lights.sunDistance}
-            min={12}
-            max={90}
-            step={1}
-            display={lights.sunDistance.toFixed(0)}
-            onChange={(sunDistance) => setLights({ sunDistance })}
-          />
+          <button type="button" className="button-ghost mmd-reset-fx" onClick={() => resetLights()}>
+            {t("mmdLightsReset")}
+          </button>
+        </PanelSection>
+
+        <PanelSection title={t("mmdSectionShadows")} collapsible defaultOpen>
           <label className="mmd-field">
             <span>{t("mmdShadowQuality")}</span>
-            <select
+            <MmdSelect
               value={lights.shadowQuality}
-              onChange={(event) => {
-                const next = event.target.value as MmdShadowQuality;
-                if (next === "custom") {
+              ariaLabel={t("mmdShadowQuality")}
+              onChange={(next) => {
+                const quality = next as MmdShadowQuality;
+                if (quality === "custom") {
                   setLights({ shadowQuality: "custom" });
                   return;
                 }
-                applyShadowQuality(next);
+                applyShadowQuality(quality);
               }}
-            >
-              <option value="performance">{t("mmdShadowQualityPerformance")}</option>
-              <option value="balanced">{t("mmdShadowQualityBalanced")}</option>
-              <option value="quality">{t("mmdShadowQualityQuality")}</option>
-              <option value="ultra">{t("mmdShadowQualityUltra")}</option>
-              <option value="custom">{t("mmdShadowQualityCustom")}</option>
-            </select>
+              options={[
+                { value: "performance", label: t("mmdShadowQualityPerformance") },
+                { value: "balanced", label: t("mmdShadowQualityBalanced") },
+                { value: "quality", label: t("mmdShadowQualityQuality") },
+                { value: "ultra", label: t("mmdShadowQualityUltra") },
+                { value: "custom", label: t("mmdShadowQualityCustom") },
+              ]}
+            />
           </label>
           <label className="mmd-field">
             <span>{t("mmdShadowMode")}</span>
-            <select
+            <MmdSelect
               value={lights.shadowMode === "off" ? "off" : "map"}
-              onChange={(event) => setLights({ shadowMode: event.target.value as MmdShadowMode })}
-            >
-              <option value="off">{t("mmdShadowOff")}</option>
-              <option value="map">{t("mmdShadowMap")}</option>
-            </select>
+              ariaLabel={t("mmdShadowMode")}
+              onChange={(next) => setLights({ shadowMode: next as MmdShadowMode })}
+              options={[
+                { value: "off", label: t("mmdShadowOff") },
+                { value: "map", label: t("mmdShadowMap") },
+              ]}
+            />
           </label>
           {lights.shadowMode !== "off" ? (
-            <>
+            <SliderField
+              label={t("mmdGroundShadowOpacity")}
+              value={lights.groundShadowOpacity}
+              min={0}
+              max={1}
+              step={0.01}
+              display={lights.groundShadowOpacity.toFixed(2)}
+              onChange={(groundShadowOpacity) => setLights({ groundShadowOpacity })}
+            />
+          ) : null}
+          <p className="mmd-note">{t("mmdShadowHint")}</p>
+          {lights.shadowMode !== "off" ? (
+            <PanelSection title={t("mmdSectionShadowAdvanced")} collapsible defaultOpen={false}>
+              <SliderField
+                label={t("mmdSunDistance")}
+                value={lights.sunDistance}
+                min={12}
+                max={90}
+                step={1}
+                display={lights.sunDistance.toFixed(0)}
+                onChange={(sunDistance) => setLights({ sunDistance })}
+              />
               <label className="mmd-field">
                 <span>{t("mmdShadowMapSize")}</span>
-                <select
-                  value={lights.shadowMapSize}
-                  onChange={(event) => setLights({ shadowMapSize: Number(event.target.value) as MmdShadowMapSize })}
-                >
-                  <option value={512}>512</option>
-                  <option value={1024}>1024</option>
-                  <option value={2048}>2048</option>
-                  <option value={4096}>4096</option>
-                </select>
+                <MmdSelect
+                  value={String(lights.shadowMapSize)}
+                  ariaLabel={t("mmdShadowMapSize")}
+                  onChange={(next) => setLights({ shadowMapSize: Number(next) as MmdShadowMapSize })}
+                  options={[
+                    { value: "512", label: "512" },
+                    { value: "1024", label: "1024" },
+                    { value: "2048", label: "2048" },
+                    { value: "4096", label: "4096" },
+                  ]}
+                />
               </label>
               <SliderField
                 label={t("mmdShadowBias")}
@@ -689,88 +764,51 @@ export function MmdSidePanel({
                 display={lights.shadowCameraSize.toFixed(0)}
                 onChange={(shadowCameraSize) => setLights({ shadowCameraSize })}
               />
-              <SliderField
-                label={t("mmdGroundShadowOpacity")}
-                value={lights.groundShadowOpacity}
-                min={0}
-                max={1}
-                step={0.01}
-                display={lights.groundShadowOpacity.toFixed(2)}
-                onChange={(groundShadowOpacity) => setLights({ groundShadowOpacity })}
-              />
-            </>
+            </PanelSection>
           ) : null}
-          <p className="mmd-note">{t("mmdShadowHint")}</p>
-          <button type="button" className="button-ghost mmd-reset-fx" onClick={() => resetLights()}>
-            {t("mmdLightsReset")}
-          </button>
+        </PanelSection>
+
+        <PanelSection title={t("mmdSectionLook")}>
           <label className="mmd-field">
             <span>{t("mmdPostFx")}</span>
-            <select
+            <MmdSelect
               value={backendDisabledPostFx ? "off" : postFx}
               disabled={backendDisabledPostFx || recording}
-              onChange={(event) => setPostFx(event.target.value as MmdPostFxPreset)}
-            >
-              {postFxOptions.map((option) => (
-                <option key={option} value={option}>{postFxLabel(option, t)}</option>
-              ))}
-            </select>
+              ariaLabel={t("mmdPostFx")}
+              onChange={(next) => setPostFx(next as MmdPostFxPreset)}
+              options={postFxOptions.map((option) => ({
+                value: option,
+                label: postFxLabel(option, t),
+              }))}
+            />
           </label>
           {backendDisabledPostFx ? <p className="mmd-note">{t("mmdPostFxWebgpuDisabled")}</p> : null}
-          {fxOpen && !backendDisabledPostFx && postFx !== "off" ? (
-            <div className="mmd-fx-grid">
-              <div className="mmd-field-row">
-                <label className="mmd-field">
-                  <span>SMAA</span>
-                  <select
-                    value={postFxTune.smaa}
-                    disabled={fxDisabled}
-                    onChange={(event) => setPostFxTune({ smaa: event.target.value as MmdSmaaQuality })}
-                  >
-                    <option value="low">{t("mmdSmaaLow")}</option>
-                    <option value="medium">{t("mmdSmaaMedium")}</option>
-                    <option value="high">{t("mmdSmaaHigh")}</option>
-                    <option value="ultra">{t("mmdSmaaUltra")}</option>
-                  </select>
-                </label>
-                <label className="mmd-field">
-                  <span>MSAA</span>
-                  <select
-                    value={postFxTune.msaa}
-                    disabled={fxDisabled}
-                    onChange={(event) => setPostFxTune({ msaa: Number(event.target.value) as MmdMsaaSamples })}
-                  >
-                    <option value={0}>{t("mmdMsaaOff")}</option>
-                    <option value={2}>2x</option>
-                    <option value={4}>4x</option>
-                    <option value={8}>8x</option>
-                  </select>
-                </label>
-              </div>
-              <SliderField label={t("mmdFxBloom")} value={postFxTune.bloom} min={0} max={1} step={0.01} display={postFxTune.bloom.toFixed(2)} disabled={fxDisabled} onChange={(bloom) => setPostFxTune({ bloom })} />
-              <SliderField label={t("mmdFxBloomThreshold")} value={postFxTune.bloomThreshold} min={0.4} max={1} step={0.01} display={postFxTune.bloomThreshold.toFixed(2)} disabled={fxDisabled} onChange={(bloomThreshold) => setPostFxTune({ bloomThreshold })} />
+          {!backendDisabledPostFx && postFx !== "off" ? (
+            <>
+              <p className="mmd-note">{t("mmdLookPresetHint")}</p>
+              <SliderField label={t("mmdFxBloom")} value={postFxTune.bloom} min={0} max={1.5} step={0.01} display={postFxTune.bloom.toFixed(2)} disabled={fxDisabled} onChange={(bloom) => setPostFxTune({ bloom })} />
+              <label className="mmd-check">
+                <input
+                  type="checkbox"
+                  checked={postFxTune.bloomSelective}
+                  disabled={fxDisabled || postFxTune.bloom < 0.001}
+                  onChange={(event) => setPostFxTune({ bloomSelective: event.target.checked })}
+                />
+                <span>{t("mmdFxBloomSelective")}</span>
+              </label>
               <SliderField label={t("mmdFxVignette")} value={postFxTune.vignette} min={0} max={0.8} step={0.01} display={postFxTune.vignette.toFixed(2)} disabled={fxDisabled} onChange={(vignette) => setPostFxTune({ vignette })} />
-              <SliderField label={t("mmdFxBrightness")} value={postFxTune.brightness} min={-0.3} max={0.3} step={0.01} display={postFxTune.brightness.toFixed(2)} disabled={fxDisabled} onChange={(brightness) => setPostFxTune({ brightness })} />
-              <SliderField label={t("mmdFxContrast")} value={postFxTune.contrast} min={-0.4} max={0.4} step={0.01} display={postFxTune.contrast.toFixed(2)} disabled={fxDisabled} onChange={(contrast) => setPostFxTune({ contrast })} />
-              <SliderField label={t("mmdFxSaturation")} value={postFxTune.saturation} min={-0.5} max={0.5} step={0.01} display={postFxTune.saturation.toFixed(2)} disabled={fxDisabled} onChange={(saturation) => setPostFxTune({ saturation })} />
-              <SliderField label={t("mmdFxChroma")} value={postFxTune.chroma} min={0} max={1} step={0.01} display={postFxTune.chroma.toFixed(2)} disabled={fxDisabled} onChange={(chroma) => setPostFxTune({ chroma })} />
-              <SliderField label={t("mmdFxDof")} value={postFxTune.dof} min={0} max={1} step={0.01} display={postFxTune.dof.toFixed(2)} disabled={fxDisabled} onChange={(dof) => setPostFxTune({ dof })} />
-              <SliderField label={t("mmdFxDofFocus")} value={postFxTune.dofFocus} min={4} max={40} step={0.5} display={postFxTune.dofFocus.toFixed(1)} disabled={fxDisabled || postFxTune.dof < 0.001} onChange={(dofFocus) => setPostFxTune({ dofFocus })} />
-              <SliderField label={t("mmdFxDofRange")} value={postFxTune.dofRange} min={2} max={30} step={0.5} display={postFxTune.dofRange.toFixed(1)} disabled={fxDisabled || postFxTune.dof < 0.001} onChange={(dofRange) => setPostFxTune({ dofRange })} />
-              <SliderField label={t("mmdFxGrain")} value={postFxTune.grain} min={0} max={1} step={0.01} display={postFxTune.grain.toFixed(2)} disabled={fxDisabled} onChange={(grain) => setPostFxTune({ grain })} />
-              <SliderField label={t("mmdFxSsao")} value={postFxTune.ssao} min={0} max={1} step={0.01} display={postFxTune.ssao.toFixed(2)} disabled={fxDisabled} onChange={(ssao) => setPostFxTune({ ssao })} />
-              <SliderField label={t("mmdFxOutline")} value={postFxTune.outline} min={0} max={1} step={0.01} display={postFxTune.outline.toFixed(2)} disabled={fxDisabled} onChange={(outline) => setPostFxTune({ outline })} />
               <label className="mmd-field">
                 <span>{t("mmdFxLut")}</span>
-                <select
+                <MmdSelect
                   value={postFxTune.lut}
                   disabled={fxDisabled}
-                  onChange={(event) => setPostFxTune({ lut: event.target.value as MmdLutLook })}
-                >
-                  {(["none", "warm", "cool", "film"] as MmdLutLook[]).map((look) => (
-                    <option key={look} value={look}>{lutLabel(look, t)}</option>
-                  ))}
-                </select>
+                  ariaLabel={t("mmdFxLut")}
+                  onChange={(next) => setPostFxTune({ lut: next as MmdLutLook })}
+                  options={(["none", "warm", "cool", "film"] as MmdLutLook[]).map((look) => ({
+                    value: look,
+                    label: lutLabel(look, t),
+                  }))}
+                />
               </label>
               <label className="mmd-check">
                 <input
@@ -781,13 +819,90 @@ export function MmdSidePanel({
                 />
                 <span>{t("mmdFxToneMapping")}</span>
               </label>
-              <p className="mmd-note">{t("mmdFxAdvancedNote")}</p>
               <button type="button" className="button-ghost mmd-reset-fx" disabled={fxDisabled} onClick={() => resetPostFxTune()}>
                 {t("mmdFxReset")}
               </button>
-            </div>
+            </>
           ) : null}
         </PanelSection>
+
+        {!backendDisabledPostFx && postFx !== "off" ? (
+          <>
+            <PanelSection title={t("mmdSectionFxAtmosphere")} collapsible defaultOpen={false}>
+              <SliderField label={t("mmdFxGodRays")} value={postFxTune.godRays} min={0} max={1} step={0.01} display={postFxTune.godRays.toFixed(2)} disabled={fxDisabled} onChange={(godRays) => setPostFxTune({ godRays })} />
+              <SliderField label={t("mmdFxSparkle")} value={postFxTune.sparkle} min={0} max={1} step={0.01} display={postFxTune.sparkle.toFixed(2)} disabled={fxDisabled} onChange={(sparkle) => setPostFxTune({ sparkle })} />
+              <SliderField label={t("mmdFxSparkleIntensity")} value={postFxTune.sparkleIntensity} min={0} max={1.5} step={0.01} display={postFxTune.sparkleIntensity.toFixed(2)} disabled={fxDisabled || postFxTune.sparkle < 0.001} onChange={(sparkleIntensity) => setPostFxTune({ sparkleIntensity })} />
+              <SliderField label={t("mmdFxDof")} value={postFxTune.dof} min={0} max={1} step={0.01} display={postFxTune.dof.toFixed(2)} disabled={fxDisabled} onChange={(dof) => setPostFxTune({ dof })} />
+              {postFxTune.dof >= 0.001 ? (
+                <>
+                  <SliderField label={t("mmdFxDofAperture")} value={postFxTune.dofAperture} min={0.05} max={1.5} step={0.01} display={postFxTune.dofAperture.toFixed(2)} disabled={fxDisabled} onChange={(dofAperture) => setPostFxTune({ dofAperture })} />
+                  <SliderField label={t("mmdFxDofFocus")} value={postFxTune.dofFocus} min={1} max={80} step={0.5} display={postFxTune.dofFocus.toFixed(1)} disabled={fxDisabled || postFxTune.dofLockModel} onChange={(dofFocus) => setPostFxTune({ dofFocus })} />
+                  <SliderField label={t("mmdFxDofRange")} value={postFxTune.dofRange} min={0.5} max={40} step={0.5} display={postFxTune.dofRange.toFixed(1)} disabled={fxDisabled} onChange={(dofRange) => setPostFxTune({ dofRange })} />
+                  <label className="mmd-check">
+                    <input
+                      type="checkbox"
+                      checked={postFxTune.dofLockModel}
+                      disabled={fxDisabled}
+                      onChange={(event) => setPostFxTune({ dofLockModel: event.target.checked })}
+                    />
+                    <span>{t("mmdFxDofLockModel")}</span>
+                  </label>
+                  {postFxTune.dofLockModel ? <p className="mmd-note">{t("mmdFxDofLockModelHint")}</p> : null}
+                </>
+              ) : null}
+              <SliderField label={t("mmdFxTiltShift")} value={postFxTune.tiltShift} min={0} max={1} step={0.01} display={postFxTune.tiltShift.toFixed(2)} disabled={fxDisabled} onChange={(tiltShift) => setPostFxTune({ tiltShift })} />
+              <p className="mmd-note">{t("mmdFxAdvancedNote")}</p>
+            </PanelSection>
+
+            <PanelSection title={t("mmdSectionFxGrade")} collapsible defaultOpen={false}>
+              <SliderField label={t("mmdFxBloomThreshold")} value={postFxTune.bloomThreshold} min={0.2} max={1} step={0.01} display={postFxTune.bloomThreshold.toFixed(2)} disabled={fxDisabled || postFxTune.bloom < 0.001} onChange={(bloomThreshold) => setPostFxTune({ bloomThreshold })} />
+              <SliderField label={t("mmdFxBloomRadius")} value={postFxTune.bloomRadius} min={0.05} max={1.2} step={0.01} display={postFxTune.bloomRadius.toFixed(2)} disabled={fxDisabled || postFxTune.bloom < 0.001} onChange={(bloomRadius) => setPostFxTune({ bloomRadius })} />
+              <SliderField label={t("mmdFxBrightness")} value={postFxTune.brightness} min={-0.3} max={0.3} step={0.01} display={postFxTune.brightness.toFixed(2)} disabled={fxDisabled} onChange={(brightness) => setPostFxTune({ brightness })} />
+              <SliderField label={t("mmdFxContrast")} value={postFxTune.contrast} min={-0.4} max={0.4} step={0.01} display={postFxTune.contrast.toFixed(2)} disabled={fxDisabled} onChange={(contrast) => setPostFxTune({ contrast })} />
+              <SliderField label={t("mmdFxSaturation")} value={postFxTune.saturation} min={-0.5} max={0.5} step={0.01} display={postFxTune.saturation.toFixed(2)} disabled={fxDisabled} onChange={(saturation) => setPostFxTune({ saturation })} />
+              <SliderField label={t("mmdFxChroma")} value={postFxTune.chroma} min={0} max={1} step={0.01} display={postFxTune.chroma.toFixed(2)} disabled={fxDisabled} onChange={(chroma) => setPostFxTune({ chroma })} />
+              <SliderField label={t("mmdFxLensDistortion")} value={postFxTune.lensDistortion} min={0} max={1} step={0.01} display={postFxTune.lensDistortion.toFixed(2)} disabled={fxDisabled} onChange={(lensDistortion) => setPostFxTune({ lensDistortion })} />
+              <SliderField label={t("mmdFxGrain")} value={postFxTune.grain} min={0} max={1} step={0.01} display={postFxTune.grain.toFixed(2)} disabled={fxDisabled} onChange={(grain) => setPostFxTune({ grain })} />
+              <SliderField label={t("mmdFxSsao")} value={postFxTune.ssao} min={0} max={1} step={0.01} display={postFxTune.ssao.toFixed(2)} disabled={fxDisabled} onChange={(ssao) => setPostFxTune({ ssao })} />
+              <SliderField label={t("mmdFxOutline")} value={postFxTune.outline} min={0} max={1} step={0.01} display={postFxTune.outline.toFixed(2)} disabled={fxDisabled} onChange={(outline) => setPostFxTune({ outline })} />
+            </PanelSection>
+
+            <PanelSection title={t("mmdSectionFxAa")} collapsible defaultOpen={false}>
+              <div className="mmd-field-row">
+                <label className="mmd-field">
+                  <span>SMAA</span>
+                  <MmdSelect
+                    value={postFxTune.smaa}
+                    disabled={fxDisabled}
+                    ariaLabel="SMAA"
+                    onChange={(next) => setPostFxTune({ smaa: next as MmdSmaaQuality })}
+                    options={[
+                      { value: "low", label: t("mmdSmaaLow") },
+                      { value: "medium", label: t("mmdSmaaMedium") },
+                      { value: "high", label: t("mmdSmaaHigh") },
+                      { value: "ultra", label: t("mmdSmaaUltra") },
+                    ]}
+                  />
+                </label>
+                <label className="mmd-field">
+                  <span>MSAA</span>
+                  <MmdSelect
+                    value={String(postFxTune.msaa)}
+                    disabled={fxDisabled}
+                    ariaLabel="MSAA"
+                    onChange={(next) => setPostFxTune({ msaa: Number(next) as MmdMsaaSamples })}
+                    options={[
+                      { value: "0", label: t("mmdMsaaOff") },
+                      { value: "2", label: "2x" },
+                      { value: "4", label: "4x" },
+                      { value: "8", label: "8x" },
+                    ]}
+                  />
+                </label>
+              </div>
+            </PanelSection>
+          </>
+        ) : null}
           </>
         ) : null}
 
@@ -797,42 +912,152 @@ export function MmdSidePanel({
           <div className="mmd-field-row">
             <label className="mmd-field">
               <span>{t("mmdResolution")}</span>
-              <select value={exportResolution} disabled={recording} onChange={(event) => setExportResolution(event.target.value as MmdExportResolution)}>
-                <option value="480p">480p</option>
-                <option value="720p">720p</option>
-                <option value="1080p">1080p</option>
-                <option value="1440p">1440p</option>
-                <option value="2160p">2160p</option>
-              </select>
+              <MmdSelect
+                value={exportResolution}
+                disabled={recording}
+                ariaLabel={t("mmdResolution")}
+                onChange={(next) => setExportResolution(next as MmdExportResolution)}
+                options={[
+                  { value: "480p", label: "480p" },
+                  { value: "720p", label: "720p" },
+                  { value: "1080p", label: "1080p" },
+                  { value: "1440p", label: "1440p" },
+                  { value: "2160p", label: "2160p" },
+                  { value: "1080x1920", label: t("mmdExportRes1080v") },
+                  { value: "720x1280", label: t("mmdExportRes720v") },
+                  { value: "1080x1080", label: t("mmdExportResSquare") },
+                  { value: "custom", label: t("mmdExportResCustom") },
+                ]}
+              />
             </label>
             <label className="mmd-field">
               <span>{t("mmdFps")}</span>
-              <select value={exportFps} disabled={recording} onChange={(event) => setExportFps(Number(event.target.value) as 24 | 30 | 60 | 120)}>
-                <option value={24}>24</option>
-                <option value={30}>30</option>
-                <option value={60}>60</option>
-                <option value={120}>120</option>
-              </select>
+              <MmdSelect
+                value={String(exportFps)}
+                disabled={recording}
+                ariaLabel={t("mmdFps")}
+                onChange={(next) => setExportFps(Number(next) as 24 | 30 | 60 | 120)}
+                options={[
+                  { value: "24", label: "24" },
+                  { value: "30", label: "30" },
+                  { value: "60", label: "60" },
+                  { value: "120", label: "120" },
+                ]}
+              />
             </label>
           </div>
+          {exportResolution === "custom" ? (
+            <div className="mmd-field-row">
+              <NumberField
+                label={t("mmdExportWidth")}
+                value={exportCustomWidth}
+                min={64}
+                max={4096}
+                step={2}
+                disabled={recording}
+                onChange={(width) => setExportCustomSize(width, exportCustomHeight, true)}
+              />
+              <NumberField
+                label={t("mmdExportHeight")}
+                value={exportCustomHeight}
+                min={64}
+                max={4096}
+                step={2}
+                disabled={recording}
+                onChange={(height) => setExportCustomSize(exportCustomWidth, height, true)}
+              />
+            </div>
+          ) : null}
+          <label className="mmd-field">
+            <span>{t("mmdExportMode")}</span>
+            <MmdSelect
+              value={exportMode}
+              disabled={recording}
+              ariaLabel={t("mmdExportMode")}
+              onChange={(next) => setExportMode(next as MmdExportMode)}
+              options={[
+                { value: "offline", label: t("mmdExportModeOffline") },
+                { value: "realtime", label: t("mmdExportModeRealtime") },
+              ]}
+            />
+          </label>
           <div className="mmd-field-row">
             <label className="mmd-field">
               <span>{t("mmdExportCodec")}</span>
-              <select value={exportCodec} disabled={recording} onChange={(event) => setExportCodec(event.target.value as MmdExportCodec)}>
-                {(["auto", "vp9", "vp8"] as MmdExportCodec[]).map((codec) => (
-                  <option key={codec} value={codec}>{codecLabel(codec, t)}</option>
-                ))}
-              </select>
+              <MmdSelect
+                value={exportCodec}
+                disabled={recording}
+                ariaLabel={t("mmdExportCodec")}
+                onChange={(next) => setExportCodec(next as MmdExportCodec)}
+                options={(
+                  [
+                    "auto",
+                    "h264",
+                    "vp9",
+                    "vp8",
+                  ] as MmdExportCodec[]
+                ).map((codec) => ({
+                  value: codec,
+                  label: codecLabel(codec, t),
+                  disabled: exportMode === "realtime" && codec === "h264" && !isExportMp4Supported(),
+                }))}
+              />
             </label>
             <label className="mmd-field">
               <span>{t("mmdExportBitrate")}</span>
-              <select value={exportBitrate} disabled={recording} onChange={(event) => setExportBitrate(event.target.value as MmdExportBitrate)}>
-                {(["low", "medium", "high", "ultra"] as MmdExportBitrate[]).map((rate) => (
-                  <option key={rate} value={rate}>{bitrateLabel(rate, t)}</option>
-                ))}
-              </select>
+              <MmdSelect
+                value={exportBitrate}
+                disabled={recording}
+                ariaLabel={t("mmdExportBitrate")}
+                onChange={(next) => setExportBitrate(next as MmdExportBitrate)}
+                options={(["low", "medium", "high", "ultra", "custom"] as MmdExportBitrate[]).map((rate) => ({
+                  value: rate,
+                  label: bitrateLabel(rate, t),
+                }))}
+              />
             </label>
           </div>
+          {exportBitrate === "custom" ? (
+            <label className="mmd-field">
+              <span>{t("mmdExportCustomVideoMbps")}</span>
+              <input
+                type="number"
+                min={0.5}
+                max={200}
+                step={0.5}
+                value={exportCustomVideoMbps}
+                disabled={recording}
+                onChange={(event) => setExportCustomVideoMbps(Number(event.target.value))}
+              />
+            </label>
+          ) : null}
+          <label className="mmd-field">
+            <span>{t("mmdExportAudioBitrate")}</span>
+            <MmdSelect
+              value={exportAudioBitrate}
+              disabled={recording || !exportIncludeAudio}
+              ariaLabel={t("mmdExportAudioBitrate")}
+              onChange={(next) => setExportAudioBitrate(next as MmdExportAudioBitrate)}
+              options={(["low", "medium", "high", "custom"] as MmdExportAudioBitrate[]).map((rate) => ({
+                value: rate,
+                label: bitrateLabel(rate, t),
+              }))}
+            />
+          </label>
+          {exportAudioBitrate === "custom" ? (
+            <label className="mmd-field">
+              <span>{t("mmdExportCustomAudioKbps")}</span>
+              <input
+                type="number"
+                min={32}
+                max={512}
+                step={16}
+                value={exportCustomAudioKbps}
+                disabled={recording || !exportIncludeAudio}
+                onChange={(event) => setExportCustomAudioKbps(Number(event.target.value))}
+              />
+            </label>
+          ) : null}
           <label className="mmd-field">
             <span>{t("mmdExportFilePrefix")}</span>
             <input
@@ -852,10 +1077,30 @@ export function MmdSidePanel({
             <input type="checkbox" checked={exportHideGrid} disabled={recording} onChange={(event) => setExportHideGrid(event.target.checked)} />
             <span>{t("mmdExportHideGrid")}</span>
           </label>
+          <label className="mmd-check">
+            <input type="checkbox" checked={exportForceOneX} disabled={recording} onChange={(event) => setExportForceOneX(event.target.checked)} />
+            <span>{t("mmdExportForceOneX")}</span>
+          </label>
+          <div className="mmd-range-actions">
+            <button type="button" className="button-ghost mmd-mini-btn" disabled={recording || !onCaptureStill} onClick={() => void onCaptureStill?.()}>
+              {t("mmdExportStill")}
+            </button>
+            <button type="button" className="button-ghost mmd-mini-btn" disabled={recording || !onExportSequence} onClick={() => void onExportSequence?.()}>
+              {t("mmdExportSequence")}
+            </button>
+          </div>
           <p className="mmd-note">
-            {exportSize.width}×{exportSize.height} · {exportBitsMbps} Mbps · {resolveExportMimeType(exportCodec)}
+            {exportSize.width}×{exportSize.height} · {exportBitsMbps} Mbps
+            {exportIncludeAudio ? ` · ${exportAudioKbps} kbps audio` : ""}
+            {exportMode === "realtime" ? ` · ${resolveExportMimeType(exportCodec)}` : " · WebCodecs"}
             {exportFps >= 120 ? ` · ${t("mmdExportFpsNote")}` : ""}
           </p>
+          {exportProgress != null ? (
+            <p className="mmd-note">
+              {t("mmdExportProgress")}: {Math.round(exportProgress * 100)}%
+            </p>
+          ) : null}
+          <p className="mmd-note">{t("mmdExportMp4Hint")}</p>
           <div className="mmd-range-row">
             <div className="mmd-meta-line">
               <span>{t("mmdExportRange")}</span>

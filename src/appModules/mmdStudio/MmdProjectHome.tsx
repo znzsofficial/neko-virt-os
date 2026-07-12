@@ -2,6 +2,7 @@ import { Icon } from "@iconify-icon/react";
 import { useRef } from "react";
 import { useLanguageStore } from "../../languageStore";
 import type { MmdProjectRecord } from "./mmdProjectDb";
+import { MmdSelect } from "./mmdPanelUi";
 
 export type MmdProjectHomeProps = {
   projectList: MmdProjectRecord[];
@@ -78,18 +79,16 @@ export function MmdProjectHome({
       <section className="mmd-project-home-folder">
         <label className="mmd-field mmd-project-home-folder-field">
           <span>{t("mmdProjectFolder")}</span>
-          <select
+          <MmdSelect
             value={projectFolderId ?? ""}
             disabled={projectBusy}
-            onChange={(event) => onChooseFolder(event.target.value || null)}
-          >
-            <option value="">{projectFolderLabel || t("mmdProjectFolderHint")}</option>
-            {folderOptions.map((folder) => (
-              <option key={folder.id} value={folder.id}>
-                {folder.name}
-              </option>
-            ))}
-          </select>
+            ariaLabel={t("mmdProjectFolder")}
+            onChange={(next) => onChooseFolder(next || null)}
+            options={[
+              { value: "", label: projectFolderLabel || t("mmdProjectFolderHint") },
+              ...folderOptions.map((folder) => ({ value: folder.id, label: folder.name })),
+            ]}
+          />
         </label>
         <button type="button" className="button-ghost mmd-mini-btn" disabled={projectBusy} onClick={onEnsureDefaultFolder}>
           {t("mmdProjectFolderDefault")}

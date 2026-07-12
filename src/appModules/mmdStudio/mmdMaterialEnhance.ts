@@ -6,6 +6,8 @@ export type MmdMaterialEnhanceState = {
   materialName: string;
   override: MaterialOverride;
   envIntensity: number;
+  /** Scene ambient light — MMD MeshToon ignores THREE.AmbientLight; inject here. */
+  ambientIntensity: number;
 };
 
 const PARS_MARKER = "#include <map_pars_fragment>";
@@ -28,7 +30,7 @@ function clampRange(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-const ENHANCE_SHADER_REV = "v5";
+const ENHANCE_SHADER_REV = "v6";
 
 export function attachMmdMaterialEnhance(material: THREE.Material) {
   const typed = material as THREE.MeshToonMaterial;
@@ -54,6 +56,7 @@ export function attachMmdMaterialEnhance(material: THREE.Material) {
     uniforms.mmdEnhanceEmission = { value: 0 };
     uniforms.mmdEnhanceEmissionColor = { value: new THREE.Color("#ffffff").convertSRGBToLinear() };
     uniforms.mmdEnhanceEnvInfluence = { value: 0 };
+    uniforms.mmdEnhanceAmbient = { value: 0.55 };
     uniforms.mmdEnhanceSpecularMode = { value: 0 };
     uniforms.mmdEnhanceLightingModel = { value: 0 };
     uniforms.mmdEnhanceHasAoMap = { value: 0 };
@@ -80,6 +83,7 @@ export function attachMmdMaterialEnhance(material: THREE.Material) {
         "uniform float mmdEnhanceEmission;",
         "uniform vec3 mmdEnhanceEmissionColor;",
         "uniform float mmdEnhanceEnvInfluence;",
+        "uniform float mmdEnhanceAmbient;",
         "uniform float mmdEnhanceSpecularMode;",
         "uniform float mmdEnhanceLightingModel;",
         "uniform float mmdEnhanceHasAoMap;",
@@ -129,6 +133,9 @@ export function attachMmdMaterialEnhance(material: THREE.Material) {
         "  }",
         "  #endif",
         "  ywMmdColor *= mix( 1.0, ywMmdEnhanceOcclusion, 0.35 );",
+        // MMD MeshToon path ignores scene AmbientLight — lift base color with ambient.
+        "  float ywMmdAmb = clamp( mmdEnhanceAmbient, 0.0, 3.0 );",
+        "  ywMmdColor = ywMmdColor * ( 0.72 + ywMmdAmb * 0.55 ) + ywMmdEnhanceBaseColor * ywMmdAmb * 0.22;",
         "  ywMmdColor += ywMmdEnhanceEmissionColor * ( 0.5 + mmdEnhanceEmission );",
         "  if ( mmdEnhanceSpecularMode < 0.5 ) {",
         "    ywMmdColor += ywMmdEnhanceEnvDiffuse;",
@@ -165,6 +172,7 @@ export function syncMmdMaterialEnhance(material: THREE.Material, state: MmdMater
   const occlusion = clamp01(override.occlusion);
   const emission = Math.max(0, override.emission);
   const envInfluence = Math.max(0, override.envInfluence) * Math.max(0, state.envIntensity);
+  const ambient = Math.max(0, state.ambientIntensity);
   const specularMode = override.specularMode === "env" ? 2 : override.specularMode === "mmd+env" ? 1 : 0;
   const lightingModel = override.lightingModel === "pbr" ? 1 : 0;
   const emissionColor = hexToLinearColor(override.emissionColor);
@@ -184,6 +192,7 @@ export function syncMmdMaterialEnhance(material: THREE.Material, state: MmdMater
   setNum("mmdEnhanceOcclusion", occlusion);
   setNum("mmdEnhanceEmission", emission);
   setNum("mmdEnhanceEnvInfluence", envInfluence);
+  setNum("mmdEnhanceAmbient", ambient);
   setNum("mmdEnhanceSpecularMode", specularMode);
   setNum("mmdEnhanceLightingModel", lightingModel);
 

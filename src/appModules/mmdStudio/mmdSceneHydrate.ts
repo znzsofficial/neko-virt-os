@@ -19,6 +19,7 @@ export type MmdHydrateModelInput = {
   companionFiles?: File[];
   bodyMotionFile?: File | null;
   faceMotionFile?: File | null;
+  cameraMotionFile?: File | null;
 };
 
 export type MmdHydrateOptions = {
@@ -69,6 +70,7 @@ export async function hydrateMmdModels(
 
     if (model.bodyMotionFile) await api.loadMotion(model.bodyMotionFile, "body", modelId);
     if (model.faceMotionFile) await api.loadMotion(model.faceMotionFile, "face", modelId);
+    if (model.cameraMotionFile) await api.loadMotion(model.cameraMotionFile, "camera", modelId);
 
     for (const [name, weight] of Object.entries(model.morphWeights ?? {})) {
       api.setMorphWeight(modelId, name, weight);
@@ -118,5 +120,6 @@ export function projectAssetsToHydrateInput(models: MmdProjectModelAssets[]): Mm
     companionFiles: model.companionFiles,
     bodyMotionFile: model.bodyMotionFile,
     faceMotionFile: model.faceMotionFile,
+    cameraMotionFile: model.cameraMotionFile,
   }));
 }

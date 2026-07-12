@@ -1,4 +1,5 @@
 import { useLanguageStore } from "./languageStore";
+import { useMmdStudioStore } from "./appModules/mmdStudio/mmdStudioStore";
 import type { WindowState } from "./types";
 
 export function setNoteWindowDirty(windowId: string, dirty: boolean) {
@@ -31,10 +32,23 @@ export function isNoteWindowDirty(windowId: string) {
   return Boolean(registry[windowId]);
 }
 
+function mmdStudioNeedsCloseConfirm() {
+  try {
+    const state = useMmdStudioStore.getState();
+    return state.models.length > 0 || state.recording || state.exportingOffline;
+  } catch {
+    return true;
+  }
+}
+
 export function requestCloseWindow(windowState: WindowState, closeWindow: (id: string) => void) {
   const t = useLanguageStore.getState().t;
   if (windowState.appId === "notes" && isNoteWindowDirty(windowState.id)) {
     const shouldClose = window.confirm(t("confirmUnsavedNotes"));
+    if (!shouldClose) return;
+  }
+  if (windowState.appId === "mmd-studio" && mmdStudioNeedsCloseConfirm()) {
+    const shouldClose = window.confirm(t("confirmCloseMmdStudio"));
     if (!shouldClose) return;
   }
   clearNoteWindowDirty(windowState.id);

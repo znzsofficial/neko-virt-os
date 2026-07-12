@@ -60,21 +60,37 @@ export function pickPrimaryMotion(files: File[]) {
 
 export function pickBodyAndFaceMotions(files: File[]) {
   const motions = findMmdMotionFiles(files);
-  if (!motions.length) return { body: null as File | null, face: null as File | null };
+  if (!motions.length) {
+    return { body: null as File | null, face: null as File | null, camera: null as File | null };
+  }
 
+  const cameras = motions.filter((file) => classifyMotionSlot(file) === "camera");
   const faces = motions.filter((file) => classifyMotionSlot(file) === "face");
   const bodies = motions.filter((file) => classifyMotionSlot(file) === "body");
 
   if (motions.length === 1) {
-    return { body: motions[0], face: null };
+    const only = motions[0]!;
+    const slot = classifyMotionSlot(only);
+    if (slot === "camera") return { body: null, face: null, camera: only };
+    if (slot === "face") return { body: null, face: only, camera: null };
+    return { body: only, face: null, camera: null };
   }
 
-  if (bodies.length && faces.length) {
-    return { body: bodies[0], face: faces[0] };
+  // Prefer name-based slots when available.
+  if (bodies.length || faces.length || cameras.length) {
+    return {
+      body: bodies[0] ?? null,
+      face: faces[0] ?? null,
+      camera: cameras[0] ?? null,
+    };
   }
 
-  // Two+ motions without clear names: first = body, second = face (common pack layout).
-  return { body: motions[0], face: motions[1] ?? null };
+  // Unnamed multi-motion packs: first body, second face, third camera.
+  return {
+    body: motions[0] ?? null,
+    face: motions[1] ?? null,
+    camera: motions[2] ?? null,
+  };
 }
 
 export function pickPrimaryAudio(files: File[]) {

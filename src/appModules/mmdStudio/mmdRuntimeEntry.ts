@@ -5,7 +5,7 @@ import {
 } from "@yohawing/three-mmd-loader";
 import * as THREE from "three";
 import { disposeEntryEnhancementTextures, type MaterialOverride } from "./mmdRuntimeMaterials";
-import { getMmdAnimationDurationSeconds, mergeBodyFaceAnimations } from "./mmdUtils";
+import { getMmdAnimationDurationSeconds, mergeMotionAnimations } from "./mmdUtils";
 
 export type MmdModelTransform = {
   positionX: number;
@@ -48,11 +48,14 @@ export type RuntimeEntry = {
   model: ThreeMmdModel;
   bodyAnimation: ThreeMmdAnimation | null;
   faceAnimation: ThreeMmdAnimation | null;
+  cameraAnimation: ThreeMmdAnimation | null;
   appliedAnimation: ThreeMmdAnimation | null;
   bodyMotionName: string | null;
   faceMotionName: string | null;
+  cameraMotionName: string | null;
   bodyMotionFile: File | null;
   faceMotionFile: File | null;
+  cameraMotionFile: File | null;
   visible: boolean;
   morphNames: string[];
   materialNames: string[];
@@ -75,6 +78,7 @@ export type RuntimeModelSnapshot = {
   materialNames: string[];
   bodyMotionName: string | null;
   faceMotionName: string | null;
+  cameraMotionName: string | null;
   morphWeights: Record<string, number>;
   morphFavorites: string[];
   materialVisible: Record<string, boolean>;
@@ -157,7 +161,16 @@ export function enforceModelCastOnlyShadows(root: THREE.Object3D) {
   });
 }
 
-export function applyModelTransform(entry: RuntimeEntry) {
+export type ApplyModelTransformOptions = {
+  /**
+   * Bullet uploads rigid-body sizes in model units and never scales them with
+   * the Three.js root. Keep scale at 1 while stepping physics, then restore the
+   * user scale for rendering so colliders stay aligned with the skeleton.
+   */
+  physicsStep?: boolean;
+};
+
+export function applyModelTransform(entry: RuntimeEntry, options: ApplyModelTransformOptions = {}) {
   const t = entry.transform;
   const scale = Math.min(10, Math.max(0.01, t.scale));
   entry.model.root.position.set(t.positionX, t.positionY, t.positionZ);
@@ -166,7 +179,7 @@ export function applyModelTransform(entry: RuntimeEntry) {
     THREE.MathUtils.degToRad(t.rotationY),
     THREE.MathUtils.degToRad(t.rotationZ),
   );
-  entry.model.root.scale.setScalar(scale);
+  entry.model.root.scale.setScalar(options.physicsStep ? 1 : scale);
   if (t.scale !== scale) entry.transform = { ...t, scale };
 }
 
@@ -201,18 +214,25 @@ function wrapMergedAnimation(animation: MmdAnimation): ThreeMmdAnimation {
 }
 
 export function recomputeEntryAnimation(entry: RuntimeEntry) {
-  if (!entry.bodyAnimation && !entry.faceAnimation) {
+  const body = entry.bodyAnimation?.animation ?? null;
+  const face = entry.faceAnimation?.animation ?? null;
+  const camera = entry.cameraAnimation?.animation ?? null;
+  const merged = mergeMotionAnimations(body, face, camera);
+  if (!merged) {
     entry.appliedAnimation = null;
     entry.hasCameraTrack = false;
     entry.duration = 0;
     return;
   }
-  if (entry.bodyAnimation && entry.faceAnimation) {
-    entry.appliedAnimation = wrapMergedAnimation(
-      mergeBodyFaceAnimations(entry.bodyAnimation.animation, entry.faceAnimation.animation),
-    );
+  // Single layer: reuse original ThreeMmdAnimation wrapper when possible.
+  if (body && !face && !camera && entry.bodyAnimation) {
+    entry.appliedAnimation = entry.bodyAnimation;
+  } else if (face && !body && !camera && entry.faceAnimation) {
+    entry.appliedAnimation = entry.faceAnimation;
+  } else if (camera && !body && !face && entry.cameraAnimation) {
+    entry.appliedAnimation = entry.cameraAnimation;
   } else {
-    entry.appliedAnimation = entry.bodyAnimation ?? entry.faceAnimation;
+    entry.appliedAnimation = wrapMergedAnimation(merged);
   }
   entry.hasCameraTrack = Boolean(entry.appliedAnimation?.animation.cameraFrames.length);
   entry.duration = entry.appliedAnimation
@@ -230,6 +250,7 @@ export function toSnapshot(entry: RuntimeEntry): RuntimeModelSnapshot {
     materialNames: entry.materialNames,
     bodyMotionName: entry.bodyMotionName,
     faceMotionName: entry.faceMotionName,
+    cameraMotionName: entry.cameraMotionName,
     morphWeights: { ...entry.morphWeights },
     morphFavorites: [...entry.morphFavorites],
     materialVisible: { ...entry.materialVisible },

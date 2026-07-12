@@ -3,9 +3,21 @@ import { create } from "zustand";
 export type MmdRendererBackend = "webgl" | "webgpu";
 export type MmdPostFxPreset = "off" | "clean" | "soft" | "cinema" | "dreamy" | "film" | "anime" | "custom";
 export type MmdCameraMode = "free" | "motion";
-export type MmdExportResolution = "480p" | "720p" | "1080p" | "1440p" | "2160p";
-export type MmdExportCodec = "auto" | "vp9" | "vp8";
-export type MmdExportBitrate = "low" | "medium" | "high" | "ultra";
+export type MmdExportResolution =
+  | "480p"
+  | "720p"
+  | "1080p"
+  | "1440p"
+  | "2160p"
+  | "1080x1920"
+  | "720x1280"
+  | "1080x1080"
+  | "custom";
+export type MmdExportCodec = "auto" | "h264" | "vp9" | "vp8";
+export type MmdExportBitrate = "low" | "medium" | "high" | "ultra" | "custom";
+export type MmdExportAudioBitrate = "low" | "medium" | "high" | "custom";
+/** offline = WebCodecs frame-accurate; realtime = MediaRecorder capture */
+export type MmdExportMode = "offline" | "realtime";
 export type MmdSmaaQuality = "low" | "medium" | "high" | "ultra";
 export type MmdMsaaSamples = 0 | 2 | 4 | 8;
 export type MmdLutLook = "none" | "warm" | "cool" | "film";
@@ -64,6 +76,7 @@ export type MmdSceneModel = {
   materialNames: string[];
   bodyMotionName: string | null;
   faceMotionName: string | null;
+  cameraMotionName: string | null;
   morphWeights: Record<string, number>;
   morphFavorites: string[];
   materialVisible: Record<string, boolean>;
@@ -105,8 +118,14 @@ export const DEFAULT_MATERIAL_OVERRIDE: MmdMaterialOverride = Object.freeze({
 });
 
 export type MmdPostFxTune = {
+  /** Bloom intensity (strength). */
   bloom: number;
+  /** Luminance threshold — higher = only brighter pixels bloom. */
   bloomThreshold: number;
+  /** Bloom spread / radius. */
+  bloomRadius: number;
+  /** When true, bloom only on character meshes (SelectiveBloom). */
+  bloomSelective: boolean;
   vignette: number;
   brightness: number;
   contrast: number;
@@ -115,28 +134,54 @@ export type MmdPostFxTune = {
   toneMapping: boolean;
   smaa: MmdSmaaQuality;
   msaa: MmdMsaaSamples;
+  /** DOF amount (maps to bokeh when aperture is fixed). */
   dof: number;
+  /** Focus distance in world units (when not locking to a model). */
   dofFocus: number;
+  /** Focus range / depth of field width. */
   dofRange: number;
+  /** Aperture / bokeh scale multiplier. */
+  dofAperture: number;
+  /** When true, focus distance tracks selected (or first) model. */
+  dofLockModel: boolean;
   grain: number;
   ssao: number;
   outline: number;
   lut: MmdLutLook;
+  /** MME-like volumetric god rays from the sun. */
+  godRays: number;
+  /** Floating air sparkle / light-point density (0–1). */
+  sparkle: number;
+  /** Sparkle brightness. */
+  sparkleIntensity: number;
+  /** Light barrel lens distortion (0–1). */
+  lensDistortion: number;
+  /** Tilt-shift / miniature blur amount (0–1). */
+  tiltShift: number;
 };
 
 const ADVANCED_ZERO = {
   dof: 0,
   dofFocus: 18,
   dofRange: 12,
+  dofAperture: 0.55,
+  dofLockModel: false,
   grain: 0,
   ssao: 0,
   outline: 0,
   lut: "none" as const,
+  godRays: 0,
+  sparkle: 0,
+  sparkleIntensity: 0.65,
+  lensDistortion: 0,
+  tiltShift: 0,
 };
 
 export const DEFAULT_POSTFX_TUNE: MmdPostFxTune = Object.freeze({
   bloom: 0.28,
   bloomThreshold: 0.82,
+  bloomRadius: 0.55,
+  bloomSelective: true,
   vignette: 0.28,
   brightness: 0.02,
   contrast: 0.06,
@@ -152,6 +197,8 @@ export const DEFAULT_POSTFX_TUNE: MmdPostFxTune = Object.freeze({
 export const OFF_POSTFX_TUNE: MmdPostFxTune = Object.freeze({
   bloom: 0,
   bloomThreshold: 0.85,
+  bloomRadius: 0.5,
+  bloomSelective: false,
   vignette: 0,
   brightness: 0,
   contrast: 0,
@@ -167,6 +214,8 @@ export const PRESET_TUNES: Record<Exclude<MmdPostFxPreset, "off" | "custom">, Mm
   clean: Object.freeze({
     bloom: 0,
     bloomThreshold: 0.85,
+    bloomRadius: 0.45,
+    bloomSelective: false,
     vignette: 0,
     brightness: 0,
     contrast: 0,
@@ -180,6 +229,8 @@ export const PRESET_TUNES: Record<Exclude<MmdPostFxPreset, "off" | "custom">, Mm
   soft: Object.freeze({
     bloom: 0.28,
     bloomThreshold: 0.82,
+    bloomRadius: 0.55,
+    bloomSelective: true,
     vignette: 0.28,
     brightness: 0.02,
     contrast: 0.06,
@@ -191,14 +242,23 @@ export const PRESET_TUNES: Record<Exclude<MmdPostFxPreset, "off" | "custom">, Mm
     dof: 0,
     dofFocus: 18,
     dofRange: 12,
+    dofAperture: 0.5,
+    dofLockModel: false,
     grain: 0.08,
     ssao: 0.15,
     outline: 0,
     lut: "none",
+    godRays: 0.12,
+    sparkle: 0.15,
+    sparkleIntensity: 0.55,
+    lensDistortion: 0.04,
+    tiltShift: 0,
   }),
   cinema: Object.freeze({
     bloom: 0.48,
     bloomThreshold: 0.78,
+    bloomRadius: 0.62,
+    bloomSelective: true,
     vignette: 0.48,
     brightness: 0.01,
     contrast: 0.1,
@@ -210,14 +270,23 @@ export const PRESET_TUNES: Record<Exclude<MmdPostFxPreset, "off" | "custom">, Mm
     dof: 0.45,
     dofFocus: 20,
     dofRange: 14,
+    dofAperture: 0.7,
+    dofLockModel: true,
     grain: 0.22,
     ssao: 0.35,
     outline: 0,
     lut: "film",
+    godRays: 0.35,
+    sparkle: 0.08,
+    sparkleIntensity: 0.45,
+    lensDistortion: 0.14,
+    tiltShift: 0.18,
   }),
   dreamy: Object.freeze({
     bloom: 0.62,
     bloomThreshold: 0.72,
+    bloomRadius: 0.78,
+    bloomSelective: true,
     vignette: 0.22,
     brightness: 0.04,
     contrast: -0.02,
@@ -229,14 +298,23 @@ export const PRESET_TUNES: Record<Exclude<MmdPostFxPreset, "off" | "custom">, Mm
     dof: 0.7,
     dofFocus: 16,
     dofRange: 10,
+    dofAperture: 0.85,
+    dofLockModel: true,
     grain: 0.1,
     ssao: 0.12,
     outline: 0,
     lut: "warm",
+    godRays: 0.55,
+    sparkle: 0.42,
+    sparkleIntensity: 0.8,
+    lensDistortion: 0.1,
+    tiltShift: 0.28,
   }),
   film: Object.freeze({
     bloom: 0.32,
     bloomThreshold: 0.8,
+    bloomRadius: 0.5,
+    bloomSelective: true,
     vignette: 0.42,
     brightness: -0.02,
     contrast: 0.14,
@@ -248,14 +326,23 @@ export const PRESET_TUNES: Record<Exclude<MmdPostFxPreset, "off" | "custom">, Mm
     dof: 0.25,
     dofFocus: 22,
     dofRange: 16,
+    dofAperture: 0.55,
+    dofLockModel: false,
     grain: 0.42,
     ssao: 0.4,
     outline: 0,
     lut: "film",
+    godRays: 0.22,
+    sparkle: 0.05,
+    sparkleIntensity: 0.4,
+    lensDistortion: 0.12,
+    tiltShift: 0.1,
   }),
   anime: Object.freeze({
     bloom: 0.18,
     bloomThreshold: 0.86,
+    bloomRadius: 0.48,
+    bloomSelective: true,
     vignette: 0.12,
     brightness: 0.03,
     contrast: 0.08,
@@ -267,10 +354,17 @@ export const PRESET_TUNES: Record<Exclude<MmdPostFxPreset, "off" | "custom">, Mm
     dof: 0,
     dofFocus: 18,
     dofRange: 12,
+    dofAperture: 0.45,
+    dofLockModel: false,
     grain: 0,
     ssao: 0.2,
     outline: 0.55,
     lut: "cool",
+    godRays: 0.18,
+    sparkle: 0.28,
+    sparkleIntensity: 0.7,
+    lensDistortion: 0,
+    tiltShift: 0,
   }),
 };
 
@@ -302,14 +396,27 @@ type MmdStudioStore = {
   status: "idle" | "loading" | "ready" | "error";
   statusMessage: string;
   webgpuAvailable: boolean;
+  /** Realtime MediaRecorder capture in progress. */
   recording: boolean;
+  /** Offline WebCodecs frame export in progress (not MediaRecorder). */
+  exportingOffline: boolean;
   exportResolution: MmdExportResolution;
+  exportCustomWidth: number;
+  exportCustomHeight: number;
   exportFps: 24 | 30 | 60 | 120;
   exportCodec: MmdExportCodec;
   exportBitrate: MmdExportBitrate;
+  /** Mbps when exportBitrate === "custom" */
+  exportCustomVideoMbps: number;
+  exportAudioBitrate: MmdExportAudioBitrate;
+  /** kbps when exportAudioBitrate === "custom" */
+  exportCustomAudioKbps: number;
+  exportMode: MmdExportMode;
   exportIncludeAudio: boolean;
   exportHideGrid: boolean;
+  exportForceOneX: boolean;
   exportFilePrefix: string;
+  exportProgress: number | null;
   exportIn: number;
   exportOut: number;
   projectName: string;
@@ -346,12 +453,20 @@ type MmdStudioStore = {
   setStatus: (status: MmdStudioStore["status"], message?: string) => void;
   setWebgpuAvailable: (available: boolean) => void;
   setRecording: (recording: boolean) => void;
+  setExportingOffline: (exporting: boolean) => void;
   setExportResolution: (resolution: MmdExportResolution) => void;
+  setExportCustomSize: (width: number, height: number, asCustom?: boolean) => void;
   setExportFps: (fps: 24 | 30 | 60 | 120) => void;
   setExportCodec: (codec: MmdExportCodec) => void;
   setExportBitrate: (bitrate: MmdExportBitrate) => void;
+  setExportCustomVideoMbps: (mbps: number) => void;
+  setExportAudioBitrate: (bitrate: MmdExportAudioBitrate) => void;
+  setExportCustomAudioKbps: (kbps: number) => void;
+  setExportMode: (mode: MmdExportMode) => void;
   setExportIncludeAudio: (enabled: boolean) => void;
   setExportHideGrid: (enabled: boolean) => void;
+  setExportForceOneX: (enabled: boolean) => void;
+  setExportProgress: (progress: number | null) => void;
   setExportFilePrefix: (prefix: string) => void;
   setExportIn: (time: number) => void;
   setExportOut: (time: number) => void;
@@ -382,10 +497,11 @@ export const DEFAULT_LIGHTS: MmdLightSettings = Object.freeze({
   shadowMode: "map",
   shadowQuality: "balanced",
   shadowMapSize: 2048,
-  shadowBias: -0.00025,
-  shadowNormalBias: 0.028,
-  shadowRadius: 2.8,
-  shadowCameraSize: 32,
+  // Slightly stronger normalBias + modest bias reduces view-angle acne shimmer.
+  shadowBias: -0.0002,
+  shadowNormalBias: 0.04,
+  shadowRadius: 2,
+  shadowCameraSize: 28,
   groundShadowOpacity: 0.45,
 });
 
@@ -397,84 +513,138 @@ export const SHADOW_QUALITY_PRESETS: Record<
   performance: {
     shadowQuality: "performance",
     shadowMode: "map",
-    shadowMapSize: 512,
-    shadowBias: -0.0002,
-    shadowNormalBias: 0.03,
+    shadowMapSize: 1024,
+    shadowBias: -0.00015,
+    shadowNormalBias: 0.045,
     shadowRadius: 1,
-    shadowCameraSize: 24,
+    shadowCameraSize: 22,
     groundShadowOpacity: 0.35,
   },
   balanced: {
     shadowQuality: "balanced",
     shadowMode: "map",
     shadowMapSize: 2048,
-    shadowBias: -0.00025,
-    shadowNormalBias: 0.028,
-    shadowRadius: 2.8,
-    shadowCameraSize: 32,
+    shadowBias: -0.0002,
+    shadowNormalBias: 0.04,
+    shadowRadius: 2,
+    shadowCameraSize: 28,
     groundShadowOpacity: 0.45,
   },
   quality: {
     shadowQuality: "quality",
     shadowMode: "map",
     shadowMapSize: 2048,
-    shadowBias: -0.0003,
-    shadowNormalBias: 0.022,
-    shadowRadius: 3.5,
-    shadowCameraSize: 36,
+    shadowBias: -0.00022,
+    shadowNormalBias: 0.035,
+    shadowRadius: 2.5,
+    shadowCameraSize: 32,
     groundShadowOpacity: 0.5,
   },
   ultra: {
     shadowQuality: "ultra",
     shadowMode: "map",
     shadowMapSize: 4096,
-    shadowBias: -0.00035,
-    shadowNormalBias: 0.018,
-    shadowRadius: 4,
-    shadowCameraSize: 40,
+    shadowBias: -0.00025,
+    shadowNormalBias: 0.03,
+    shadowRadius: 3,
+    shadowCameraSize: 36,
     groundShadowOpacity: 0.52,
   },
 };
 
+const EXPORT_RESOLUTIONS: MmdExportResolution[] = [
+  "480p",
+  "720p",
+  "1080p",
+  "1440p",
+  "2160p",
+  "1080x1920",
+  "720x1280",
+  "1080x1080",
+  "custom",
+];
+
 type ExportSettingsPersist = {
   resolution?: MmdExportResolution;
+  customWidth?: number;
+  customHeight?: number;
   fps?: 24 | 30 | 60 | 120;
   codec?: MmdExportCodec;
   bitrate?: MmdExportBitrate;
+  customVideoMbps?: number;
+  audioBitrate?: MmdExportAudioBitrate;
+  customAudioKbps?: number;
+  mode?: MmdExportMode;
   includeAudio?: boolean;
   hideGrid?: boolean;
+  forceOneX?: boolean;
   filePrefix?: string;
 };
+
+function clampExportDim(value: unknown, fallback: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(4096, Math.max(64, Math.round(value)));
+}
 
 function loadExportSettings(): Required<ExportSettingsPersist> {
   const defaults: Required<ExportSettingsPersist> = {
     resolution: "1080p",
+    customWidth: 1920,
+    customHeight: 1080,
     fps: 30,
     codec: "auto",
     bitrate: "high",
+    customVideoMbps: 12,
+    audioBitrate: "medium",
+    customAudioKbps: 192,
+    mode: "offline",
     includeAudio: true,
     hideGrid: true,
+    forceOneX: true,
     filePrefix: "mmd-export",
   };
   try {
     const raw = localStorage.getItem(EXPORT_KEY);
     if (!raw) return defaults;
     const parsed = JSON.parse(raw) as ExportSettingsPersist;
-    const resolution = parsed.resolution && ["480p", "720p", "1080p", "1440p", "2160p"].includes(parsed.resolution)
+    const resolution = parsed.resolution && EXPORT_RESOLUTIONS.includes(parsed.resolution)
       ? parsed.resolution
       : defaults.resolution;
     const fps = parsed.fps === 24 || parsed.fps === 30 || parsed.fps === 60 || parsed.fps === 120 ? parsed.fps : defaults.fps;
-    const codec = parsed.codec === "vp8" || parsed.codec === "vp9" || parsed.codec === "auto" ? parsed.codec : defaults.codec;
-    const bitrate = parsed.bitrate && ["low", "medium", "high", "ultra"].includes(parsed.bitrate)
+    const codec =
+      parsed.codec === "vp8"
+      || parsed.codec === "vp9"
+      || parsed.codec === "h264"
+      || parsed.codec === "auto"
+        ? parsed.codec
+        : defaults.codec;
+    const bitrate = parsed.bitrate && ["low", "medium", "high", "ultra", "custom"].includes(parsed.bitrate)
       ? parsed.bitrate
       : defaults.bitrate;
+    const audioBitrate = parsed.audioBitrate && ["low", "medium", "high", "custom"].includes(parsed.audioBitrate)
+      ? parsed.audioBitrate
+      : defaults.audioBitrate;
+    const mode = parsed.mode === "realtime" || parsed.mode === "offline" ? parsed.mode : defaults.mode;
+    const customVideoMbps = typeof parsed.customVideoMbps === "number" && Number.isFinite(parsed.customVideoMbps)
+      ? Math.min(200, Math.max(0.5, parsed.customVideoMbps))
+      : defaults.customVideoMbps;
+    const customAudioKbps = typeof parsed.customAudioKbps === "number" && Number.isFinite(parsed.customAudioKbps)
+      ? Math.min(512, Math.max(32, Math.round(parsed.customAudioKbps)))
+      : defaults.customAudioKbps;
     return {
       resolution,
+      customWidth: clampExportDim(parsed.customWidth, defaults.customWidth),
+      customHeight: clampExportDim(parsed.customHeight, defaults.customHeight),
       fps,
       codec,
       bitrate,
+      customVideoMbps,
+      audioBitrate,
+      customAudioKbps,
+      mode,
       includeAudio: parsed.includeAudio !== false,
       hideGrid: parsed.hideGrid !== false,
+      forceOneX: parsed.forceOneX !== false,
       filePrefix: typeof parsed.filePrefix === "string" && parsed.filePrefix.trim()
         ? parsed.filePrefix.trim().slice(0, 48)
         : defaults.filePrefix,
@@ -516,15 +686,33 @@ function sanitizeLut(value: unknown): MmdLutLook {
   return "none";
 }
 
+function clampTuneNum(value: unknown, min: number, max: number, fallback: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+}
+
 function loadPostFxTune(): MmdPostFxTune {
   try {
     const raw = localStorage.getItem(POSTFX_TUNE_KEY);
     if (!raw) return { ...DEFAULT_POSTFX_TUNE };
     const parsed = JSON.parse(raw) as Partial<MmdPostFxTune>;
+    const base = { ...DEFAULT_POSTFX_TUNE, ...parsed, lut: sanitizeLut(parsed.lut) };
     return {
-      ...DEFAULT_POSTFX_TUNE,
-      ...parsed,
-      lut: sanitizeLut(parsed.lut),
+      ...base,
+      bloom: clampTuneNum(base.bloom, 0, 2, DEFAULT_POSTFX_TUNE.bloom),
+      bloomThreshold: clampTuneNum(base.bloomThreshold, 0, 1, DEFAULT_POSTFX_TUNE.bloomThreshold),
+      bloomRadius: clampTuneNum(base.bloomRadius, 0.05, 1.5, DEFAULT_POSTFX_TUNE.bloomRadius),
+      bloomSelective: Boolean(base.bloomSelective ?? DEFAULT_POSTFX_TUNE.bloomSelective),
+      dof: clampTuneNum(base.dof, 0, 1, DEFAULT_POSTFX_TUNE.dof),
+      dofFocus: clampTuneNum(base.dofFocus, 0.5, 120, DEFAULT_POSTFX_TUNE.dofFocus),
+      dofRange: clampTuneNum(base.dofRange, 0.5, 60, DEFAULT_POSTFX_TUNE.dofRange),
+      dofAperture: clampTuneNum(base.dofAperture, 0.05, 2, DEFAULT_POSTFX_TUNE.dofAperture),
+      dofLockModel: Boolean(base.dofLockModel),
+      godRays: clampTuneNum(base.godRays, 0, 1, DEFAULT_POSTFX_TUNE.godRays),
+      sparkle: clampTuneNum(base.sparkle, 0, 1, DEFAULT_POSTFX_TUNE.sparkle),
+      sparkleIntensity: clampTuneNum(base.sparkleIntensity, 0, 2, DEFAULT_POSTFX_TUNE.sparkleIntensity),
+      lensDistortion: clampTuneNum(base.lensDistortion, 0, 1, DEFAULT_POSTFX_TUNE.lensDistortion),
+      tiltShift: clampTuneNum(base.tiltShift, 0, 1, DEFAULT_POSTFX_TUNE.tiltShift),
     };
   } catch {
     return { ...DEFAULT_POSTFX_TUNE };
@@ -645,13 +833,22 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
   statusMessage: "",
   webgpuAvailable: typeof navigator !== "undefined" && Boolean((navigator as Navigator & { gpu?: unknown }).gpu),
   recording: false,
+  exportingOffline: false,
   exportResolution: exportDefaults.resolution,
+  exportCustomWidth: exportDefaults.customWidth,
+  exportCustomHeight: exportDefaults.customHeight,
   exportFps: exportDefaults.fps,
   exportCodec: exportDefaults.codec,
   exportBitrate: exportDefaults.bitrate,
+  exportCustomVideoMbps: exportDefaults.customVideoMbps,
+  exportAudioBitrate: exportDefaults.audioBitrate,
+  exportCustomAudioKbps: exportDefaults.customAudioKbps,
+  exportMode: exportDefaults.mode,
   exportIncludeAudio: exportDefaults.includeAudio,
   exportHideGrid: exportDefaults.hideGrid,
+  exportForceOneX: exportDefaults.forceOneX,
   exportFilePrefix: exportDefaults.filePrefix,
+  exportProgress: null,
   exportIn: 0,
   exportOut: 0,
   projectName: "Untitled Project",
@@ -665,7 +862,7 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
     } catch {
       // ignore
     }
-    set({ backend, playing: false, recording: false });
+    set({ backend, playing: false, recording: false, exportingOffline: false });
   },
   setPostFx: (postFx) => {
     try {
@@ -826,9 +1023,25 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
     set({ webgpuAvailable });
   },
   setRecording: (recording) => set({ recording, playing: recording ? true : get().playing }),
+  setExportingOffline: (exportingOffline) => set({ exportingOffline }),
   setExportResolution: (exportResolution) => {
     persistExportSettings({ resolution: exportResolution });
     set({ exportResolution });
+  },
+  setExportCustomSize: (width, height, asCustom = false) => {
+    const exportCustomWidth = clampExportDim(width, 1920);
+    const exportCustomHeight = clampExportDim(height, 1080);
+    if (asCustom) {
+      persistExportSettings({
+        customWidth: exportCustomWidth,
+        customHeight: exportCustomHeight,
+        resolution: "custom",
+      });
+      set({ exportCustomWidth, exportCustomHeight, exportResolution: "custom" });
+      return;
+    }
+    persistExportSettings({ customWidth: exportCustomWidth, customHeight: exportCustomHeight });
+    set({ exportCustomWidth, exportCustomHeight });
   },
   setExportFps: (exportFps) => {
     persistExportSettings({ fps: exportFps });
@@ -842,6 +1055,24 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
     persistExportSettings({ bitrate: exportBitrate });
     set({ exportBitrate });
   },
+  setExportCustomVideoMbps: (mbps) => {
+    const exportCustomVideoMbps = Math.min(200, Math.max(0.5, Number.isFinite(mbps) ? mbps : 12));
+    persistExportSettings({ customVideoMbps: exportCustomVideoMbps, bitrate: "custom" });
+    set({ exportCustomVideoMbps, exportBitrate: "custom" });
+  },
+  setExportAudioBitrate: (exportAudioBitrate) => {
+    persistExportSettings({ audioBitrate: exportAudioBitrate });
+    set({ exportAudioBitrate });
+  },
+  setExportCustomAudioKbps: (kbps) => {
+    const exportCustomAudioKbps = Math.min(512, Math.max(32, Math.round(Number.isFinite(kbps) ? kbps : 192)));
+    persistExportSettings({ customAudioKbps: exportCustomAudioKbps, audioBitrate: "custom" });
+    set({ exportCustomAudioKbps, exportAudioBitrate: "custom" });
+  },
+  setExportMode: (exportMode) => {
+    persistExportSettings({ mode: exportMode });
+    set({ exportMode });
+  },
   setExportIncludeAudio: (exportIncludeAudio) => {
     persistExportSettings({ includeAudio: exportIncludeAudio });
     set({ exportIncludeAudio });
@@ -850,6 +1081,11 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
     persistExportSettings({ hideGrid: exportHideGrid });
     set({ exportHideGrid });
   },
+  setExportForceOneX: (exportForceOneX) => {
+    persistExportSettings({ forceOneX: exportForceOneX });
+    set({ exportForceOneX });
+  },
+  setExportProgress: (exportProgress) => set({ exportProgress }),
   setExportFilePrefix: (exportFilePrefix) => {
     const next = exportFilePrefix.trim().slice(0, 48) || "mmd-export";
     persistExportSettings({ filePrefix: next });
@@ -900,11 +1136,12 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
     return resolvePostFxTune(state.backend, state.postFx, state.postFxTune);
   },
   exportRangeSeconds: () => {
-    const { duration, exportIn, exportOut, speed } = get();
+    const { duration, exportIn, exportOut, speed, exportForceOneX } = get();
     if (duration <= 0) return 0;
     const end = exportOut > 0 ? Math.min(exportOut, duration) : duration;
     const start = Math.min(exportIn, end);
-    return Math.max(0.05, (end - start) / Math.max(0.05, speed));
+    const rate = exportForceOneX ? 1 : Math.max(0.05, speed);
+    return Math.max(0.05, (end - start) / rate);
   },
 };
 });
@@ -918,40 +1155,136 @@ export function formatMmdTime(seconds: number, fps = 30) {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(f).padStart(2, "0")}`;
 }
 
-export function getExportSize(resolution: MmdExportResolution) {
+export function getExportSize(
+  resolution: MmdExportResolution,
+  customWidth = 1920,
+  customHeight = 1080,
+) {
   if (resolution === "480p") return { width: 854, height: 480 };
   if (resolution === "720p") return { width: 1280, height: 720 };
   if (resolution === "1440p") return { width: 2560, height: 1440 };
   if (resolution === "2160p") return { width: 3840, height: 2160 };
+  if (resolution === "1080x1920") return { width: 1080, height: 1920 };
+  if (resolution === "720x1280") return { width: 720, height: 1280 };
+  if (resolution === "1080x1080") return { width: 1080, height: 1080 };
+  if (resolution === "custom") {
+    return {
+      width: clampExportDim(customWidth, 1920),
+      height: clampExportDim(customHeight, 1080),
+    };
+  }
   return { width: 1920, height: 1080 };
 }
 
-export function getExportVideoBits(resolution: MmdExportResolution, bitrate: MmdExportBitrate) {
-  const base = {
-    "480p": 2_500_000,
-    "720p": 5_000_000,
-    "1080p": 10_000_000,
-    "1440p": 18_000_000,
-    "2160p": 35_000_000,
-  }[resolution];
+export function getExportVideoBits(
+  resolution: MmdExportResolution,
+  bitrate: MmdExportBitrate,
+  customWidth = 1920,
+  customHeight = 1080,
+  customMbps = 12,
+) {
+  if (bitrate === "custom") {
+    return Math.max(500_000, Math.round(Math.min(200, Math.max(0.5, customMbps)) * 1_000_000));
+  }
+  const size = getExportSize(resolution, customWidth, customHeight);
+  const pixels = size.width * size.height;
+  // ~10 Mbps reference at 1080p
+  const base = Math.round(10_000_000 * (pixels / (1920 * 1080)));
   const scale = { low: 0.55, medium: 0.8, high: 1, ultra: 1.45 }[bitrate];
-  return Math.round(base * scale);
+  return Math.max(1_000_000, Math.round(base * scale));
+}
+
+export function getExportAudioBits(bitrate: MmdExportAudioBitrate, customKbps = 192) {
+  if (bitrate === "custom") {
+    return Math.max(32_000, Math.min(512_000, Math.round(customKbps) * 1000));
+  }
+  if (bitrate === "low") return 96_000;
+  if (bitrate === "high") return 256_000;
+  return 160_000;
+}
+
+/** Prefer MP4/H.264 when the browser MediaRecorder supports it. */
+const MP4_MIME_CANDIDATES = [
+  "video/mp4;codecs=avc1.640028,mp4a.40.2",
+  "video/mp4;codecs=avc1.4D401F,mp4a.40.2",
+  "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+  "video/mp4;codecs=avc1.640028",
+  "video/mp4;codecs=avc1.4D401F",
+  "video/mp4;codecs=avc1.42E01E",
+  "video/mp4",
+  "video/webm;codecs=h264,opus",
+  "video/webm;codecs=avc1,opus",
+  "video/webm;codecs=h264",
+  "video/webm;codecs=avc1",
+] as const;
+
+const VP9_MIME_CANDIDATES = [
+  "video/webm;codecs=vp9,opus",
+  "video/webm;codecs=vp9",
+  "video/webm",
+] as const;
+
+const VP8_MIME_CANDIDATES = [
+  "video/webm;codecs=vp8,opus",
+  "video/webm;codecs=vp8",
+  "video/webm",
+] as const;
+
+function firstSupportedMime(candidates: readonly string[]) {
+  if (typeof MediaRecorder === "undefined") return null;
+  for (const type of candidates) {
+    try {
+      if (MediaRecorder.isTypeSupported(type)) return type;
+    } catch {
+      // ignore invalid type strings
+    }
+  }
+  return null;
+}
+
+export function isExportMp4Supported() {
+  return firstSupportedMime(MP4_MIME_CANDIDATES) != null;
 }
 
 export function resolveExportMimeType(codec: MmdExportCodec) {
-  const candidates =
-    codec === "vp8"
-      ? ["video/webm;codecs=vp8", "video/webm"]
-      : codec === "vp9"
-        ? ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"]
-        : ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
-  for (const type of candidates) {
-    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type)) return type;
+  if (codec === "h264") {
+    return firstSupportedMime(MP4_MIME_CANDIDATES)
+      ?? firstSupportedMime(VP9_MIME_CANDIDATES)
+      ?? "video/webm";
   }
-  return "video/webm";
+  if (codec === "vp8") {
+    return firstSupportedMime(VP8_MIME_CANDIDATES) ?? "video/webm";
+  }
+  if (codec === "vp9") {
+    return firstSupportedMime(VP9_MIME_CANDIDATES)
+      ?? firstSupportedMime(VP8_MIME_CANDIDATES)
+      ?? "video/webm";
+  }
+  // auto: prefer MP4 when available, else VP9/VP8 WebM
+  return firstSupportedMime(MP4_MIME_CANDIDATES)
+    ?? firstSupportedMime(VP9_MIME_CANDIDATES)
+    ?? firstSupportedMime(VP8_MIME_CANDIDATES)
+    ?? "video/webm";
 }
 
-export function buildExportFileName(prefix: string, resolution: MmdExportResolution, fps: number) {
+export function exportExtensionForMime(mimeType: string) {
+  const mime = (mimeType || "").toLowerCase();
+  if (mime.includes("mp4")) return "mp4";
+  if (mime.includes("webm")) return "webm";
+  return "webm";
+}
+
+export function buildExportFileName(
+  prefix: string,
+  resolution: MmdExportResolution,
+  fps: number,
+  mimeTypeOrExt?: string,
+) {
   const safe = (prefix.trim() || "mmd-export").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 48);
-  return `${safe}-${resolution}-${fps}fps-${Date.now()}.webm`;
+  const ext = !mimeTypeOrExt
+    ? "webm"
+    : mimeTypeOrExt.includes("/")
+      ? exportExtensionForMime(mimeTypeOrExt)
+      : mimeTypeOrExt.replace(/^\./, "") || "webm";
+  return `${safe}-${resolution}-${fps}fps-${Date.now()}.${ext}`;
 }

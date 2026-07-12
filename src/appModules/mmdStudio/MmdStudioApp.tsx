@@ -5,9 +5,11 @@ import { useNotificationStore } from "../../notificationStore";
 import { collectFilesFromDataTransfer, pickBodyAndFaceMotions, pickPrimaryAudio, pickPrimaryModel } from "./folderImport";
 import { MmdCanvas, type MmdSceneApi } from "./MmdCanvas";
 import { MmdProjectHome } from "./MmdProjectHome";
+import { MmdSelect } from "./mmdPanelUi";
 import { MmdSidePanel } from "./MmdSidePanel";
 import { MmdTimelineBar } from "./MmdTimelineBar";
 import type { MmdProjectModelAssets } from "./mmdRuntime";
+import { pickSkyPanoramaFile, SKY_FILE_ACCEPT } from "./mmdSkyFormats";
 import {
   useMmdStudioStore,
   type MmdRendererBackend,
@@ -54,6 +56,7 @@ export function MmdStudioApp() {
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const bodyMotionInputRef = useRef<HTMLInputElement | null>(null);
   const faceMotionInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraMotionInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const hdrInputRef = useRef<HTMLInputElement | null>(null);
   const audioFileRef = useRef<File | null>(null);
@@ -107,6 +110,10 @@ export function MmdStudioApp() {
     await apiRef.current?.loadMotion(file, "face", useMmdStudioStore.getState().selectedModelId);
   }
 
+  async function handleCameraMotion(file: File) {
+    await apiRef.current?.loadMotion(file, "camera", useMmdStudioStore.getState().selectedModelId);
+  }
+
   async function handleAudio(file: File) {
     audioFileRef.current = file;
     setAudioName(file.name);
@@ -145,8 +152,11 @@ export function MmdStudioApp() {
   }
 
   function seek(value: number) {
-    setCurrentTime(value);
-    if (audioRef.current) audioRef.current.currentTime = value;
+    const t = Number.isFinite(value) ? Math.max(0, value) : 0;
+    // Prefer canvas seekTime so the next rAF reads the correct frame (export).
+    if (apiRef.current) apiRef.current.seekTime(t);
+    else setCurrentTime(t);
+    if (audioRef.current) audioRef.current.currentTime = t;
   }
 
   async function handleBackendChange(next: MmdRendererBackend) {
@@ -233,7 +243,7 @@ export function MmdStudioApp() {
     editorActive: view === "editor",
   });
 
-  const { recording, toggleRecord } = useMmdRecordingController({
+  const { recording, exportingOffline, exportBusy, toggleRecord, captureStill, exportPngSequence } = useMmdRecordingController({
     apiRef,
     audioRef,
     seek,
@@ -252,20 +262,21 @@ export function MmdStudioApp() {
   async function ingestFiles(files: File[]) {
     if (!files.length) return;
     const model = pickPrimaryModel(files);
-    const { body, face } = pickBodyAndFaceMotions(files);
+    const { body, face, camera } = pickBodyAndFaceMotions(files);
     const audio = pickPrimaryAudio(files) ?? files.find(isAudioFile) ?? null;
-    const hdr = files.find((file) => /\.hdr$/i.test(file.name)) ?? null;
+    const sky = pickSkyPanoramaFile(files);
 
     if (model) await loadModelBundle(model, files);
     if (body) await handleBodyMotion(body);
     if (face) await handleFaceMotion(face);
+    if (camera) await handleCameraMotion(camera);
     if (audio) await handleAudio(audio);
-    if (hdr) {
-      hdrFileRef.current = hdr;
-      setSkyHdr(hdr);
+    if (sky) {
+      hdrFileRef.current = sky;
+      setSkyHdr(sky);
     }
 
-    if (!model && !body && !face && !audio && !hdr) {
+    if (!model && !body && !face && !camera && !audio && !sky) {
       addNotification({
         title: t("mmdError"),
         message: t("mmdDropHint"),
@@ -300,6 +311,19 @@ export function MmdStudioApp() {
         appId: "mmd-studio",
       });
     }
+  }
+
+  function onPhysicsReset() {
+    if (!useMmdStudioStore.getState().physicsEnabled) return;
+    apiRef.current?.resetPhysics(useMmdStudioStore.getState().currentTime);
+    addNotification({
+      title: t("mmdPhysics"),
+      message: t("mmdPhysicsResetDone"),
+      type: "success",
+      category: "media",
+      appId: "mmd-studio",
+      duration: 2500,
+    });
   }
 
   function togglePlay() {
@@ -411,23 +435,26 @@ export function MmdStudioApp() {
             <button type="button" className="button-ghost" onClick={() => modelInputRef.current?.click()}>{t("mmdLoadModel")}</button>
             <button type="button" className="button-ghost" onClick={() => bodyMotionInputRef.current?.click()}>{t("mmdLoadBodyMotion")}</button>
             <button type="button" className="button-ghost" onClick={() => faceMotionInputRef.current?.click()}>{t("mmdLoadFaceMotion")}</button>
+            <button type="button" className="button-ghost" onClick={() => cameraMotionInputRef.current?.click()}>{t("mmdLoadCameraMotion")}</button>
             <button type="button" className="button-ghost" onClick={() => audioInputRef.current?.click()}>{t("mmdLoadAudio")}</button>
           </div>
         </div>
         <div className="mmd-toolbar-group mmd-toolbar-meta">
           <label className="mmd-inline-field">
             <span>{t("mmdBackend")}</span>
-            <select
+            <MmdSelect
               value={backend}
-              disabled={backendSwitching || recording}
-              onChange={(event) => void handleBackendChange(event.target.value as MmdRendererBackend)}
-            >
-              <option value="webgl">{t("mmdBackendWebgl")}</option>
-              <option value="webgpu" disabled={!webgpuAvailable}>{t("mmdBackendWebgpu")}</option>
-            </select>
+              disabled={backendSwitching || exportBusy}
+              ariaLabel={t("mmdBackend")}
+              onChange={(next) => void handleBackendChange(next as MmdRendererBackend)}
+              options={[
+                { value: "webgl", label: t("mmdBackendWebgl") },
+                { value: "webgpu", label: t("mmdBackendWebgpu"), disabled: !webgpuAvailable },
+              ]}
+            />
           </label>
           <span className={`mmd-status-chip ${statusTone}`}>{statusText}</span>
-          {recording ? <span className="mmd-status-chip is-rec">{t("mmdExporting")}</span> : null}
+          {exportBusy ? <span className="mmd-status-chip is-rec">{exportingOffline ? t("mmdExportOffline") : t("mmdExporting")}</span> : null}
         </div>
       </header>
 
@@ -460,7 +487,7 @@ export function MmdStudioApp() {
               <span>{t("mmdFolderHint")}</span>
             </div>
           ) : null}
-          {recording ? <div className="mmd-rec-badge">{t("mmdExporting")}</div> : null}
+          {exportBusy ? <div className="mmd-rec-badge">{exportingOffline ? t("mmdExportOffline") : t("mmdExporting")}</div> : null}
         </div>
 
         <MmdSidePanel
@@ -470,10 +497,13 @@ export function MmdStudioApp() {
           folderInputRef={folderInputRef}
           bodyMotionInputRef={bodyMotionInputRef}
           faceMotionInputRef={faceMotionInputRef}
+          cameraMotionInputRef={cameraMotionInputRef}
           audioInputRef={audioInputRef}
           hdrInputRef={hdrInputRef}
           textureInfo={textureInfo}
-          recording={recording}
+          recording={exportBusy}
+          onCaptureStill={captureStill}
+          onExportSequence={exportPngSequence}
           projectList={projectList}
           projectBusy={projectBusy}
           projectName={projectName}
@@ -488,6 +518,7 @@ export function MmdStudioApp() {
           importProject={importProject}
           onBackToProjects={() => setView("home")}
           onPhysicsToggle={onPhysicsToggle}
+          onPhysicsReset={onPhysicsReset}
         />
       </div>
 
@@ -519,9 +550,9 @@ export function MmdStudioApp() {
           onSetExportIn={setExportIn}
           onSetExportOut={setExportOut}
         />
-        <button type="button" className={recording ? "button-primary" : "button-ghost"} onClick={() => void toggleRecord()}>
-          <Icon icon={recording ? "solar:stop-bold" : "solar:videocamera-record-bold"} width={14} height={14} />
-          {recording ? t("mmdStopExport") : t("mmdExport")}
+        <button type="button" className={exportBusy ? "button-primary" : "button-ghost"} onClick={() => void toggleRecord()}>
+          <Icon icon={exportBusy ? "solar:stop-bold" : "solar:videocamera-record-bold"} width={14} height={14} />
+          {exportBusy ? t("mmdStopExport") : t("mmdExport")}
         </button>
       </footer>
 
@@ -552,12 +583,13 @@ export function MmdStudioApp() {
       />
       <input ref={bodyMotionInputRef} hidden type="file" accept=".vmd,.vpd" onChange={(event) => event.target.files?.[0] && void handleBodyMotion(event.target.files[0])} />
       <input ref={faceMotionInputRef} hidden type="file" accept=".vmd,.vpd" onChange={(event) => event.target.files?.[0] && void handleFaceMotion(event.target.files[0])} />
+      <input ref={cameraMotionInputRef} hidden type="file" accept=".vmd" onChange={(event) => event.target.files?.[0] && void handleCameraMotion(event.target.files[0])} />
       <input ref={audioInputRef} hidden type="file" accept="audio/*" onChange={(event) => event.target.files?.[0] && void handleAudio(event.target.files[0])} />
       <input
         ref={hdrInputRef}
         hidden
         type="file"
-        accept=".hdr,image/vnd.radiance"
+        accept={SKY_FILE_ACCEPT}
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) {

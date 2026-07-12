@@ -34,7 +34,10 @@ export type MmdSceneApi = {
   /** Rebuild models into a fresh runtime (e.g. after WebGL/WebGPU canvas remount). */
   restoreScene: (models: MmdProjectModelAssets[], options?: { physics?: boolean; selectedId?: string | null }) => Promise<void>;
   setPhysicsEnabled: (enabled: boolean) => Promise<void>;
+  resetPhysics: (seconds?: number) => void;
   getCanvas: () => HTMLCanvasElement | null;
+  /** Sync timeline into the render loop immediately (store + timeRef). */
+  seekTime: (seconds: number) => void;
   setRecordingCanvasSize: (width: number, height: number) => void;
   restoreRecordingCanvasSize: () => void;
   startRecording: (options: {
@@ -42,9 +45,11 @@ export type MmdSceneApi = {
     audio: HTMLAudioElement | null;
     includeAudio?: boolean;
     videoBitsPerSecond?: number;
+    audioBitsPerSecond?: number;
     mimeType?: string;
   }) => MediaRecorder | null;
   stopRecording: () => Promise<Blob | null>;
+  captureStillPng: () => Promise<Blob | null>;
 };
 
 type Props = {
@@ -85,6 +90,7 @@ function snapshotToStore(models: RuntimeModelSnapshot[]): MmdSceneModel[] {
     materialNames: item.materialNames,
     bodyMotionName: item.bodyMotionName,
     faceMotionName: item.faceMotionName,
+    cameraMotionName: item.cameraMotionName,
     morphWeights: item.morphWeights,
     morphFavorites: item.morphFavorites,
     materialVisible: item.materialVisible,
@@ -107,8 +113,14 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const audioDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  /** Element currently wired into createMediaElementSource (one source per element). */
+  const audioBoundElRef = useRef<HTMLAudioElement | null>(null);
   const captureStreamRef = useRef<MediaStream | null>(null);
+  /** Logical renderer size (getSize), not drawing-buffer pixels. */
   const recordingCanvasStateRef = useRef<{ width: number; height: number; pixelRatio: number } | null>(null);
+  /** Preview camera.aspect before export; restored with drawing buffer. */
+  const recordingCameraAspectRef = useRef<number | null>(null);
+  const sizeScratch = useMemo(() => new THREE.Vector2(), []);
   const keysRef = useRef<KeyMap>({ w: false, a: false, s: false, d: false, f: false, c: false, q: false, e: false });
   const forward = useMemo(() => new THREE.Vector3(), []);
   const right = useMemo(() => new THREE.Vector3(), []);
@@ -294,17 +306,49 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
           throw error;
         }
       },
+      resetPhysics: (seconds) => {
+        const t = seconds ?? useMmdStudioStore.getState().currentTime;
+        runtime.resetPhysics(t);
+      },
       getCanvas: () => gl.domElement,
+      seekTime: (seconds) => {
+        const t = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+        timeRef.current = t;
+        lastUiTimeRef.current = t;
+        setCurrentTime(t);
+      },
       setRecordingCanvasSize: (width, height) => {
         if (!recordingCanvasStateRef.current) {
+          // Must save logical size (getSize), not domElement.width (drawing buffer).
+          // Restoring drawing-buffer dims with pixelRatio>1 multiplies past max texture size.
+          gl.getSize(sizeScratch);
           recordingCanvasStateRef.current = {
-            width: gl.domElement.width,
-            height: gl.domElement.height,
+            width: Math.max(2, Math.round(sizeScratch.x)),
+            height: Math.max(2, Math.round(sizeScratch.y)),
             pixelRatio: gl.getPixelRatio(),
           };
         }
+        // H.264 and many encoders require even dimensions.
+        const even = (n: number) => {
+          const v = Math.max(2, Math.round(n));
+          return v % 2 === 0 ? v : v - 1;
+        };
+        const w = even(width);
+        const h = even(height);
+        // Export at 1:1 logical=buffer so encoder pixels match requested resolution.
         gl.setPixelRatio(1);
-        gl.setSize(width, height, false);
+        // false = do not change CSS size; export buffer ≠ viewport box.
+        gl.setSize(w, h, false);
+        // R3F `size` stays CSS viewport; force projection to export aspect or
+        // the frame is stretched (typically narrower/taller characters).
+        const perspective = camera as THREE.PerspectiveCamera;
+        if (perspective.isPerspectiveCamera) {
+          if (recordingCameraAspectRef.current == null) {
+            recordingCameraAspectRef.current = perspective.aspect;
+          }
+          perspective.aspect = w / Math.max(1, h);
+          perspective.updateProjectionMatrix();
+        }
       },
       restoreRecordingCanvasSize: () => {
         const previous = recordingCanvasStateRef.current;
@@ -312,8 +356,21 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
         gl.setPixelRatio(previous.pixelRatio);
         gl.setSize(previous.width, previous.height, false);
         recordingCanvasStateRef.current = null;
+        const perspective = camera as THREE.PerspectiveCamera;
+        if (perspective.isPerspectiveCamera && recordingCameraAspectRef.current != null) {
+          perspective.aspect = recordingCameraAspectRef.current;
+          perspective.updateProjectionMatrix();
+          recordingCameraAspectRef.current = null;
+        }
       },
-      startRecording: ({ fps, audio, includeAudio = true, videoBitsPerSecond = 8_000_000, mimeType }) => {
+      startRecording: ({
+        fps,
+        audio,
+        includeAudio = true,
+        videoBitsPerSecond = 8_000_000,
+        audioBitsPerSecond,
+        mimeType,
+      }) => {
         try {
           const stream = gl.domElement.captureStream(fps);
           captureStreamRef.current = stream;
@@ -323,14 +380,27 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
                 audioCtxRef.current = new AudioContext();
                 audioSourceRef.current = null;
                 audioDestRef.current = null;
+                audioBoundElRef.current = null;
               }
               const ctx = audioCtxRef.current;
               if (ctx.state === "suspended") void ctx.resume();
-              if (!audioSourceRef.current) {
+              // createMediaElementSource may only be called once per element.
+              if (!audioSourceRef.current || audioBoundElRef.current !== audio) {
+                try {
+                  audioSourceRef.current?.disconnect();
+                } catch {
+                  // ignore
+                }
+                try {
+                  audioDestRef.current?.disconnect();
+                } catch {
+                  // ignore
+                }
                 audioSourceRef.current = ctx.createMediaElementSource(audio);
                 audioDestRef.current = ctx.createMediaStreamDestination();
                 audioSourceRef.current.connect(audioDestRef.current);
                 audioSourceRef.current.connect(ctx.destination);
+                audioBoundElRef.current = audio;
               }
               const dest = audioDestRef.current;
               if (dest) dest.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
@@ -338,17 +408,50 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
               // video only
             }
           }
-          const resolvedMime =
-            mimeType
-            || (MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-              ? "video/webm;codecs=vp9"
-              : MediaRecorder.isTypeSupported("video/webm;codecs=vp8")
-                ? "video/webm;codecs=vp8"
-                : "video/webm");
-          const recorder = new MediaRecorder(stream, {
+          const candidates = [
+            mimeType,
+            "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+            "video/mp4;codecs=avc1.42E01E",
+            "video/mp4",
+            "video/webm;codecs=vp9,opus",
+            "video/webm;codecs=vp9",
+            "video/webm;codecs=vp8,opus",
+            "video/webm;codecs=vp8",
+            "video/webm",
+          ].filter(Boolean) as string[];
+          let resolvedMime = "video/webm";
+          for (const type of candidates) {
+            try {
+              if (MediaRecorder.isTypeSupported(type)) {
+                resolvedMime = type;
+                break;
+              }
+            } catch {
+              // ignore
+            }
+          }
+          const recorderOptions: MediaRecorderOptions = {
             mimeType: resolvedMime,
             videoBitsPerSecond,
-          });
+          };
+          if (audioBitsPerSecond && audioBitsPerSecond > 0) {
+            recorderOptions.audioBitsPerSecond = audioBitsPerSecond;
+          }
+          let recorder: MediaRecorder;
+          try {
+            recorder = new MediaRecorder(stream, recorderOptions);
+          } catch {
+            // Some browsers reject audio codec combos; retry without codec string extras.
+            const fallback = resolvedMime.startsWith("video/mp4") ? "video/mp4" : "video/webm";
+            recorder = new MediaRecorder(stream, {
+              mimeType: MediaRecorder.isTypeSupported(fallback) ? fallback : undefined,
+              videoBitsPerSecond,
+              ...(audioBitsPerSecond && audioBitsPerSecond > 0
+                ? { audioBitsPerSecond }
+                : {}),
+            });
+            resolvedMime = recorder.mimeType || fallback;
+          }
           chunksRef.current = [];
           recorder.ondataavailable = (event) => {
             if (event.data.size) chunksRef.current.push(event.data);
@@ -371,7 +474,8 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
           return;
         }
         const finish = () => {
-          const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "video/webm" });
+          const mime = recorder.mimeType || "video/webm";
+          const blob = new Blob(chunksRef.current, { type: mime });
           chunksRef.current = [];
           recorderRef.current = null;
           const stream = captureStreamRef.current;
@@ -386,6 +490,14 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
         recorder.onstop = finish;
         if (recorder.state !== "inactive") recorder.stop();
         else finish();
+      }),
+      captureStillPng: () => new Promise((resolve) => {
+        try {
+          // Capture the last presented canvas (includes post FX when active).
+          gl.domElement.toBlob((blob) => resolve(blob), "image/png");
+        } catch {
+          resolve(null);
+        }
       }),
     };
 
@@ -527,19 +639,25 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
 
     if (playing) {
       const audio = audioRef.current;
+      // Realtime capture only — offline WebCodecs seeks frames without playing.
+      const forceOneX = recording && !state.exportingOffline && state.exportForceOneX;
+      const playSpeed = forceOneX ? 1 : speed;
+      // Cap timeline advance so physics never sees multi-second jumps on lag spikes.
+      const step = Math.min(1 / 20, Math.max(0, delta)) * playSpeed;
       if (audio && !audio.paused && Number.isFinite(audio.currentTime)) {
         timeRef.current = audio.currentTime;
       } else {
-        timeRef.current += delta * speed;
+        timeRef.current += step;
       }
 
-      const endLimit = recording && rangeEnd > 0 ? rangeEnd : duration;
+      const endLimit = recording && !state.exportingOffline && rangeEnd > 0 ? rangeEnd : duration;
       if (endLimit > 0 && timeRef.current >= endLimit) {
-        if (recording) {
+        if (recording && !state.exportingOffline) {
           timeRef.current = endLimit;
           setPlaying(false);
           if (audio) audio.pause();
         } else if (loop) {
+          // Exact loop restart — runtime will treat as seek for physics reset.
           timeRef.current = 0;
           if (audio) audio.currentTime = 0;
         } else {
@@ -557,7 +675,16 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
     }
 
     if (controls.current) controls.current.enabled = !useMotionCamera;
-    runtime.update(timeRef.current, physicsEnabled, perspective, size.width / Math.max(1, size.height), useMotionCamera);
+    // While exporting, drawing buffer aspect ≠ R3F CSS size — keep FOV correct.
+    const exportBuf = recordingCanvasStateRef.current != null;
+    const viewAspect = exportBuf
+      ? gl.domElement.width / Math.max(1, gl.domElement.height)
+      : size.width / Math.max(1, size.height);
+    if (perspective.isPerspectiveCamera && Math.abs(perspective.aspect - viewAspect) > 1e-5) {
+      perspective.aspect = viewAspect;
+      perspective.updateProjectionMatrix();
+    }
+    runtime.update(timeRef.current, physicsEnabled, perspective, viewAspect, useMotionCamera);
   });
 
   useEffect(() => {
@@ -582,15 +709,19 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
   const shadowsActive = mapShadows && sunEnabled;
   const shadowCam = lights.shadowCameraSize;
   // Ortho volume centered on stage origin; far must contain the light distance.
-  const shadowNear = 1;
+  // Slightly larger near reduces depth precision waste and acne shimmer.
+  const shadowNear = 0.5;
   const shadowFar = Math.max(80, lights.sunDistance + shadowCam * 2);
   // Receiver matches the ortho footprint (±shadowCam on XZ).
   const groundSize = Math.max(20, shadowCam * 2);
+  // Keep ground slightly under y=0 so it does not z-fight the grid / foot soles
+  // when the view camera moves (classic shadow-plane shimmer).
+  const groundY = -0.015;
   const dirLightRef = useRef<THREE.DirectionalLight>(null);
   const shadowMapSizeRef = useRef(lights.shadowMapSize);
   const webGpuGrid = useMemo(() => {
     const helper = new THREE.GridHelper(80, 40, "#3a4254", "#2a3140");
-    helper.position.y = 0;
+    helper.position.y = 0.001;
     helper.frustumCulled = false;
     return helper;
   }, []);
@@ -600,8 +731,7 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
     gl.shadowMap.enabled = shadowsActive;
     gl.shadowMap.type = THREE.PCFShadowMap;
     gl.shadowMap.autoUpdate = true;
-    gl.shadowMap.needsUpdate = true;
-  }, [gl, lights.shadowMapSize, shadowsActive]);
+  }, [gl, shadowsActive]);
 
   useEffect(() => {
     const light = dirLightRef.current;
@@ -621,9 +751,10 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
 
     const prevMapSize = shadowMapSizeRef.current;
     light.shadow.mapSize.set(lights.shadowMapSize, lights.shadowMapSize);
-    light.shadow.bias = lights.shadowBias;
-    light.shadow.normalBias = lights.shadowNormalBias;
-    light.shadow.radius = lights.shadowRadius;
+    // Clamp extreme user bias that causes view-dependent swimming.
+    light.shadow.bias = Math.min(-0.00005, Math.max(-0.002, lights.shadowBias));
+    light.shadow.normalBias = Math.min(0.12, Math.max(0.01, lights.shadowNormalBias));
+    light.shadow.radius = Math.min(8, Math.max(0, lights.shadowRadius));
 
     const cam = light.shadow.camera;
     cam.near = shadowNear;
@@ -633,21 +764,24 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
     cam.top = shadowCam;
     cam.bottom = -shadowCam;
     cam.updateProjectionMatrix();
+    light.shadow.updateMatrices(light);
 
     // Only rebuild the shadow RT when resolution changes (avoids flicker thrash).
     if (prevMapSize !== lights.shadowMapSize && light.shadow.map) {
       light.shadow.map.dispose();
       light.shadow.map = null as unknown as THREE.WebGLRenderTarget;
+      light.shadow.needsUpdate = true;
     }
     shadowMapSizeRef.current = lights.shadowMapSize;
-    light.shadow.needsUpdate = true;
 
     runtime.setLighting({
       envIntensity: skyAsEnvironment && skyMode === "hdr" ? envIntensity : 0,
+      ambientIntensity: lights.ambientIntensity,
       directionalLight: light,
     });
   }, [
     envIntensity,
+    lights.ambientIntensity,
     lights.shadowBias,
     lights.shadowCameraSize,
     lights.shadowMapSize,
@@ -694,7 +828,7 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
           key={`shadow-ground-${groundSize}`}
           name="mmd-shadow-ground"
           rotation={[-Math.PI / 2, 0, 0]}
-          position={[0, 0, 0]}
+          position={[0, groundY, 0]}
           receiveShadow
           castShadow={false}
           renderOrder={-20}
@@ -706,6 +840,10 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
             opacity={Math.min(0.7, Math.max(0, lights.groundShadowOpacity))}
             depthWrite={false}
             depthTest
+            // Separate from grid / coplanar geometry when orbiting the camera.
+            polygonOffset
+            polygonOffsetFactor={-1}
+            polygonOffsetUnits={-2}
             toneMapped={false}
           />
         </mesh>
@@ -714,7 +852,7 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
         isWebGpu ? (
           <primitive object={webGpuGrid} />
         ) : (
-          <Grid infiniteGrid fadeDistance={80} sectionColor="#3a4254" cellColor="#2a3140" position={[0, 0, 0]} />
+          <Grid infiniteGrid fadeDistance={80} sectionColor="#3a4254" cellColor="#2a3140" position={[0, 0.001, 0]} />
         )
       ) : null}
       <OrbitControls

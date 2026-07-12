@@ -79,6 +79,7 @@ export async function buildMmdProjectPackage(projectId: string): Promise<{ blob:
     }
     await pushAsset(`model-${index}-body`, model.bodyMotionAssetId);
     await pushAsset(`model-${index}-face`, model.faceMotionAssetId);
+    await pushAsset(`model-${index}-camera`, model.cameraMotionAssetId);
   }
   await pushAsset("audio", record.audioAssetId);
   await pushAsset("hdr", record.hdrAssetId);
@@ -144,6 +145,7 @@ export async function importMmdProjectPackage(file: File): Promise<MmdProjectRec
     }
     const bodyMotionFile = resolveFile(`model-${index}-body`) ?? resolveFile(model.bodyMotionAssetId);
     const faceMotionFile = resolveFile(`model-${index}-face`) ?? resolveFile(model.faceMotionAssetId);
+    const cameraMotionFile = resolveFile(`model-${index}-camera`) ?? resolveFile(model.cameraMotionAssetId);
     const transform = model.transform ?? {
       positionX: model.offsetX ?? 0,
       positionY: 0,
@@ -166,6 +168,7 @@ export async function importMmdProjectPackage(file: File): Promise<MmdProjectRec
       companionFiles: companionFiles.length ? companionFiles : [modelFile],
       bodyMotionFile,
       faceMotionFile,
+      cameraMotionFile,
     };
   });
 

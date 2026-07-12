@@ -906,6 +906,143 @@ input[type="file"]::file-selector-button:hover {
   width: auto;
 }
 
+/* Custom dropdown (replaces native select in MMD Studio) */
+.mmd-select {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+
+.mmd-inline-field .mmd-select {
+  min-width: 148px;
+  width: auto;
+}
+
+.mmd-select-trigger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  margin: 0;
+  border: 1px solid var(--os-border);
+  border-radius: 8px;
+  background: var(--os-surface);
+  color: var(--os-ink);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+.mmd-select-trigger:hover:not(:disabled) {
+  border-color: color-mix(in oklch, var(--os-accent) 45%, var(--os-border));
+  background: color-mix(in oklch, var(--os-surface) 88%, var(--os-panel));
+}
+
+.mmd-select-trigger:focus-visible {
+  outline: none;
+  border-color: color-mix(in oklch, var(--os-accent) 70%, var(--os-border));
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--os-accent) 28%, transparent);
+}
+
+.mmd-select.is-open .mmd-select-trigger {
+  border-color: color-mix(in oklch, var(--os-accent) 65%, var(--os-border));
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--os-accent) 22%, transparent);
+}
+
+.mmd-select.is-disabled .mmd-select-trigger,
+.mmd-select-trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mmd-select-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mmd-select-chevron {
+  flex: 0 0 auto;
+  color: var(--os-muted);
+  font-size: 10px;
+  line-height: 1;
+  transition: transform 0.12s ease;
+}
+
+.mmd-select.is-open .mmd-select-chevron {
+  transform: rotate(180deg);
+}
+
+.mmd-select-menu {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 2px;
+  max-height: min(240px, 42vh);
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--os-border);
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--os-surface) 92%, var(--os-panel));
+  box-shadow:
+    0 10px 28px color-mix(in oklch, black 22%, transparent),
+    0 1px 0 color-mix(in oklch, white 6%, transparent) inset;
+  backdrop-filter: blur(10px);
+}
+
+.mmd-select-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--os-ink);
+  padding: 7px 8px;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mmd-select-option:hover:not(:disabled),
+.mmd-select-option.is-active:not(:disabled) {
+  background: color-mix(in oklch, var(--os-accent) 16%, var(--os-panel));
+}
+
+.mmd-select-option.is-selected {
+  color: var(--os-ink);
+  font-weight: 600;
+}
+
+.mmd-select-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mmd-select-check {
+  color: var(--os-accent);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.mmd-field > .mmd-select,
+.mmd-inline-field > .mmd-select {
+  min-width: 0;
+}
+
 .mmd-status-chip {
   display: inline-flex;
   align-items: center;
@@ -1092,6 +1229,27 @@ input[type="file"]::file-selector-button:hover {
   border-radius: 12px;
   background: var(--os-surface);
   overflow: hidden;
+}
+
+/* Nested fine-tune groups inside Look tab */
+.mmd-panel-body > .mmd-panel {
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--os-panel) 55%, var(--os-surface));
+}
+
+.mmd-panel-body > .mmd-panel .mmd-panel-head {
+  padding: 6px 8px;
+  background: transparent;
+}
+
+.mmd-panel-body > .mmd-panel .mmd-panel-head h3 {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.mmd-panel-body > .mmd-panel .mmd-panel-body {
+  padding: 8px;
 }
 
 .mmd-panel-head {
@@ -5150,6 +5308,92 @@ input[type="file"]::file-selector-button:hover {
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.about-licenses {
+  margin-top: 20px;
+  display: grid;
+  gap: 10px;
+}
+
+.about-licenses-head h3 {
+  margin: 0 0 4px;
+  color: var(--os-ink);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.about-licenses-head p {
+  margin: 0;
+  color: var(--os-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.about-licenses-table {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--os-border);
+  border-radius: 12px;
+  background: var(--os-surface);
+  padding: 6px;
+  max-height: min(360px, 42vh);
+  overflow: auto;
+}
+
+.about-licenses-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) 72px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.about-licenses-row.is-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: color-mix(in oklch, var(--os-panel) 88%, var(--os-surface));
+  color: var(--os-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.about-licenses-row:not(.is-head):hover {
+  background: color-mix(in oklch, var(--os-panel) 70%, transparent);
+}
+
+.about-pkg-name {
+  overflow: hidden;
+  color: var(--os-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.about-pkg-ver {
+  color: var(--os-muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+.about-pkg-lic {
+  overflow: hidden;
+  color: var(--os-ink);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.about-licenses-note {
+  margin: 0;
+  color: var(--os-muted);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .launcher {

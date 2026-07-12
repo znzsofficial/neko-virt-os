@@ -240,21 +240,28 @@ export function stripWebGlOnlyMaterialShaders(root: THREE.Object3D) {
   });
 }
 
-export function applyMaterialOverrides(entry: MaterialPipelineEntry, envIntensity = 0) {
+export function applyMaterialOverrides(
+  entry: MaterialPipelineEntry,
+  envIntensity = 0,
+  ambientIntensity = 0.55,
+) {
   const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
   materials.forEach((material, index) => {
     if (!material) return;
     const name = entry.materialNames[index] ?? `Material ${index + 1}`;
-    const override = entry.materialOverrides[name];
-    if (!override) return;
+    const override = entry.materialOverrides[name] ?? DEFAULT_MATERIAL_OVERRIDE;
     // Skip WebGL-only enhance injection on WebGPU preview.
-    if (material.userData?.mmdWebGpuStripped) return;
+    if (material.userData?.mmdWebGpuStripped) {
+      // MeshStandard path: scene ambientLight already contributes.
+      return;
+    }
     attachMmdMaterialEnhance(material);
     syncMmdMaterialEnhance(material, {
       modelId: entry.id,
       materialName: name,
       override,
       envIntensity,
+      ambientIntensity,
     });
   });
 }

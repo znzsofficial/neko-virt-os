@@ -1,8 +1,10 @@
 import Dexie, { type EntityTable } from "dexie";
 import type {
   MmdCameraMode,
+  MmdExportAudioBitrate,
   MmdExportBitrate,
   MmdExportCodec,
+  MmdExportMode,
   MmdExportResolution,
   MmdLightSettings,
   MmdMaterialOverride,
@@ -30,11 +32,18 @@ export type MmdProjectSettings = {
   envIntensity: number;
   lights: MmdLightSettings;
   exportResolution: MmdExportResolution;
+  exportCustomWidth: number;
+  exportCustomHeight: number;
   exportFps: 24 | 30 | 60 | 120;
   exportCodec: MmdExportCodec;
   exportBitrate: MmdExportBitrate;
+  exportCustomVideoMbps?: number;
+  exportAudioBitrate: MmdExportAudioBitrate;
+  exportCustomAudioKbps?: number;
+  exportMode: MmdExportMode;
   exportIncludeAudio: boolean;
   exportHideGrid: boolean;
+  exportForceOneX: boolean;
   exportFilePrefix: string;
   exportIn: number;
   exportOut: number;
@@ -65,6 +74,7 @@ export type MmdProjectModelMeta = {
   companionAssetIds: string[];
   bodyMotionAssetId: string | null;
   faceMotionAssetId: string | null;
+  cameraMotionAssetId: string | null;
 };
 
 export type MmdProjectRecord = {
@@ -177,6 +187,7 @@ export type SaveMmdProjectInput = {
     companionFiles: File[];
     bodyMotionFile: File | null;
     faceMotionFile: File | null;
+    cameraMotionFile: File | null;
   }>;
   audioFile: File | null;
   audioName: string | null;
@@ -236,6 +247,18 @@ export async function saveMmdProject(input: SaveMmdProjectInput) {
         relativePath: fileRelativePath(model.faceMotionFile),
       });
     }
+    let cameraMotionAssetId: string | null = null;
+    if (model.cameraMotionFile) {
+      cameraMotionAssetId = assetId(projectId, `model-${index}-camera`);
+      assets.push({
+        id: cameraMotionAssetId,
+        projectId,
+        name: model.cameraMotionFile.name,
+        mime: model.cameraMotionFile.type || "application/octet-stream",
+        blob: model.cameraMotionFile,
+        relativePath: fileRelativePath(model.cameraMotionFile),
+      });
+    }
     models.push({
       id: model.id,
       name: model.name,
@@ -250,6 +273,7 @@ export async function saveMmdProject(input: SaveMmdProjectInput) {
       companionAssetIds,
       bodyMotionAssetId,
       faceMotionAssetId,
+      cameraMotionAssetId,
     });
   }
 
