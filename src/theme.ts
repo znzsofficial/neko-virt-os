@@ -81,6 +81,10 @@ export function applyThemeSettings(theme: ThemeSettings) {
   root.setAttribute("data-density", theme.density);
   root.setAttribute("data-theme-mode", theme.theme);
   root.setAttribute("data-theme", effectiveTheme);
+  // Drive native chrome (scrollbars, form controls) with the resolved theme.
+  root.style.colorScheme = effectiveTheme;
+  const colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
+  if (colorSchemeMeta) colorSchemeMeta.setAttribute("content", effectiveTheme);
   const wallpaper = WALLPAPERS[effectiveTheme === "dark" ? theme.wallpaperDarkId : theme.wallpaperLightId];
   root.style.setProperty("--os-wallpaper-image", wallpaper.url ? `url("${wallpaper.url}")` : "none");
   root.style.setProperty("--os-wallpaper-size", getWallpaperSize(theme.wallpaperFit));

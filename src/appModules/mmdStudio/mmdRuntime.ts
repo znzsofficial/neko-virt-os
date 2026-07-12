@@ -1,16 +1,42 @@
 import {
   applyMmdCameraStateToThreeCamera,
   createMmdTextureMapFromFiles,
+  syncMmdSpecularDirection,
   ThreeMmdLoader,
-  type MmdAnimation,
-  type ThreeMmdAnimation,
-  type ThreeMmdModel,
   type TextureMap,
 } from "@yohawing/three-mmd-loader";
 import type { MmdPhysicsBackend } from "@yohawing/three-mmd-loader/physics";
 import * as THREE from "three";
 import { createBulletPhysicsBackend } from "./mmdPhysics";
-import { getMmdAnimationDurationSeconds, mergeBodyFaceAnimations } from "./mmdUtils";
+import {
+  applyMaterialOverrides,
+  applyMaterialVisibility,
+  createDefaultMaterialOverrides,
+  mergeMaterialOverride,
+  refreshMaterialTextures,
+  stripWebGlOnlyMaterialShaders,
+  type MaterialOverride,
+} from "./mmdRuntimeMaterials";
+import {
+  applyModelTransform,
+  applyMorphOverrides,
+  cloneTransform,
+  DEFAULT_MODEL_TRANSFORM,
+  disposeModelObject,
+  enableModelShadows,
+  enforceModelCastOnlyShadows,
+  extractMaterialNames,
+  extractMorphNames,
+  recomputeEntryAnimation,
+  toSnapshot,
+  type MmdModelTransform,
+  type RuntimeEntry,
+  type RuntimeModelSnapshot,
+} from "./mmdRuntimeEntry";
+
+export type { MaterialOverride } from "./mmdRuntimeMaterials";
+export type { MmdModelTransform, RuntimeModelSnapshot } from "./mmdRuntimeEntry";
+export { cloneTransform, DEFAULT_MODEL_TRANSFORM };
 
 export type MmdLoadReport = {
   textureCount: number;
@@ -23,54 +49,27 @@ export type MmdLoadReport = {
 
 export type MmdMotionSlot = "body" | "face";
 
-export type RuntimeModelSnapshot = {
-  id: string;
-  name: string;
-  visible: boolean;
-  morphNames: string[];
-  materialNames: string[];
-  bodyMotionName: string | null;
-  faceMotionName: string | null;
-  morphWeights: Record<string, number>;
-  materialVisible: Record<string, boolean>;
-  hasCameraTrack: boolean;
-  duration: number;
-};
-
-type RuntimeEntry = {
-  id: string;
-  name: string;
-  model: ThreeMmdModel;
-  bodyAnimation: ThreeMmdAnimation | null;
-  faceAnimation: ThreeMmdAnimation | null;
-  appliedAnimation: ThreeMmdAnimation | null;
-  bodyMotionName: string | null;
-  faceMotionName: string | null;
-  bodyMotionFile: File | null;
-  faceMotionFile: File | null;
-  visible: boolean;
-  morphNames: string[];
-  materialNames: string[];
-  morphWeights: Record<string, number>;
-  materialVisible: Record<string, boolean>;
-  hasCameraTrack: boolean;
-  duration: number;
-  modelFile: File;
-  companionFiles: File[];
-  offsetX: number;
-};
-
 export type MmdProjectModelAssets = {
   id: string;
   name: string;
   visible: boolean;
   morphWeights: Record<string, number>;
+  morphFavorites: string[];
   materialVisible: Record<string, boolean>;
+  materialOverrides: Record<string, MaterialOverride>;
   modelFile: File;
   companionFiles: File[];
   bodyMotionFile: File | null;
   faceMotionFile: File | null;
-  offsetX: number;
+  transform: MmdModelTransform;
+};
+
+export type MmdAddModelOptions = {
+  physics?: boolean;
+  preferredId?: string;
+  transform?: Partial<MmdModelTransform>;
+  /** @deprecated use transform.positionX */
+  offsetX?: number;
 };
 
 export type MmdRuntimeHandle = {
@@ -80,13 +79,16 @@ export type MmdRuntimeHandle = {
   listModels: () => RuntimeModelSnapshot[];
   exportProjectModels: () => MmdProjectModelAssets[];
   clearAll: () => void;
-  addModel: (modelFile: File, companionFiles?: readonly File[], options?: { physics?: boolean; offsetX?: number; preferredId?: string }) => Promise<MmdLoadReport>;
+  addModel: (modelFile: File, companionFiles?: readonly File[], options?: MmdAddModelOptions) => Promise<MmdLoadReport>;
   removeModel: (id: string) => void;
   selectModel: (id: string | null) => void;
   setModelVisible: (id: string, visible: boolean) => void;
+  setModelTransform: (id: string, patch: Partial<MmdModelTransform>) => void;
   loadMotion: (file: File, slot?: MmdMotionSlot, modelId?: string | null) => Promise<void>;
   setMorphWeight: (modelId: string, morphName: string, weight: number) => void;
   setMaterialVisible: (modelId: string, materialName: string, visible: boolean) => void;
+  setMaterialOverride: (modelId: string, materialName: string, patch: Partial<MaterialOverride>) => void;
+  setLighting: (options: { envIntensity: number; directionalLight: THREE.DirectionalLight | null }) => void;
   setPhysicsEnabled: (enabled: boolean) => Promise<void>;
   update: (seconds: number, physics: boolean, camera: THREE.PerspectiveCamera, aspect: number, useMotionCamera: boolean) => void;
   dispose: () => void;
@@ -96,133 +98,52 @@ let nextModelSeq = 1;
 
 function buildTextureMap(modelFile: File, companionFiles: readonly File[] = []): TextureMap {
   const allFiles = companionFiles.length ? companionFiles : [modelFile];
-  return createMmdTextureMapFromFiles(allFiles, modelFile);
-}
-
-function wrapMergedAnimation(animation: MmdAnimation): ThreeMmdAnimation {
-  return {
-    source: animation.bytes,
-    name: "merged-body-face",
-    animation,
-  };
-}
-
-function extractMorphNames(model: ThreeMmdModel) {
-  const dict = model.mesh.morphTargetDictionary ?? {};
-  return Object.keys(dict).sort((a, b) => a.localeCompare(b, "zh"));
-}
-
-function extractMaterialNames(model: ThreeMmdModel) {
-  const materials = Array.isArray(model.mesh.material) ? model.mesh.material : [model.mesh.material];
-  const names = materials.map((material, index) => {
-    const named = material?.name?.trim();
-    return named || `Material ${index + 1}`;
-  });
-  return names;
-}
-
-function disposeModelObject(model: ThreeMmdModel) {
-  model.root.traverse((object) => {
-    const mesh = object as THREE.Mesh;
-    if (mesh.geometry) mesh.geometry.dispose();
-    const material = mesh.material;
-    if (Array.isArray(material)) material.forEach((item) => item.dispose());
-    else if (material) material.dispose();
-  });
-}
-
-function applyMaterialVisibility(entry: RuntimeEntry) {
-  const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
-  materials.forEach((material, index) => {
-    if (!material) return;
-    const name = entry.materialNames[index] ?? `Material ${index + 1}`;
-    const visible = entry.materialVisible[name] !== false;
-    material.visible = visible && entry.visible;
-  });
-
-  // Keep outline / render-order proxies in sync when possible.
-  for (const proxy of [...entry.model.outlineMeshes, ...entry.model.renderOrderMeshes]) {
-    const mats = Array.isArray(proxy.material) ? proxy.material : [proxy.material];
-    mats.forEach((material) => {
-      if (!material) return;
-      const name = material.name || entry.materialNames[0];
-      const visible = !name || entry.materialVisible[name] !== false;
-      material.visible = visible && entry.visible;
-    });
-    proxy.visible = entry.visible;
+  const baseMap = createMmdTextureMapFromFiles(allFiles, modelFile) as Record<string, File | string>;
+  // Index by basename so loads without webkitRelativePath (old project DB rows)
+  // still resolve nested PMX refs like "tex/foo.png" -> "foo.png".
+  const byBaseName = new Map<string, File>();
+  for (const file of allFiles) {
+    byBaseName.set(file.name.toLowerCase(), file);
   }
-  entry.model.root.visible = entry.visible;
-  entry.model.mesh.visible = entry.visible;
-}
-
-function applyMorphOverrides(entry: RuntimeEntry) {
-  const influences = entry.model.mesh.morphTargetInfluences;
-  const dict = entry.model.mesh.morphTargetDictionary;
-  if (!influences || !dict) return;
-  for (const [name, weight] of Object.entries(entry.morphWeights)) {
-    const index = dict[name];
-    if (index == null) continue;
-    // Manual override wins over VMD-sampled weight for that morph.
-    influences[index] = Math.min(1, Math.max(0, weight));
-  }
-  // Propagate to morph-split body meshes if present.
-  const bodies = (entry.model.mesh.userData as { mmdMorphSplitBodyMeshes?: THREE.SkinnedMesh[] }).mmdMorphSplitBodyMeshes;
-  if (!Array.isArray(bodies)) return;
-  for (const body of bodies) {
-    const target = body.morphTargetInfluences;
-    const map = body.userData?.mmdMorphSplit?.morphTargetIndices as Uint16Array | Uint32Array | undefined;
-    if (!target || !map) continue;
-    for (let i = 0; i < map.length; i += 1) {
-      const sourceIndex = map[i];
-      if (sourceIndex != null && sourceIndex < influences.length) target[i] = influences[sourceIndex] ?? 0;
+  for (const [key, value] of Object.entries(baseMap)) {
+    if (typeof value === "string" || !value) continue;
+    const base = key.split(/[/\\]/).pop();
+    if (base) {
+      baseMap[base] = value;
+      byBaseName.set(base.toLowerCase(), value);
     }
   }
+
+  return new Proxy(baseMap, {
+    get(target, prop, receiver) {
+      if (typeof prop !== "string") return Reflect.get(target, prop, receiver);
+      const direct = Reflect.get(target, prop, receiver);
+      if (direct !== undefined) return direct;
+      const normalized = prop.replaceAll("\\", "/").replace(/^\.\/+/, "");
+      const nested = Reflect.get(target, normalized, receiver);
+      if (nested !== undefined) return nested;
+      const base = normalized.split("/").pop();
+      if (!base) return undefined;
+      return Reflect.get(target, base, receiver) ?? byBaseName.get(base.toLowerCase());
+    },
+  }) as TextureMap;
 }
 
-function recomputeEntryAnimation(entry: RuntimeEntry) {
-  if (!entry.bodyAnimation && !entry.faceAnimation) {
-    entry.appliedAnimation = null;
-    entry.hasCameraTrack = false;
-    entry.duration = 0;
-    return;
-  }
-  if (entry.bodyAnimation && entry.faceAnimation) {
-    entry.appliedAnimation = wrapMergedAnimation(
-      mergeBodyFaceAnimations(entry.bodyAnimation.animation, entry.faceAnimation.animation),
-    );
-  } else {
-    entry.appliedAnimation = entry.bodyAnimation ?? entry.faceAnimation;
-  }
-  entry.hasCameraTrack = Boolean(entry.appliedAnimation?.animation.cameraFrames.length);
-  entry.duration = entry.appliedAnimation
-    ? getMmdAnimationDurationSeconds(entry.appliedAnimation.animation)
-    : 0;
-  if (entry.appliedAnimation) entry.model.setAnimation(entry.appliedAnimation);
-}
+export type MmdRuntimeOptions = {
+  /** When true, strip WebGL-only MMD shaders and use MeshStandard for scene lights. */
+  webGpu?: boolean;
+};
 
-function toSnapshot(entry: RuntimeEntry): RuntimeModelSnapshot {
-  return {
-    id: entry.id,
-    name: entry.name,
-    visible: entry.visible,
-    morphNames: entry.morphNames,
-    materialNames: entry.materialNames,
-    bodyMotionName: entry.bodyMotionName,
-    faceMotionName: entry.faceMotionName,
-    morphWeights: { ...entry.morphWeights },
-    materialVisible: { ...entry.materialVisible },
-    hasCameraTrack: entry.hasCameraTrack,
-    duration: entry.duration,
-  };
-}
-
-export function createMmdRuntimeHandle(scene: THREE.Scene): MmdRuntimeHandle {
+export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOptions = {}): MmdRuntimeHandle {
   const entries = new Map<string, RuntimeEntry>();
   let selectedId: string | null = null;
   let physicsBackend: MmdPhysicsBackend | null = null;
   let physicsWanted = false;
   let duration = 0;
   let hasCameraTrack = false;
+  let envIntensity = 0;
+  let directionalLight: THREE.DirectionalLight | null = null;
+  const webGpuMode = Boolean(options.webGpu);
 
   function recomputeGlobal() {
     duration = 0;
@@ -248,7 +169,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene): MmdRuntimeHandle {
     const entry = entries.get(id);
     if (!entry) return;
     scene.remove(entry.model.root);
-    disposeModelObject(entry.model);
+    disposeModelObject(entry);
     entries.delete(id);
     if (selectedId === id) {
       selectedId = entries.keys().next().value ?? null;
@@ -260,7 +181,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene): MmdRuntimeHandle {
     modelFile: File,
     companionFiles: readonly File[],
     withPhysics: boolean,
-    offsetX: number,
+    transform: MmdModelTransform,
     preferredId?: string,
   ) {
     const textureMap = buildTextureMap(modelFile, companionFiles);
@@ -276,7 +197,12 @@ export function createMmdRuntimeHandle(scene: THREE.Scene): MmdRuntimeHandle {
       runtime: runtimeOptions,
     });
     const model = await loader.loadModel(modelFile);
-    model.root.position.x = offsetX;
+    if (webGpuMode) {
+      // Replace MMD MeshToon+onBeforeCompile with MeshStandard so scene lights work.
+      stripWebGlOnlyMaterialShaders(model.root);
+    }
+    enableModelShadows(model);
+    enforceModelCastOnlyShadows(model.root);
     scene.add(model.root);
 
     const morphNames = extractMorphNames(model);
@@ -312,15 +238,20 @@ export function createMmdRuntimeHandle(scene: THREE.Scene): MmdRuntimeHandle {
       morphNames,
       materialNames,
       morphWeights: {},
+      morphFavorites: [],
       materialVisible,
+      materialOverrides: createDefaultMaterialOverrides(materialNames),
+      transform: cloneTransform(transform),
       hasCameraTrack: false,
       duration: 0,
       modelFile,
       companionFiles: companionFiles.length ? [...companionFiles] : [modelFile],
-      offsetX,
     };
     entries.set(id, entry);
+    applyModelTransform(entry);
     applyMaterialVisibility(entry);
+    applyMaterialOverrides(entry, envIntensity);
+    refreshMaterialTextures(entry);
 
     return {
       entry,
@@ -347,16 +278,17 @@ export function createMmdRuntimeHandle(scene: THREE.Scene): MmdRuntimeHandle {
       visible: entry.visible,
       morphWeights: { ...entry.morphWeights },
       materialVisible: { ...entry.materialVisible },
+      materialOverrides: { ...entry.materialOverrides },
       modelFile: entry.modelFile,
       companionFiles: entry.companionFiles,
-      offsetX: entry.offsetX,
+      transform: cloneTransform(entry.transform),
     }));
     const previousSelected = selectedId;
     for (const id of [...entries.keys()]) removeEntry(id);
     if (!withPhysics) disposePhysicsBackend();
     else await ensurePhysicsBackend();
     for (const snap of snapshots) {
-      const { entry } = await createEntry(snap.modelFile, snap.companionFiles, withPhysics, snap.offsetX, snap.id);
+      const { entry } = await createEntry(snap.modelFile, snap.companionFiles, withPhysics, snap.transform, snap.id);
       entry.bodyAnimation = snap.bodyAnimation;
       entry.faceAnimation = snap.faceAnimation;
       entry.bodyMotionName = snap.bodyMotionName;
@@ -366,8 +298,11 @@ export function createMmdRuntimeHandle(scene: THREE.Scene): MmdRuntimeHandle {
       entry.visible = snap.visible;
       entry.morphWeights = snap.morphWeights;
       entry.materialVisible = { ...entry.materialVisible, ...snap.materialVisible };
+      entry.materialOverrides = { ...entry.materialOverrides, ...snap.materialOverrides };
       recomputeEntryAnimation(entry);
       applyMaterialVisibility(entry);
+      applyMaterialOverrides(entry, envIntensity);
+      refreshMaterialTextures(entry);
     }
     selectedId = previousSelected && entries.has(previousSelected)
       ? previousSelected
@@ -394,12 +329,14 @@ export function createMmdRuntimeHandle(scene: THREE.Scene): MmdRuntimeHandle {
         name: entry.name,
         visible: entry.visible,
         morphWeights: { ...entry.morphWeights },
+        morphFavorites: [...entry.morphFavorites],
         materialVisible: { ...entry.materialVisible },
+        materialOverrides: { ...entry.materialOverrides },
         modelFile: entry.modelFile,
         companionFiles: [...entry.companionFiles],
         bodyMotionFile: entry.bodyMotionFile,
         faceMotionFile: entry.faceMotionFile,
-        offsetX: entry.offsetX,
+        transform: cloneTransform(entry.transform),
       }));
     },
     clearAll() {
@@ -411,12 +348,17 @@ export function createMmdRuntimeHandle(scene: THREE.Scene): MmdRuntimeHandle {
     async addModel(modelFile, companionFiles = [], options = {}) {
       physicsWanted = Boolean(options.physics ?? physicsWanted);
       if (!physicsWanted) disposePhysicsBackend();
-      const offsetX = options.offsetX ?? entries.size * 1.35;
+      const base: MmdModelTransform = {
+        ...DEFAULT_MODEL_TRANSFORM,
+        positionX: options.offsetX ?? entries.size * 1.35,
+        ...options.transform,
+      };
+      const transform = cloneTransform(base);
       const { entry, report } = await createEntry(
         modelFile,
         companionFiles.length ? companionFiles : [modelFile],
         physicsWanted,
-        offsetX,
+        transform,
         options.preferredId,
       );
       selectedId = entry.id;
@@ -435,6 +377,33 @@ export function createMmdRuntimeHandle(scene: THREE.Scene): MmdRuntimeHandle {
       if (!entry) return;
       entry.visible = visible;
       applyMaterialVisibility(entry);
+      applyMaterialOverrides(entry, envIntensity);
+      refreshMaterialTextures(entry);
+    },
+    setModelTransform(id, patch) {
+      const entry = entries.get(id);
+      if (!entry) return;
+      entry.transform = {
+        ...entry.transform,
+        ...patch,
+      };
+      applyModelTransform(entry);
+    },
+    setMaterialOverride(modelId, materialName, patch) {
+      const entry = entries.get(modelId);
+      if (!entry) return;
+      entry.materialOverrides[materialName] = mergeMaterialOverride(entry.materialOverrides[materialName], patch);
+      applyMaterialOverrides(entry, envIntensity);
+      refreshMaterialTextures(entry);
+    },
+    setLighting(options) {
+      envIntensity = Math.max(0, options.envIntensity);
+      directionalLight = options.directionalLight;
+      for (const entry of entries.values()) {
+        const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
+        if (directionalLight) syncMmdSpecularDirection(materials, directionalLight);
+        applyMaterialOverrides(entry, envIntensity);
+      }
     },
     async loadMotion(file, slot = "body", modelId = selectedId) {
       const id = modelId ?? selectedId;
@@ -488,7 +457,14 @@ export function createMmdRuntimeHandle(scene: THREE.Scene): MmdRuntimeHandle {
       for (const entry of entries.values()) {
         if (!entry.visible) continue;
         entry.model.update(seconds, { physics: physics && physicsWanted, ik: true });
+        // Keep user transform after animation/physics sampling.
+        applyModelTransform(entry);
         applyMorphOverrides(entry);
+        const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
+        if (directionalLight) syncMmdSpecularDirection(materials, directionalLight);
+        applyMaterialOverrides(entry, envIntensity);
+        // Material hooks may re-enable receive/self-shadow; keep ground-only receive.
+        enforceModelCastOnlyShadows(entry.model.root);
         if (useMotionCamera && !cameraApplied && entry.hasCameraTrack) {
           const cameraState = entry.model.runtime.cameraState();
           if (cameraState) {

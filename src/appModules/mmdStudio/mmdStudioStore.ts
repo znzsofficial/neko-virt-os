@@ -9,14 +9,52 @@ export type MmdExportBitrate = "low" | "medium" | "high" | "ultra";
 export type MmdSmaaQuality = "low" | "medium" | "high" | "ultra";
 export type MmdMsaaSamples = 0 | 2 | 4 | 8;
 export type MmdLutLook = "none" | "warm" | "cool" | "film";
+/** Contact/both were removed with ContactShadows; legacy values sanitize to map. */
+export type MmdShadowMode = "off" | "map";
+export type MmdShadowMapSize = 512 | 1024 | 2048 | 4096;
+export type MmdShadowQuality = "performance" | "balanced" | "quality" | "ultra" | "custom";
 
 export type MmdLightSettings = {
   ambientIntensity: number;
   sunIntensity: number;
   sunAzimuth: number;
   sunElevation: number;
+  /** distance of directional light from origin */
+  sunDistance: number;
   sunCastShadow: boolean;
+  shadowMode: MmdShadowMode;
+  shadowQuality: MmdShadowQuality;
+  shadowMapSize: MmdShadowMapSize;
+  shadowBias: number;
+  shadowNormalBias: number;
+  shadowRadius: number;
+  shadowCameraSize: number;
+  /** opacity of the ground plane that receives map shadows */
+  groundShadowOpacity: number;
 };
+
+export type MmdModelTransform = {
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  /** degrees */
+  rotationX: number;
+  /** degrees */
+  rotationY: number;
+  /** degrees */
+  rotationZ: number;
+  scale: number;
+};
+
+export const DEFAULT_MODEL_TRANSFORM: MmdModelTransform = Object.freeze({
+  positionX: 0,
+  positionY: 0,
+  positionZ: 0,
+  rotationX: 0,
+  rotationY: 0,
+  rotationZ: 0,
+  scale: 1,
+});
 
 export type MmdSceneModel = {
   id: string;
@@ -27,8 +65,44 @@ export type MmdSceneModel = {
   bodyMotionName: string | null;
   faceMotionName: string | null;
   morphWeights: Record<string, number>;
+  morphFavorites: string[];
   materialVisible: Record<string, boolean>;
+  materialOverrides: Record<string, MmdMaterialOverride>;
+  transform: MmdModelTransform;
 };
+
+export type MmdMaterialSpecularMode = "mmd" | "mmd+env" | "env";
+export type MmdMaterialLightingModel = "toon" | "pbr";
+
+export type MmdMaterialOverride = {
+  opacity: number;
+  metallic: number;
+  roughness: number;
+  occlusion: number;
+  emission: number;
+  emissionColor: string;
+  envInfluence: number;
+  specularMode: MmdMaterialSpecularMode;
+  lightingModel: MmdMaterialLightingModel;
+  aoMapFile: File | null;
+  emissionMapFile: File | null;
+  maskMapFile: File | null;
+};
+
+export const DEFAULT_MATERIAL_OVERRIDE: MmdMaterialOverride = Object.freeze({
+  opacity: 1,
+  metallic: 0,
+  roughness: 0.55,
+  occlusion: 1,
+  emission: 0,
+  emissionColor: "#ffffff",
+  envInfluence: 0,
+  specularMode: "mmd",
+  lightingModel: "toon",
+  aoMapFile: null,
+  emissionMapFile: null,
+  maskMapFile: null,
+});
 
 export type MmdPostFxTune = {
   bloom: number;
@@ -210,6 +284,7 @@ type MmdStudioStore = {
   loop: boolean;
   speed: number;
   cameraMoveSpeed: number;
+  cameraRotateSpeed: number;
   playing: boolean;
   currentTime: number;
   duration: number;
@@ -239,6 +314,7 @@ type MmdStudioStore = {
   exportOut: number;
   projectName: string;
   lastProjectId: string | null;
+  morphSearch: string;
   setBackend: (backend: MmdRendererBackend) => void;
   setPostFx: (postFx: MmdPostFxPreset) => void;
   setPostFxTune: (partial: Partial<MmdPostFxTune>) => void;
@@ -249,12 +325,15 @@ type MmdStudioStore = {
   setLoop: (loop: boolean) => void;
   setSpeed: (speed: number) => void;
   setCameraMoveSpeed: (speed: number) => void;
+  setCameraRotateSpeed: (speed: number) => void;
   setPlaying: (playing: boolean) => void;
   setCurrentTime: (time: number) => void;
   setDuration: (duration: number) => void;
   setModels: (models: MmdSceneModel[], selectedModelId?: string | null) => void;
   setSelectedModelId: (id: string | null) => void;
   patchModel: (id: string, patch: Partial<MmdSceneModel>) => void;
+  setMorphFavorites: (id: string, favorites: string[]) => void;
+  setMorphSearch: (value: string) => void;
   setAudioName: (name: string | null) => void;
   setSkyHdr: (file: File | null) => void;
   setSkyAsBackground: (enabled: boolean) => void;
@@ -262,6 +341,7 @@ type MmdStudioStore = {
   setEnvIntensity: (value: number) => void;
   setShowGrid: (show: boolean) => void;
   setLights: (partial: Partial<MmdLightSettings>) => void;
+  applyShadowQuality: (quality: Exclude<MmdShadowQuality, "custom">) => void;
   resetLights: () => void;
   setStatus: (status: MmdStudioStore["status"], message?: string) => void;
   setWebgpuAvailable: (available: boolean) => void;
@@ -297,8 +377,64 @@ export const DEFAULT_LIGHTS: MmdLightSettings = Object.freeze({
   sunIntensity: 1.15,
   sunAzimuth: 35,
   sunElevation: 48,
+  sunDistance: 42,
   sunCastShadow: true,
+  shadowMode: "map",
+  shadowQuality: "balanced",
+  shadowMapSize: 2048,
+  shadowBias: -0.00025,
+  shadowNormalBias: 0.028,
+  shadowRadius: 2.8,
+  shadowCameraSize: 32,
+  groundShadowOpacity: 0.45,
 });
+
+/** One-click shadow quality packs (map shadows only). */
+export const SHADOW_QUALITY_PRESETS: Record<
+  Exclude<MmdShadowQuality, "custom">,
+  Partial<MmdLightSettings>
+> = {
+  performance: {
+    shadowQuality: "performance",
+    shadowMode: "map",
+    shadowMapSize: 512,
+    shadowBias: -0.0002,
+    shadowNormalBias: 0.03,
+    shadowRadius: 1,
+    shadowCameraSize: 24,
+    groundShadowOpacity: 0.35,
+  },
+  balanced: {
+    shadowQuality: "balanced",
+    shadowMode: "map",
+    shadowMapSize: 2048,
+    shadowBias: -0.00025,
+    shadowNormalBias: 0.028,
+    shadowRadius: 2.8,
+    shadowCameraSize: 32,
+    groundShadowOpacity: 0.45,
+  },
+  quality: {
+    shadowQuality: "quality",
+    shadowMode: "map",
+    shadowMapSize: 2048,
+    shadowBias: -0.0003,
+    shadowNormalBias: 0.022,
+    shadowRadius: 3.5,
+    shadowCameraSize: 36,
+    groundShadowOpacity: 0.5,
+  },
+  ultra: {
+    shadowQuality: "ultra",
+    shadowMode: "map",
+    shadowMapSize: 4096,
+    shadowBias: -0.00035,
+    shadowNormalBias: 0.018,
+    shadowRadius: 4,
+    shadowCameraSize: 40,
+    groundShadowOpacity: 0.52,
+  },
+};
 
 type ExportSettingsPersist = {
   resolution?: MmdExportResolution;
@@ -395,18 +531,55 @@ function loadPostFxTune(): MmdPostFxTune {
   }
 }
 
+function sanitizeShadowMode(value: unknown): MmdShadowMode {
+  if (value === "off") return "off";
+  // Legacy contact/both → map (ContactShadows removed).
+  if (value === "map" || value === "contact" || value === "both") return "map";
+  return DEFAULT_LIGHTS.shadowMode;
+}
+
+function sanitizeShadowMapSize(value: unknown): MmdShadowMapSize {
+  if (value === 512 || value === 1024 || value === 2048 || value === 4096) return value;
+  return DEFAULT_LIGHTS.shadowMapSize;
+}
+
+function sanitizeShadowQuality(value: unknown): MmdShadowQuality {
+  if (value === "performance" || value === "balanced" || value === "quality" || value === "ultra" || value === "custom") {
+    return value;
+  }
+  return DEFAULT_LIGHTS.shadowQuality;
+}
+
+export function sanitizeLights(partial: Partial<MmdLightSettings> | null | undefined): MmdLightSettings {
+  const parsed = partial ?? {};
+  const shadowMode = parsed.shadowMode
+    ? sanitizeShadowMode(parsed.shadowMode)
+    : parsed.sunCastShadow === false
+      ? "off"
+      : DEFAULT_LIGHTS.shadowMode;
+  return {
+    ambientIntensity: clampNum(parsed.ambientIntensity, 0, 3, DEFAULT_LIGHTS.ambientIntensity),
+    sunIntensity: clampNum(parsed.sunIntensity, 0, 5, DEFAULT_LIGHTS.sunIntensity),
+    sunAzimuth: clampNum(parsed.sunAzimuth, -180, 180, DEFAULT_LIGHTS.sunAzimuth),
+    sunElevation: clampNum(parsed.sunElevation, 5, 89, DEFAULT_LIGHTS.sunElevation),
+    sunDistance: clampNum(parsed.sunDistance, 8, 120, DEFAULT_LIGHTS.sunDistance),
+    sunCastShadow: shadowMode === "map",
+    shadowMode,
+    shadowQuality: sanitizeShadowQuality(parsed.shadowQuality),
+    shadowMapSize: sanitizeShadowMapSize(parsed.shadowMapSize),
+    shadowBias: clampNum(parsed.shadowBias, -0.01, 0.01, DEFAULT_LIGHTS.shadowBias),
+    shadowNormalBias: clampNum(parsed.shadowNormalBias, 0, 0.2, DEFAULT_LIGHTS.shadowNormalBias),
+    shadowRadius: clampNum(parsed.shadowRadius, 0, 12, DEFAULT_LIGHTS.shadowRadius),
+    shadowCameraSize: clampNum(parsed.shadowCameraSize, 8, 80, DEFAULT_LIGHTS.shadowCameraSize),
+    groundShadowOpacity: clampNum(parsed.groundShadowOpacity, 0, 1, DEFAULT_LIGHTS.groundShadowOpacity),
+  };
+}
+
 function loadLights(): MmdLightSettings {
   try {
     const raw = localStorage.getItem(LIGHTS_KEY);
     if (!raw) return { ...DEFAULT_LIGHTS };
-    const parsed = JSON.parse(raw) as Partial<MmdLightSettings>;
-    return {
-      ambientIntensity: clampNum(parsed.ambientIntensity, 0, 3, DEFAULT_LIGHTS.ambientIntensity),
-      sunIntensity: clampNum(parsed.sunIntensity, 0, 5, DEFAULT_LIGHTS.sunIntensity),
-      sunAzimuth: clampNum(parsed.sunAzimuth, -180, 180, DEFAULT_LIGHTS.sunAzimuth),
-      sunElevation: clampNum(parsed.sunElevation, 5, 89, DEFAULT_LIGHTS.sunElevation),
-      sunCastShadow: parsed.sunCastShadow !== false,
-    };
+    return sanitizeLights(JSON.parse(raw) as Partial<MmdLightSettings>);
   } catch {
     return { ...DEFAULT_LIGHTS };
   }
@@ -452,7 +625,8 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
   physicsReady: false,
   loop: true,
   speed: 1,
-  cameraMoveSpeed: 8,
+  cameraMoveSpeed: 20,
+  cameraRotateSpeed: 1,
   playing: false,
   currentTime: 0,
   duration: 0,
@@ -482,6 +656,7 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
   exportOut: 0,
   projectName: "Untitled Project",
   lastProjectId: null,
+  morphSearch: "",
 
   setBackend: (backend) => {
     if (get().backend === backend) return;
@@ -542,6 +717,7 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
   setLoop: (loop) => set({ loop }),
   setSpeed: (speed) => set({ speed }),
   setCameraMoveSpeed: (cameraMoveSpeed) => set({ cameraMoveSpeed: Math.min(40, Math.max(1, cameraMoveSpeed)) }),
+  setCameraRotateSpeed: (cameraRotateSpeed) => set({ cameraRotateSpeed: Math.min(4, Math.max(0.1, cameraRotateSpeed)) }),
   setPlaying: (playing) => set({ playing }),
   setCurrentTime: (currentTime) => {
     if (get().currentTime === currentTime) return;
@@ -569,6 +745,12 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
       models: get().models.map((item) => (item.id === id ? { ...item, ...patch } : item)),
     });
   },
+  setMorphFavorites: (id, favorites) => {
+    set({
+      models: get().models.map((item) => (item.id === id ? { ...item, morphFavorites: [...favorites] } : item)),
+    });
+  },
+  setMorphSearch: (value) => set({ morphSearch: value }),
   setAudioName: (audioName) => set({ audioName }),
   setSkyHdr: (file) => {
     const prev = get().skyHdrUrl;
@@ -597,15 +779,35 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
   setEnvIntensity: (envIntensity) => set({ envIntensity: Math.min(3, Math.max(0, envIntensity)) }),
   setShowGrid: (showGrid) => set({ showGrid }),
   setLights: (partial) => {
-    const lights: MmdLightSettings = {
-      ...get().lights,
+    const prev = get().lights;
+    let shadowMode = partial.shadowMode !== undefined ? sanitizeShadowMode(partial.shadowMode) : prev.shadowMode;
+    if (partial.sunCastShadow !== undefined && partial.shadowMode === undefined) {
+      shadowMode = partial.sunCastShadow ? "map" : "off";
+    }
+    const shadowDetailKeys = [
+      "shadowMode",
+      "shadowMapSize",
+      "shadowBias",
+      "shadowNormalBias",
+      "shadowRadius",
+      "shadowCameraSize",
+      "groundShadowOpacity",
+    ] as const;
+    const manualShadowEdit = shadowDetailKeys.some((key) => partial[key] !== undefined)
+      && partial.shadowQuality === undefined;
+    const lights = sanitizeLights({
+      ...prev,
       ...partial,
-      ambientIntensity: clampNum(partial.ambientIntensity ?? get().lights.ambientIntensity, 0, 3, DEFAULT_LIGHTS.ambientIntensity),
-      sunIntensity: clampNum(partial.sunIntensity ?? get().lights.sunIntensity, 0, 5, DEFAULT_LIGHTS.sunIntensity),
-      sunAzimuth: clampNum(partial.sunAzimuth ?? get().lights.sunAzimuth, -180, 180, DEFAULT_LIGHTS.sunAzimuth),
-      sunElevation: clampNum(partial.sunElevation ?? get().lights.sunElevation, 5, 89, DEFAULT_LIGHTS.sunElevation),
-      sunCastShadow: partial.sunCastShadow ?? get().lights.sunCastShadow,
-    };
+      shadowMode,
+      sunCastShadow: shadowMode === "map",
+      shadowQuality: manualShadowEdit ? "custom" : (partial.shadowQuality ?? prev.shadowQuality),
+    });
+    persistLights(lights);
+    set({ lights });
+  },
+  applyShadowQuality: (quality: Exclude<MmdShadowQuality, "custom">) => {
+    const pack = SHADOW_QUALITY_PRESETS[quality];
+    const lights = sanitizeLights({ ...get().lights, ...pack, shadowQuality: quality });
     persistLights(lights);
     set({ lights });
   },
@@ -708,11 +910,11 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
 });
 
 
-export function formatMmdTime(seconds: number) {
+export function formatMmdTime(seconds: number, fps = 30) {
   const safe = Math.max(0, seconds);
   const m = Math.floor(safe / 60);
   const s = Math.floor(safe % 60);
-  const f = Math.floor((safe % 1) * 30);
+  const f = Math.floor((safe % 1) * fps);
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(f).padStart(2, "0")}`;
 }
 

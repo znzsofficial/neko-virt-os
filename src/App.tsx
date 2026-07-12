@@ -1021,24 +1021,30 @@ function SystemWindow({ window }: { window: WindowState }) {
     return restored;
   }
 
-  if (window.minimized) return null;
-
   return (
     <Rnd
       key={window.id}
       bounds="parent"
-      className={clsx("system-window", isActive && "is-active", window.maximized && "is-maximized", isMinimizing && "is-minimizing")}
+      className={clsx(
+        "system-window",
+        isActive && "is-active",
+        window.maximized && "is-maximized",
+        isMinimizing && "is-minimizing",
+        window.minimized && "is-minimized-kept",
+      )}
       data-app-id={window.appId}
       position={{ x: liveBounds.x, y: liveBounds.y }}
       size={{ width: liveBounds.width, height: liveBounds.height }}
-      disableDragging={false}
+      disableDragging={window.minimized}
       dragHandleClassName="window-titlebar"
       cancel=".window-content, .window-actions, .window-actions *, input, textarea, button, select, option, a, iframe, label"
-      enableResizing={!window.maximized}
+      enableResizing={!window.maximized && !window.minimized}
       minWidth={380}
       minHeight={250}
-      style={{ zIndex: window.z }}
-      onMouseDown={() => focusWindow(window.id)}
+      style={{ zIndex: window.minimized ? 0 : window.z }}
+      onMouseDown={() => {
+        if (!window.minimized) focusWindow(window.id);
+      }}
       onDragStart={() => {}}
       onDrag={(_, data) => setLiveBounds((current) => ({ ...current, x: data.x, y: data.y }))}
       onDragStop={(_, data) => {
@@ -1077,7 +1083,12 @@ function SystemWindow({ window }: { window: WindowState }) {
         updateWindow(window.id, snapped);
       }}
     >
-      <article className="window-frame" data-context-kind="window" data-context-id={window.id}>
+      <article
+        className="window-frame"
+        data-context-kind="window"
+        data-context-id={window.id}
+        aria-hidden={window.minimized || undefined}
+      >
         <header
           className="window-titlebar"
           onMouseDown={(event) => {

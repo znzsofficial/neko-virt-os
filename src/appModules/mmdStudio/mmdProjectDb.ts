@@ -4,18 +4,14 @@ import type {
   MmdExportBitrate,
   MmdExportCodec,
   MmdExportResolution,
+  MmdLightSettings,
+  MmdMaterialOverride,
   MmdPostFxPreset,
   MmdPostFxTune,
   MmdRendererBackend,
 } from "./mmdStudioStore";
 
-export type MmdLightSettings = {
-  ambientIntensity: number;
-  sunIntensity: number;
-  sunAzimuth: number;
-  sunElevation: number;
-  sunCastShadow: boolean;
-};
+export type { MmdLightSettings };
 
 export type MmdProjectSettings = {
   backend: MmdRendererBackend;
@@ -26,6 +22,7 @@ export type MmdProjectSettings = {
   loop: boolean;
   speed: number;
   cameraMoveSpeed: number;
+  cameraRotateSpeed: number;
   currentTime: number;
   showGrid: boolean;
   skyAsBackground: boolean;
@@ -43,13 +40,27 @@ export type MmdProjectSettings = {
   exportOut: number;
 };
 
+export type MmdProjectModelTransform = {
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  rotationX: number;
+  rotationY: number;
+  rotationZ: number;
+  scale: number;
+};
+
 export type MmdProjectModelMeta = {
   id: string;
   name: string;
   visible: boolean;
   morphWeights: Record<string, number>;
+  morphFavorites: string[];
   materialVisible: Record<string, boolean>;
+  materialOverrides: Record<string, MmdMaterialOverride>;
+  /** legacy single-axis offset; prefer transform */
   offsetX: number;
+  transform?: MmdProjectModelTransform;
   modelAssetId: string;
   companionAssetIds: string[];
   bodyMotionAssetId: string | null;
@@ -75,7 +86,31 @@ export type MmdProjectAsset = {
   name: string;
   mime: string;
   blob: Blob;
+  /** Folder-relative path used by MMD texture resolve (webkitRelativePath). */
+  relativePath?: string;
 };
+
+function fileRelativePath(file: File) {
+  const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+  const value = (relative && relative.trim()) || file.name;
+  return value.replaceAll("\\", "/").replace(/^\.\/+/, "");
+}
+
+export function fileWithRelativePath(blob: Blob, name: string, mime: string, relativePath?: string | null) {
+  const file = new File([blob], name, { type: mime || "application/octet-stream" });
+  const path = (relativePath && relativePath.trim()) || name;
+  const normalized = path.replaceAll("\\", "/").replace(/^\.\/+/, "");
+  try {
+    Object.defineProperty(file, "webkitRelativePath", {
+      value: normalized,
+      writable: false,
+      configurable: true,
+    });
+  } catch {
+    // ignore non-configurable environments
+  }
+  return file;
+}
 
 const db = new Dexie("NekoVirtOSMmdStudio") as Dexie & {
   projects: EntityTable<MmdProjectRecord, "id">;
@@ -116,7 +151,12 @@ export async function deleteMmdProject(id: string) {
 export async function loadMmdProjectAsset(assetId: string): Promise<File | null> {
   const row = await db.assets.get(assetId);
   if (!row) return null;
-  return new File([row.blob], row.name, { type: row.mime || row.blob.type || "application/octet-stream" });
+  return fileWithRelativePath(
+    row.blob,
+    row.name,
+    row.mime || row.blob.type || "application/octet-stream",
+    row.relativePath ?? row.name,
+  );
 }
 
 export type SaveMmdProjectInput = {
@@ -129,8 +169,10 @@ export type SaveMmdProjectInput = {
     name: string;
     visible: boolean;
     morphWeights: Record<string, number>;
+    morphFavorites?: string[];
     materialVisible: Record<string, boolean>;
-    offsetX: number;
+    materialOverrides: Record<string, MmdMaterialOverride>;
+    transform: MmdProjectModelTransform;
     modelFile: File;
     companionFiles: File[];
     bodyMotionFile: File | null;
@@ -155,6 +197,7 @@ export async function saveMmdProject(input: SaveMmdProjectInput) {
       name: model.modelFile.name,
       mime: model.modelFile.type || "application/octet-stream",
       blob: model.modelFile,
+      relativePath: fileRelativePath(model.modelFile),
     });
     const companionAssetIds: string[] = [];
     for (const [cIndex, file] of model.companionFiles.entries()) {
@@ -166,6 +209,7 @@ export async function saveMmdProject(input: SaveMmdProjectInput) {
         name: file.name,
         mime: file.type || "application/octet-stream",
         blob: file,
+        relativePath: fileRelativePath(file),
       });
     }
     let bodyMotionAssetId: string | null = null;
@@ -177,6 +221,7 @@ export async function saveMmdProject(input: SaveMmdProjectInput) {
         name: model.bodyMotionFile.name,
         mime: model.bodyMotionFile.type || "application/octet-stream",
         blob: model.bodyMotionFile,
+        relativePath: fileRelativePath(model.bodyMotionFile),
       });
     }
     let faceMotionAssetId: string | null = null;
@@ -188,6 +233,7 @@ export async function saveMmdProject(input: SaveMmdProjectInput) {
         name: model.faceMotionFile.name,
         mime: model.faceMotionFile.type || "application/octet-stream",
         blob: model.faceMotionFile,
+        relativePath: fileRelativePath(model.faceMotionFile),
       });
     }
     models.push({
@@ -195,8 +241,11 @@ export async function saveMmdProject(input: SaveMmdProjectInput) {
       name: model.name,
       visible: model.visible,
       morphWeights: model.morphWeights,
+      morphFavorites: model.morphFavorites ?? [],
       materialVisible: model.materialVisible,
-      offsetX: model.offsetX,
+      materialOverrides: model.materialOverrides,
+      offsetX: model.transform.positionX,
+      transform: { ...model.transform },
       modelAssetId: modelAsset,
       companionAssetIds,
       bodyMotionAssetId,
@@ -213,6 +262,7 @@ export async function saveMmdProject(input: SaveMmdProjectInput) {
       name: input.audioFile.name,
       mime: input.audioFile.type || "audio/*",
       blob: input.audioFile,
+      relativePath: fileRelativePath(input.audioFile),
     });
   }
 
@@ -225,6 +275,7 @@ export async function saveMmdProject(input: SaveMmdProjectInput) {
       name: input.hdrFile.name,
       mime: input.hdrFile.type || "application/octet-stream",
       blob: input.hdrFile,
+      relativePath: fileRelativePath(input.hdrFile),
     });
   }
 
@@ -250,7 +301,7 @@ export async function saveMmdProject(input: SaveMmdProjectInput) {
   return record;
 }
 
-export function sunPositionFromAngles(azimuthDeg: number, elevationDeg: number, distance = 12): [number, number, number] {
+export function sunPositionFromAngles(azimuthDeg: number, elevationDeg: number, distance = 42): [number, number, number] {
   const az = (azimuthDeg * Math.PI) / 180;
   const el = (elevationDeg * Math.PI) / 180;
   const x = distance * Math.cos(el) * Math.sin(az);
