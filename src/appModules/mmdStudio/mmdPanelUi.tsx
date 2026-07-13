@@ -238,6 +238,32 @@ export function PanelSection({
   );
 }
 
+/** Lightweight collapsible block for nesting inside PanelSection (no second panel chrome). */
+export function NestedPanel({
+  title,
+  children,
+  defaultOpen = false,
+}: {
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={`mmd-nested-panel${open ? " is-open" : ""}`}>
+      <button
+        type="button"
+        className="mmd-nested-panel-summary"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {title}
+      </button>
+      {open ? <div className="mmd-nested-panel-body">{children}</div> : null}
+    </div>
+  );
+}
+
 export function AssetRow({
   label,
   value,
@@ -361,6 +387,83 @@ export function morphGroupLabel(group: string, t: ReturnType<typeof useLanguageS
   }
 }
 
+const MAT_PRESETS = [
+  {
+    id: "toon" as const,
+    labelKey: "mmdMatPresetToon" as const,
+    hintKey: "mmdMatPresetToonHint" as const,
+    patch: {
+      lightingModel: "toon" as const,
+      specularMode: "mmd" as const,
+      envInfluence: 0,
+      metallic: 0,
+      roughness: 0.55,
+    },
+  },
+  {
+    id: "hybrid" as const,
+    labelKey: "mmdMatPresetHybrid" as const,
+    hintKey: "mmdMatPresetHybridHint" as const,
+    patch: {
+      lightingModel: "pbr" as const,
+      specularMode: "mmd+env" as const,
+      envInfluence: 1,
+      metallic: 0.05,
+      roughness: 0.45,
+    },
+  },
+  {
+    id: "metal" as const,
+    labelKey: "mmdMatPresetMetal" as const,
+    hintKey: "mmdMatPresetMetalHint" as const,
+    patch: {
+      lightingModel: "pbr" as const,
+      specularMode: "env" as const,
+      envInfluence: 1.4,
+      metallic: 0.85,
+      roughness: 0.22,
+    },
+  },
+  {
+    id: "gloss" as const,
+    labelKey: "mmdMatPresetGloss" as const,
+    hintKey: "mmdMatPresetGlossHint" as const,
+    patch: {
+      lightingModel: "pbr" as const,
+      specularMode: "mmd+env" as const,
+      envInfluence: 1.1,
+      metallic: 0.02,
+      roughness: 0.12,
+    },
+  },
+];
+
+function matchMatPreset(value: MmdMaterialOverride): (typeof MAT_PRESETS)[number]["id"] | "custom" {
+  for (const preset of MAT_PRESETS) {
+    const p = preset.patch;
+    if (
+      value.lightingModel === p.lightingModel
+      && value.specularMode === p.specularMode
+      && Math.abs(value.envInfluence - p.envInfluence) < 0.06
+      && Math.abs(value.metallic - p.metallic) < 0.06
+      && Math.abs(value.roughness - p.roughness) < 0.06
+    ) {
+      return preset.id;
+    }
+  }
+  return "custom";
+}
+
+function matPresetSummaryLabel(
+  presetId: ReturnType<typeof matchMatPreset>,
+  t: ReturnType<typeof useLanguageStore.getState>["t"],
+) {
+  if (presetId === "custom") return t("mmdMatPresetCustom");
+  const hit = MAT_PRESETS.find((item) => item.id === presetId);
+  return hit ? t(hit.labelKey) : t("mmdMatPresetCustom");
+}
+
+/** Presets first; advanced (maps / lighting model) collapsed. */
 export function MaterialOverrideEditor({
   name,
   value,
@@ -372,81 +475,141 @@ export function MaterialOverrideEditor({
   onChange: (patch: Partial<MmdMaterialOverride>) => void;
 }) {
   const t = useLanguageStore((state) => state.t);
+  const activePreset = matchMatPreset(value);
+  const showReflectSliders = value.specularMode !== "mmd";
+
   return (
     <details className="mmd-material-card">
       <summary>
         <span title={name}>{name}</span>
-        <span className="mmd-mono">{value.opacity.toFixed(2)}</span>
+        <span className="mmd-mono mmd-mat-summary-meta">
+          {matPresetSummaryLabel(activePreset, t)}
+          <span className="mmd-mat-summary-sep">·</span>
+          {value.opacity.toFixed(2)}
+        </span>
       </summary>
       <div className="mmd-fx-grid">
+        <div className="mmd-preset-chips" role="group" aria-label={t("mmdMatPresets")}>
+          {MAT_PRESETS.map((preset) => {
+            const active = activePreset === preset.id;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                className={active ? "mmd-chip is-active" : "mmd-chip"}
+                title={t(preset.hintKey)}
+                aria-pressed={active}
+                onClick={() => onChange(preset.patch)}
+              >
+                {t(preset.labelKey)}
+              </button>
+            );
+          })}
+          {activePreset === "custom" ? (
+            <span className="mmd-chip is-muted" aria-current="true">
+              {t("mmdMatPresetCustom")}
+            </span>
+          ) : null}
+        </div>
         <SliderField label={t("mmdMatOpacity")} value={value.opacity} min={0} max={1} step={0.01} display={value.opacity.toFixed(2)} onChange={(opacity) => onChange({ opacity })} />
-        <SliderField label={t("mmdMatEmission")} value={value.emission} min={0} max={5} step={0.01} display={value.emission.toFixed(2)} onChange={(emission) => onChange({ emission })} />
-        <SliderField label={t("mmdMatEnv")} value={value.envInfluence} min={0} max={3} step={0.01} display={value.envInfluence.toFixed(2)} onChange={(envInfluence) => onChange({ envInfluence })} />
-        <SliderField label={t("mmdMatOcclusion")} value={value.occlusion} min={0} max={1} step={0.01} display={value.occlusion.toFixed(2)} onChange={(occlusion) => onChange({ occlusion })} />
-        <SliderField label={t("mmdMatMetallic")} value={value.metallic} min={0} max={1} step={0.01} display={value.metallic.toFixed(2)} onChange={(metallic) => onChange({ metallic })} />
-        <SliderField label={t("mmdMatRoughness")} value={value.roughness} min={0} max={1} step={0.01} display={value.roughness.toFixed(2)} onChange={(roughness) => onChange({ roughness })} />
-        <label className="mmd-field">
-          <span>{t("mmdMatLightingModel")}</span>
-          <MmdSelect
-            value={value.lightingModel}
-            ariaLabel={t("mmdMatLightingModel")}
-            onChange={(next) => onChange({ lightingModel: next as MmdMaterialOverride["lightingModel"] })}
-            options={[
-              { value: "toon", label: t("mmdMatLightingToon") },
-              { value: "pbr", label: t("mmdMatLightingPbr") },
-            ]}
-          />
-        </label>
-        <label className="mmd-field">
-          <span>{t("mmdMatSpecularMode")}</span>
-          <MmdSelect
-            value={value.specularMode}
-            ariaLabel={t("mmdMatSpecularMode")}
-            onChange={(next) => onChange({ specularMode: next as MmdMaterialOverride["specularMode"] })}
-            options={[
-              { value: "mmd", label: t("mmdMatSpecularMmd") },
-              { value: "mmd+env", label: t("mmdMatSpecularHybrid") },
-              { value: "env", label: t("mmdMatSpecularEnv") },
-            ]}
-          />
-        </label>
-        <label className="mmd-field">
-          <span>{t("mmdMatEmissionColor")}</span>
-          <input type="color" className="mmd-color-input" value={value.emissionColor} onChange={(event) => onChange({ emissionColor: event.target.value })} />
-        </label>
-        <label className="mmd-field">
-          <span>{t("mmdMatAoMap")}</span>
-          <div className="mmd-file-row">
-            <input type="file" accept="image/*" onChange={(event) => onChange({ aoMapFile: event.target.files?.[0] ?? null })} />
-            <button type="button" className="button-ghost mmd-mini-btn" onClick={() => onChange({ aoMapFile: null })}>
-              {t("mmdClear")}
+        {showReflectSliders ? (
+          <>
+            <SliderField label={t("mmdMatRoughness")} value={value.roughness} min={0} max={1} step={0.01} display={value.roughness.toFixed(2)} onChange={(roughness) => onChange({ roughness })} />
+            <SliderField label={t("mmdMatMetallic")} value={value.metallic} min={0} max={1} step={0.01} display={value.metallic.toFixed(2)} onChange={(metallic) => onChange({ metallic })} />
+            <SliderField label={t("mmdMatEnv")} value={value.envInfluence} min={0} max={3} step={0.01} display={value.envInfluence.toFixed(2)} onChange={(envInfluence) => onChange({ envInfluence })} />
+          </>
+        ) : null}
+        <details className="mmd-nested-advanced">
+          <summary>{t("mmdMatAdvanced")}</summary>
+          <div className="mmd-fx-grid">
+            <label className="mmd-field">
+              <span>{t("mmdMatLightingModel")}</span>
+              <MmdSelect
+                value={value.lightingModel}
+                ariaLabel={t("mmdMatLightingModel")}
+                onChange={(next) => {
+                  const lightingModel = next as MmdMaterialOverride["lightingModel"];
+                  // Keep combinations coherent when switching models.
+                  if (lightingModel === "toon" && value.specularMode === "env") {
+                    onChange({ lightingModel, specularMode: "mmd+env", envInfluence: Math.max(value.envInfluence, 1) });
+                  } else if (lightingModel === "pbr" && value.specularMode === "mmd") {
+                    onChange({ lightingModel, specularMode: "mmd+env", envInfluence: Math.max(value.envInfluence, 0.8) });
+                  } else {
+                    onChange({ lightingModel });
+                  }
+                }}
+                options={[
+                  { value: "toon", label: t("mmdMatLightingToon") },
+                  { value: "pbr", label: t("mmdMatLightingPbr") },
+                ]}
+              />
+            </label>
+            <label className="mmd-field">
+              <span>{t("mmdMatSpecularMode")}</span>
+              <MmdSelect
+                value={value.specularMode}
+                ariaLabel={t("mmdMatSpecularMode")}
+                onChange={(next) => {
+                  const mode = next as MmdMaterialOverride["specularMode"];
+                  if (mode === "mmd") {
+                    onChange({ specularMode: "mmd", lightingModel: "toon" });
+                    return;
+                  }
+                  const envInfluence = value.envInfluence < 0.05 ? 1 : value.envInfluence;
+                  if (mode === "env") {
+                    onChange({ specularMode: "env", lightingModel: "pbr", envInfluence });
+                    return;
+                  }
+                  onChange({ specularMode: "mmd+env", envInfluence });
+                }}
+                options={[
+                  { value: "mmd", label: t("mmdMatSpecularMmd") },
+                  { value: "mmd+env", label: t("mmdMatSpecularHybrid") },
+                  { value: "env", label: t("mmdMatSpecularEnv") },
+                ]}
+              />
+            </label>
+            <SliderField label={t("mmdMatEmission")} value={value.emission} min={0} max={5} step={0.01} display={value.emission.toFixed(2)} onChange={(emission) => onChange({ emission })} />
+            <SliderField label={t("mmdMatOcclusion")} value={value.occlusion} min={0} max={1} step={0.01} display={value.occlusion.toFixed(2)} onChange={(occlusion) => onChange({ occlusion })} />
+            <label className="mmd-field">
+              <span>{t("mmdMatEmissionColor")}</span>
+              <input type="color" className="mmd-color-input" value={value.emissionColor} onChange={(event) => onChange({ emissionColor: event.target.value })} />
+            </label>
+            <label className="mmd-field">
+              <span>{t("mmdMatAoMap")}</span>
+              <div className="mmd-file-row">
+                <input type="file" accept="image/*" onChange={(event) => onChange({ aoMapFile: event.target.files?.[0] ?? null })} />
+                <button type="button" className="button-ghost mmd-mini-btn" onClick={() => onChange({ aoMapFile: null })}>
+                  {t("mmdClear")}
+                </button>
+              </div>
+              <small className="mmd-note">{value.aoMapFile?.name ?? "—"}</small>
+            </label>
+            <label className="mmd-field">
+              <span>{t("mmdMatEmissionMap")}</span>
+              <div className="mmd-file-row">
+                <input type="file" accept="image/*" onChange={(event) => onChange({ emissionMapFile: event.target.files?.[0] ?? null })} />
+                <button type="button" className="button-ghost mmd-mini-btn" onClick={() => onChange({ emissionMapFile: null })}>
+                  {t("mmdClear")}
+                </button>
+              </div>
+              <small className="mmd-note">{value.emissionMapFile?.name ?? "—"}</small>
+            </label>
+            <label className="mmd-field">
+              <span>{t("mmdMatMaskMap")}</span>
+              <div className="mmd-file-row">
+                <input type="file" accept="image/*" onChange={(event) => onChange({ maskMapFile: event.target.files?.[0] ?? null })} />
+                <button type="button" className="button-ghost mmd-mini-btn" onClick={() => onChange({ maskMapFile: null })}>
+                  {t("mmdClear")}
+                </button>
+              </div>
+              <small className="mmd-note">{value.maskMapFile?.name ?? "—"}</small>
+            </label>
+            <button type="button" className="button-ghost mmd-mini-btn" onClick={() => onChange({ ...DEFAULT_MATERIAL_OVERRIDE })}>
+              {t("mmdMatReset")}
             </button>
           </div>
-          <small className="mmd-note">{value.aoMapFile?.name ?? "—"}</small>
-        </label>
-        <label className="mmd-field">
-          <span>{t("mmdMatEmissionMap")}</span>
-          <div className="mmd-file-row">
-            <input type="file" accept="image/*" onChange={(event) => onChange({ emissionMapFile: event.target.files?.[0] ?? null })} />
-            <button type="button" className="button-ghost mmd-mini-btn" onClick={() => onChange({ emissionMapFile: null })}>
-              {t("mmdClear")}
-            </button>
-          </div>
-          <small className="mmd-note">{value.emissionMapFile?.name ?? "—"}</small>
-        </label>
-        <label className="mmd-field">
-          <span>{t("mmdMatMaskMap")}</span>
-          <div className="mmd-file-row">
-            <input type="file" accept="image/*" onChange={(event) => onChange({ maskMapFile: event.target.files?.[0] ?? null })} />
-            <button type="button" className="button-ghost mmd-mini-btn" onClick={() => onChange({ maskMapFile: null })}>
-              {t("mmdClear")}
-            </button>
-          </div>
-          <small className="mmd-note">{value.maskMapFile?.name ?? "—"}</small>
-        </label>
-        <button type="button" className="button-ghost mmd-mini-btn" onClick={() => onChange({ ...DEFAULT_MATERIAL_OVERRIDE })}>
-          {t("mmdMatReset")}
-        </button>
+        </details>
       </div>
     </details>
   );

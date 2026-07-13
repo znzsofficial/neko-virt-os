@@ -240,11 +240,27 @@ export function stripWebGlOnlyMaterialShaders(root: THREE.Object3D) {
   });
 }
 
+export type MaterialLightingContext = {
+  envIntensity?: number;
+  ambientIntensity?: number;
+  envMap?: THREE.Texture | null;
+  lightDirection?: THREE.Vector3 | null;
+  lightIntensity?: number;
+  lightColor?: THREE.Color | null;
+};
+
 export function applyMaterialOverrides(
   entry: MaterialPipelineEntry,
-  envIntensity = 0,
+  envIntensityOrCtx: number | MaterialLightingContext = 0,
   ambientIntensity = 0.55,
 ) {
+  const ctx: MaterialLightingContext =
+    typeof envIntensityOrCtx === "number"
+      ? { envIntensity: envIntensityOrCtx, ambientIntensity }
+      : { ambientIntensity: 0.55, ...envIntensityOrCtx };
+  const envIntensity = ctx.envIntensity ?? 0;
+  const ambient = ctx.ambientIntensity ?? ambientIntensity;
+
   const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
   materials.forEach((material, index) => {
     if (!material) return;
@@ -252,7 +268,15 @@ export function applyMaterialOverrides(
     const override = entry.materialOverrides[name] ?? DEFAULT_MATERIAL_OVERRIDE;
     // Skip WebGL-only enhance injection on WebGPU preview.
     if (material.userData?.mmdWebGpuStripped) {
-      // MeshStandard path: scene ambientLight already contributes.
+      // MeshStandard uses scene.environment (equirect) — do not assign CubeUV PMREM to envMap.
+      const std = material as THREE.MeshStandardMaterial;
+      if ("roughness" in std) {
+        std.roughness = override.roughness;
+        std.metalness = override.metallic;
+        std.envMapIntensity = Math.max(0, override.envInfluence) * envIntensity;
+        if (std.envMap) std.envMap = null;
+        std.needsUpdate = true;
+      }
       return;
     }
     attachMmdMaterialEnhance(material);
@@ -261,7 +285,11 @@ export function applyMaterialOverrides(
       materialName: name,
       override,
       envIntensity,
-      ambientIntensity,
+      ambientIntensity: ambient,
+      envMap: ctx.envMap ?? null,
+      lightDirection: ctx.lightDirection ?? null,
+      lightIntensity: ctx.lightIntensity,
+      lightColor: ctx.lightColor ?? null,
     });
   });
 }

@@ -148,6 +148,8 @@ export type MmdPostFxTune = {
   dofLockModel: boolean;
   grain: number;
   ssao: number;
+  /** Screen-space reflections intensity (0 = off). Cost scales with resolution. */
+  ssr: number;
   outline: number;
   lut: MmdLutLook;
   /** MME-like volumetric god rays from the sun. */
@@ -170,6 +172,7 @@ const ADVANCED_ZERO = {
   dofLockModel: false,
   grain: 0,
   ssao: 0,
+  ssr: 0,
   outline: 0,
   lut: "none" as const,
   godRays: 0,
@@ -248,6 +251,7 @@ export const PRESET_TUNES: Record<Exclude<MmdPostFxPreset, "off" | "custom">, Mm
     dofLockModel: false,
     grain: 0.08,
     ssao: 0.15,
+    ssr: 0,
     outline: 0,
     lut: "none",
     godRays: 0.12,
@@ -276,6 +280,7 @@ export const PRESET_TUNES: Record<Exclude<MmdPostFxPreset, "off" | "custom">, Mm
     dofLockModel: true,
     grain: 0.22,
     ssao: 0.35,
+    ssr: 0.28,
     outline: 0,
     lut: "film",
     godRays: 0.35,
@@ -304,6 +309,7 @@ export const PRESET_TUNES: Record<Exclude<MmdPostFxPreset, "off" | "custom">, Mm
     dofLockModel: true,
     grain: 0.1,
     ssao: 0.12,
+    ssr: 0.18,
     outline: 0,
     lut: "warm",
     godRays: 0.55,
@@ -332,6 +338,7 @@ export const PRESET_TUNES: Record<Exclude<MmdPostFxPreset, "off" | "custom">, Mm
     dofLockModel: false,
     grain: 0.42,
     ssao: 0.4,
+    ssr: 0.22,
     outline: 0,
     lut: "film",
     godRays: 0.22,
@@ -360,6 +367,7 @@ export const PRESET_TUNES: Record<Exclude<MmdPostFxPreset, "off" | "custom">, Mm
     dofLockModel: false,
     grain: 0,
     ssao: 0.2,
+    ssr: 0,
     outline: 0.55,
     lut: "cool",
     godRays: 0.18,
@@ -827,6 +835,7 @@ function loadPostFxTune(): MmdPostFxTune {
       sparkleIntensity: clampTuneNum(base.sparkleIntensity, 0, 2, DEFAULT_POSTFX_TUNE.sparkleIntensity),
       lensDistortion: clampTuneNum(base.lensDistortion, 0, 1, DEFAULT_POSTFX_TUNE.lensDistortion),
       tiltShift: clampTuneNum(base.tiltShift, 0, 1, DEFAULT_POSTFX_TUNE.tiltShift),
+      ssr: clampTuneNum(base.ssr, 0, 1, DEFAULT_POSTFX_TUNE.ssr),
     };
   } catch {
     return { ...DEFAULT_POSTFX_TUNE };

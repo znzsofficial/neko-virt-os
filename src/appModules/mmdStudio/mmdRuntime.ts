@@ -95,6 +95,8 @@ export type MmdRuntimeHandle = {
     envIntensity: number;
     ambientIntensity?: number;
     directionalLight: THREE.DirectionalLight | null;
+    /** PMREM CubeUV from sky (WebGL toon IBL). */
+    envMap?: THREE.Texture | null;
   }) => void;
   setPhysicsEnabled: (enabled: boolean) => Promise<void>;
   /** Re-seed soft-body pose from current animation (fix floating / stuck cloth). */
@@ -177,7 +179,38 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
   let envIntensity = 0;
   let ambientIntensity = 0.55;
   let directionalLight: THREE.DirectionalLight | null = null;
+  let envMap: THREE.Texture | null = null;
+  const lightDirWorld = new THREE.Vector3(0.35, 0.9, 0.25);
+  const lightColor = new THREE.Color(1, 1, 1);
+  let lightIntensity = 1;
   const webGpuMode = Boolean(options.webGpu);
+
+  function lightingContext() {
+    // Shared vectors — consumers copy into uniforms immediately.
+    return {
+      envIntensity,
+      ambientIntensity,
+      envMap,
+      lightDirection: lightDirWorld,
+      lightIntensity,
+      lightColor,
+    };
+  }
+
+  function refreshDirectionalLightState() {
+    if (!directionalLight || !directionalLight.visible) {
+      lightIntensity = 0;
+      lightColor.setRGB(1, 1, 1);
+      lightDirWorld.set(0.35, 0.9, 0.25).normalize();
+      return;
+    }
+    // Zero sun intensity must kill GGX (no ghost specular).
+    lightIntensity = Math.max(0, directionalLight.intensity);
+    lightColor.copy(directionalLight.color);
+    // Surface → light (directional light at pos targeting origin).
+    lightDirWorld.copy(directionalLight.position).normalize();
+    if (lightDirWorld.lengthSq() < 1e-6) lightDirWorld.set(0.35, 0.9, 0.25).normalize();
+  }
 
   function recomputeGlobal() {
     duration = 0;
@@ -292,7 +325,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
     entries.set(id, entry);
     syncEntryWorldMatrix(entry);
     applyMaterialVisibility(entry);
-    applyMaterialOverrides(entry, envIntensity, ambientIntensity);
+    applyMaterialOverrides(entry, lightingContext());
     refreshMaterialTextures(entry);
 
     return {
@@ -348,7 +381,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       entry.materialOverrides = { ...entry.materialOverrides, ...snap.materialOverrides };
       recomputeEntryAnimation(entry);
       applyMaterialVisibility(entry);
-      applyMaterialOverrides(entry, envIntensity, ambientIntensity);
+      applyMaterialOverrides(entry, lightingContext());
       refreshMaterialTextures(entry);
     }
     selectedId = previousSelected && entries.has(previousSelected)
@@ -428,7 +461,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       if (!entry) return;
       entry.visible = visible;
       applyMaterialVisibility(entry);
-      applyMaterialOverrides(entry, envIntensity, ambientIntensity);
+      applyMaterialOverrides(entry, lightingContext());
       refreshMaterialTextures(entry);
     },
     setModelTransform(id, patch) {
@@ -444,17 +477,19 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       const entry = entries.get(modelId);
       if (!entry) return;
       entry.materialOverrides[materialName] = mergeMaterialOverride(entry.materialOverrides[materialName], patch);
-      applyMaterialOverrides(entry, envIntensity, ambientIntensity);
+      applyMaterialOverrides(entry, lightingContext());
       refreshMaterialTextures(entry);
     },
     setLighting(options) {
       envIntensity = Math.max(0, options.envIntensity);
       if (options.ambientIntensity != null) ambientIntensity = Math.max(0, options.ambientIntensity);
       directionalLight = options.directionalLight;
+      if (options.envMap !== undefined) envMap = options.envMap;
+      refreshDirectionalLightState();
       for (const entry of entries.values()) {
         const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
         if (directionalLight) syncMmdSpecularDirection(materials, directionalLight);
-        applyMaterialOverrides(entry, envIntensity, ambientIntensity);
+        applyMaterialOverrides(entry, lightingContext());
       }
     },
     async loadMotion(file, slot = "body", modelId = selectedId) {
@@ -578,7 +613,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
         if (physicsOn) syncEntryWorldMatrix(entry, false);
         const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
         if (directionalLight) syncMmdSpecularDirection(materials, directionalLight);
-        applyMaterialOverrides(entry, envIntensity, ambientIntensity);
+        applyMaterialOverrides(entry, lightingContext());
         // Material hooks may re-enable receive/self-shadow; keep ground-only receive.
         enforceModelCastOnlyShadows(entry.model.root);
         if (useMotionCamera && !cameraApplied && entry.hasCameraTrack) {

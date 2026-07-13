@@ -37,6 +37,7 @@ import {
   type MmdPostFxTune,
   type MmdSmaaQuality,
 } from "./mmdStudioStore";
+import { MmdSsrEffect, ssrIntensityForExport, ssrQualityFromPixels } from "./mmdSsrEffect";
 
 OverrideMaterialManager.workaroundEnabled = true;
 
@@ -123,6 +124,8 @@ function structuralFxKey(tune: MmdPostFxTune, preset: MmdPostFxPreset, msaa: num
     tune.toneMapping ? 1 : 0,
     tune.lut,
     tune.ssao > 0.001 ? 1 : 0,
+    // SSR rebuild only on/off (amount is hot-updated)
+    tune.ssr > 0.001 ? 1 : 0,
     tune.outline > 0.001 ? 1 : 0,
     tune.dof > 0.001 ? 1 : 0,
     tune.bloom > 0.001 ? 1 : 0,
@@ -430,6 +433,11 @@ export function MmdPostFx({ preset }: { preset: MmdPostFxPreset }) {
   const grainRef = useRef<NoiseEffect | null>(null);
   const lensRef = useRef<LensDistortionEffect | null>(null);
   const tiltRef = useRef<TiltShiftEffect | null>(null);
+  const ssrRef = useRef<MmdSsrEffect | null>(null);
+  const pixelsRef = useRef(composerQuality.pixels);
+  pixelsRef.current = composerQuality.pixels;
+  const exportingRef = useRef(exporting);
+  exportingRef.current = exporting;
   const sunMeshRef = useRef<THREE.Mesh | null>(null);
   const sparklesRef = useRef<THREE.Points | null>(null);
   const bloomSelectionKeyRef = useRef("");
@@ -460,6 +468,7 @@ export function MmdPostFx({ preset }: { preset: MmdPostFxPreset }) {
     grainRef.current = null;
     lensRef.current = null;
     tiltRef.current = null;
+    ssrRef.current = null;
     if (sunMeshRef.current) {
       scene.remove(sunMeshRef.current);
       sunMeshRef.current.geometry.dispose();
@@ -481,6 +490,19 @@ export function MmdPostFx({ preset }: { preset: MmdPostFxPreset }) {
     const disposableTextures: THREE.Texture[] = [];
     const grade: ConstructorParameters<typeof EffectPass>[1][] = [];
     let normalPass: NormalPass | null = null;
+    // SSR is CONVOLUTION — must be its own EffectPass (before grade).
+    let ssrPass: EffectPass | null = null;
+
+    if (t.ssr > 0.001) {
+      const ssr = new MmdSsrEffect({
+        intensity: ssrIntensityForExport(t.ssr, false),
+        maxDistance: 20 + t.ssr * 16,
+        thickness: 0.42 + t.ssr * 0.32,
+        roughnessFade: 0.55,
+      });
+      ssrRef.current = ssr;
+      ssrPass = new EffectPass(camera, ssr);
+    }
 
     if (t.ssao > 0.001) {
       normalPass = new NormalPass(scene, camera);
@@ -677,6 +699,8 @@ export function MmdPostFx({ preset }: { preset: MmdPostFxPreset }) {
       grade.push(noise);
     }
 
+    // Order: RenderPass → [SSR] → grade (SSAO/bloom/…) → SMAA
+    if (ssrPass) composer.addPass(ssrPass);
     if (grade.length) composer.addPass(new EffectPass(camera, ...grade));
     composer.addPass(new EffectPass(camera, new SMAAEffect({ preset: smaaFromQuality(t.smaa) })));
 
@@ -693,6 +717,7 @@ export function MmdPostFx({ preset }: { preset: MmdPostFxPreset }) {
       grainRef.current = null;
       lensRef.current = null;
       tiltRef.current = null;
+      ssrRef.current = null;
       if (sunMeshRef.current) {
         scene.remove(sunMeshRef.current);
         sunMeshRef.current.geometry.dispose();
@@ -719,6 +744,21 @@ export function MmdPostFx({ preset }: { preset: MmdPostFxPreset }) {
 
     if (sunMeshRef.current) {
       sunMeshRef.current.position.set(sun[0], sun[1], sun[2]);
+    }
+
+    const ssr = ssrRef.current;
+    if (ssr && t.ssr > 0.001) {
+      const exportMode = exportingRef.current;
+      ssr.intensity = ssrIntensityForExport(t.ssr, exportMode);
+      ssr.maxDistance = 20 + t.ssr * 16;
+      ssr.thickness = 0.42 + t.ssr * 0.32;
+      const q = ssrQualityFromPixels(pixelsRef.current, t.ssr, { exportMode });
+      // Prefer drawing-buffer size (composer / export may differ from CSS size)
+      const glr = state.gl as THREE.WebGLRenderer;
+      const db = glr.getDrawingBufferSize(sizeScratch);
+      const dw = Math.max(1, Math.round(db.x));
+      const dh = Math.max(1, Math.round(db.y));
+      ssr.syncCamera(state.camera, dw, dh, q);
     }
 
     const bloom = bloomRef.current;

@@ -1070,6 +1070,104 @@ body.mmd-resizing-transport * {
   overflow-x: hidden;
 }
 
+.mmd-preset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mmd-chip {
+  appearance: none;
+  border: 1px solid color-mix(in oklch, var(--os-border) 88%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--os-surface) 92%, transparent);
+  color: var(--os-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.mmd-chip:hover {
+  color: var(--os-ink);
+  border-color: color-mix(in oklch, var(--os-accent) 35%, var(--os-border));
+}
+
+.mmd-chip.is-active {
+  color: var(--os-ink);
+  border-color: color-mix(in oklch, var(--os-accent) 55%, var(--os-border));
+  background: color-mix(in oklch, var(--os-accent) 16%, var(--os-surface));
+}
+
+.mmd-chip.is-muted {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.mmd-nested-advanced,
+.mmd-nested-panel {
+  border-top: 1px solid color-mix(in oklch, var(--os-border) 70%, transparent);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+
+.mmd-nested-advanced > summary,
+.mmd-nested-panel-summary {
+  cursor: pointer;
+  color: var(--os-muted);
+  font-size: 11px;
+  font-weight: 600;
+  list-style: none;
+  user-select: none;
+}
+
+button.mmd-nested-panel-summary {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+}
+
+.mmd-nested-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mmd-nested-advanced[open] > summary,
+.mmd-nested-panel.is-open > .mmd-nested-panel-summary {
+  margin-bottom: 8px;
+  color: var(--os-ink);
+}
+
+.mmd-nested-panel-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mmd-light-look-seg.mmd-preset-chips {
+  margin-bottom: 2px;
+}
+
+.mmd-mat-summary-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 58%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mmd-mat-summary-sep {
+  opacity: 0.45;
+}
+
 .mmd-panel-body,
 .mmd-field {
   min-width: 0;

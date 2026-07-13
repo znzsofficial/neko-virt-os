@@ -14,7 +14,7 @@ import {
 } from "./mmdRuntime";
 import { hydrateMmdModels, projectAssetsToHydrateInput } from "./mmdSceneHydrate";
 import { MmdPostFx } from "./MmdPostFx";
-import { MmdSky } from "./MmdSky";
+import { getActivePmremEnvMap, MmdSky, subscribePmremEnvMap } from "./MmdSky";
 import { useMmdStudioStore, type MmdPostFxPreset, type MmdRendererBackend, type MmdSceneModel } from "./mmdStudioStore";
 import { sunPositionFromAngles } from "./mmdProjectDb";
 
@@ -947,6 +947,7 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
       envIntensity: skyAsEnvironment && skyMode === "hdr" ? envIntensity : 0,
       ambientIntensity: lights.ambientIntensity,
       directionalLight: light,
+      envMap: skyAsEnvironment && skyMode === "hdr" ? getActivePmremEnvMap() : null,
     });
   }, [
     envIntensity,
@@ -968,6 +969,19 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
     sunEnabled,
     sunPos,
   ]);
+
+  // PMREM is async after sky load — push into material enhance when ready.
+  useEffect(() => {
+    return subscribePmremEnvMap((envMap) => {
+      const light = dirLightRef.current;
+      runtime.setLighting({
+        envIntensity: skyAsEnvironment && skyMode === "hdr" ? envIntensity : 0,
+        ambientIntensity: lights.ambientIntensity,
+        directionalLight: light,
+        envMap: skyAsEnvironment && skyMode === "hdr" ? envMap : null,
+      });
+    });
+  }, [envIntensity, lights.ambientIntensity, runtime, skyAsEnvironment, skyMode]);
 
   return (
     <>

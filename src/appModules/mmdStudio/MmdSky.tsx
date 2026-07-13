@@ -3,10 +3,32 @@ import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
+import { disposePmremEnvMap, getPmremEnvMap } from "./mmdEnvMap";
 import { detectSkyFormat, type MmdSkyFormat } from "./mmdSkyFormats";
 import { useMmdStudioStore } from "./mmdStudioStore";
 
 const SOLID_BG = new THREE.Color("#0e1118");
+
+/** Latest PMREM CubeUV for toon IBL (read by MmdCanvas lighting sync). */
+let activePmremEnvMap: THREE.Texture | null = null;
+const pmremListeners = new Set<(map: THREE.Texture | null) => void>();
+
+export function getActivePmremEnvMap() {
+  return activePmremEnvMap;
+}
+
+export function subscribePmremEnvMap(listener: (map: THREE.Texture | null) => void) {
+  pmremListeners.add(listener);
+  listener(activePmremEnvMap);
+  return () => {
+    pmremListeners.delete(listener);
+  };
+}
+
+function publishPmrem(map: THREE.Texture | null) {
+  activePmremEnvMap = map;
+  for (const listener of pmremListeners) listener(map);
+}
 
 function formatFromUrl(url: string, nameHint: string | null): MmdSkyFormat {
   // blob: URLs have no extension — use stored file name.
@@ -31,6 +53,7 @@ function prepareEquirect(texture: THREE.Texture, format: MmdSkyFormat) {
  * - .hdr (RGBE)
  * - .exr
  * - LDR panoramas .png / .jpg / .webp / .avif
+ * Also builds PMREM CubeUV for MeshToon IBL (mmdMaterialEnhance).
  */
 export function MmdSky() {
   const { scene, gl } = useThree();
@@ -41,11 +64,15 @@ export function MmdSky() {
   const skyAsEnvironment = useMmdStudioStore((state) => state.skyAsEnvironment);
   const envIntensity = useMmdStudioStore((state) => state.envIntensity);
   const textureRef = useRef<THREE.Texture | null>(null);
+  // Intensity-only changes must not reload HDR / rebuild PMREM.
+  const envIntensityRef = useRef(envIntensity);
+  envIntensityRef.current = envIntensity;
 
   useEffect(() => {
     let cancelled = false;
     const previousBackground = scene.background;
     const previousEnvironment = scene.environment;
+    const renderer = gl as THREE.WebGLRenderer;
 
     function clearSkyTexture() {
       if (textureRef.current) {
@@ -60,6 +87,8 @@ export function MmdSky() {
       if ("environmentIntensity" in scene) {
         (scene as THREE.Scene & { environmentIntensity?: number }).environmentIntensity = 1;
       }
+      disposePmremEnvMap(renderer);
+      publishPmrem(null);
     }
 
     function applyTexture(texture: THREE.Texture, format: MmdSkyFormat) {
@@ -73,10 +102,17 @@ export function MmdSky() {
       scene.background = skyAsBackground ? texture : SOLID_BG;
       scene.environment = skyAsEnvironment ? texture : null;
       if ("environmentIntensity" in scene) {
-        (scene as THREE.Scene & { environmentIntensity?: number }).environmentIntensity = envIntensity;
+        (scene as THREE.Scene & { environmentIntensity?: number }).environmentIntensity = envIntensityRef.current;
       }
       if ("outputColorSpace" in gl) {
         gl.outputColorSpace = THREE.SRGBColorSpace;
+      }
+      if (skyAsEnvironment) {
+        const pmrem = getPmremEnvMap(renderer, texture);
+        publishPmrem(pmrem);
+      } else {
+        disposePmremEnvMap(renderer);
+        publishPmrem(null);
       }
     }
 
@@ -114,10 +150,12 @@ export function MmdSky() {
     return () => {
       cancelled = true;
       clearSkyTexture();
+      disposePmremEnvMap(renderer);
+      publishPmrem(null);
       scene.background = previousBackground instanceof THREE.Color ? previousBackground : SOLID_BG;
       scene.environment = previousEnvironment instanceof THREE.Texture ? null : previousEnvironment;
     };
-  }, [envIntensity, gl, scene, skyAsBackground, skyAsEnvironment, skyHdrName, skyHdrUrl, skyMode]);
+  }, [gl, scene, skyAsBackground, skyAsEnvironment, skyHdrName, skyHdrUrl, skyMode]);
 
   useEffect(() => {
     if ("environmentIntensity" in scene) {

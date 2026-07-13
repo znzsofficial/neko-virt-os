@@ -84,8 +84,8 @@ export function MmdProjectHome({
       <header className="mmd-project-home-head">
         <div>
           <h2>{t("mmdProjectHomeTitle")}</h2>
-          <p className="mmd-note">{t("mmdProjectHomeHint")}</p>
-          <p className="mmd-note mmd-project-open-hint">{t("mmdProjectOpenHint")}</p>
+          {t("mmdProjectHomeHint") ? <p className="mmd-note">{t("mmdProjectHomeHint")}</p> : null}
+          {t("mmdProjectOpenHint") ? <p className="mmd-note mmd-project-open-hint">{t("mmdProjectOpenHint")}</p> : null}
         </div>
         <div className="mmd-project-home-actions">
           <button type="button" className="button-primary" disabled={projectBusy} onClick={onNewProject}>
@@ -200,7 +200,7 @@ export function MmdProjectHome({
           <div className="mmd-project-home-empty">
             <Icon icon="solar:folder-open-bold-duotone" width={28} height={28} />
             <strong>{query.trim() ? t("mmdPickModelsEmpty") : t("mmdProjectEmpty")}</strong>
-            <span className="mmd-note">{t("mmdProjectHint")}</span>
+            {t("mmdProjectHint") ? <span className="mmd-note">{t("mmdProjectHint")}</span> : null}
           </div>
         )}
       </section>

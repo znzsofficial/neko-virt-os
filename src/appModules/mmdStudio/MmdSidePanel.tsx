@@ -8,6 +8,7 @@ import {
   MaterialOverrideEditor,
   morphGroupLabel,
   MmdSelect,
+  NestedPanel,
   NumberField,
   PanelSection,
   SliderField,
@@ -633,9 +634,9 @@ export function MmdSidePanel({
                 {t("mmdSkyClear")}
               </button>
             </div>
-          ) : (
+          ) : t("mmdSkyHint") ? (
             <p className="mmd-note">{t("mmdSkyHint")}</p>
-          )}
+          ) : null}
           <label className="mmd-check">
             <input type="checkbox" checked={skyAsBackground} disabled={!skyHdrName} onChange={(event) => setSkyAsBackground(event.target.checked)} />
             <span>{t("mmdSkyAsBackground")}</span>
@@ -654,16 +655,16 @@ export function MmdSidePanel({
             disabled={!skyHdrName || !skyAsEnvironment}
             onChange={(next) => setEnvIntensity(next)}
           />
-          <label className="mmd-check">
-            <input type="checkbox" checked={showGrid} onChange={(event) => setShowGrid(event.target.checked)} />
-            <span>{t("mmdShowGrid")}</span>
-          </label>
-          <label className="mmd-check">
-            <input type="checkbox" checked={showGizmo} onChange={(event) => setShowGizmo(event.target.checked)} />
-            <span>{t("mmdShowGizmo")}</span>
-          </label>
-          {showGizmo ? (
-            <>
+          <NestedPanel title={t("mmdSectionViewportHelpers")}>
+            <label className="mmd-check">
+              <input type="checkbox" checked={showGrid} onChange={(event) => setShowGrid(event.target.checked)} />
+              <span>{t("mmdShowGrid")}</span>
+            </label>
+            <label className="mmd-check">
+              <input type="checkbox" checked={showGizmo} onChange={(event) => setShowGizmo(event.target.checked)} />
+              <span>{t("mmdShowGizmo")}</span>
+            </label>
+            {showGizmo ? (
               <label className="mmd-field">
                 <span>{t("mmdGizmoMode")}</span>
                 <MmdSelect
@@ -677,96 +678,84 @@ export function MmdSidePanel({
                   ]}
                 />
               </label>
-              <p className="mmd-note">{t("mmdGizmoHint")}</p>
-            </>
-          ) : null}
-          <label className="mmd-check">
-            <input type="checkbox" checked={showLightHelper} onChange={(event) => setShowLightHelper(event.target.checked)} />
-            <span>{t("mmdShowLightHelper")}</span>
-          </label>
-          <label className="mmd-check">
-            <input type="checkbox" checked={showSkeletonHelper} onChange={(event) => setShowSkeletonHelper(event.target.checked)} />
-            <span>{t("mmdShowSkeletonHelper")}</span>
-          </label>
+            ) : null}
+            <label className="mmd-check">
+              <input type="checkbox" checked={showLightHelper} onChange={(event) => setShowLightHelper(event.target.checked)} />
+              <span>{t("mmdShowLightHelper")}</span>
+            </label>
+            <label className="mmd-check">
+              <input type="checkbox" checked={showSkeletonHelper} onChange={(event) => setShowSkeletonHelper(event.target.checked)} />
+              <span>{t("mmdShowSkeletonHelper")}</span>
+            </label>
+          </NestedPanel>
         </PanelSection>
 
         <PanelSection title={t("mmdSectionLights")}>
-          <label className="mmd-field">
-            <span>{t("mmdLightLook")}</span>
-            <MmdSelect
-              value={lightLook}
-              ariaLabel={t("mmdLightLook")}
-              onChange={(next) => {
-                const look = next as MmdLightLook;
-                if (look === "custom") return;
-                applyLightLook(look);
-              }}
-              options={[
-                { value: "default", label: t("mmdLightLookDefault") },
-                { value: "studio", label: t("mmdLightLookStudio") },
-                { value: "outdoor", label: t("mmdLightLookOutdoor") },
-                { value: "sunset", label: t("mmdLightLookSunset") },
-                { value: "anime", label: t("mmdLightLookAnime") },
-                { value: "dramatic", label: t("mmdLightLookDramatic") },
-                { value: "soft", label: t("mmdLightLookSoft") },
-                { value: "custom", label: t("mmdLightLookCustom"), disabled: true },
-              ]}
-            />
-          </label>
-          <div className="mmd-seg mmd-light-look-seg" role="group" aria-label={t("mmdLightLook")}>
-            {(Object.keys(LIGHT_LOOK_PRESETS) as Exclude<MmdLightLook, "custom">[]).map((look) => (
-              <button
-                key={look}
-                type="button"
-                className={lightLook === look ? "button-ghost is-active" : "button-ghost"}
-                onClick={() => applyLightLook(look)}
-              >
-                {lightLookLabel(look, t)}
-              </button>
-            ))}
+          <div className="mmd-preset-chips mmd-light-look-seg" role="group" aria-label={t("mmdLightLook")}>
+            {(Object.keys(LIGHT_LOOK_PRESETS) as Exclude<MmdLightLook, "custom">[]).map((look) => {
+              const active = lightLook === look;
+              return (
+                <button
+                  key={look}
+                  type="button"
+                  className={active ? "mmd-chip is-active" : "mmd-chip"}
+                  aria-pressed={active}
+                  onClick={() => applyLightLook(look)}
+                >
+                  {lightLookLabel(look, t)}
+                </button>
+              );
+            })}
+            {lightLook === "custom" ? (
+              <span className="mmd-chip is-muted" aria-current="true">
+                {t("mmdLightLookCustom")}
+              </span>
+            ) : null}
           </div>
-          <SliderField
-            label={t("mmdAmbientIntensity")}
-            value={lights.ambientIntensity}
-            min={0}
-            max={2}
-            step={0.01}
-            display={lights.ambientIntensity.toFixed(2)}
-            onChange={(ambientIntensity) => setLights({ ambientIntensity })}
-          />
-          <SliderField
-            label={t("mmdSunIntensity")}
-            value={lights.sunIntensity}
-            min={0}
-            max={4}
-            step={0.01}
-            display={lights.sunIntensity.toFixed(2)}
-            onChange={(sunIntensity) => setLights({ sunIntensity })}
-          />
-          <SliderField
-            label={t("mmdSunAzimuth")}
-            value={lights.sunAzimuth}
-            min={-180}
-            max={180}
-            step={1}
-            display={`${lights.sunAzimuth.toFixed(0)}°`}
-            onChange={(sunAzimuth) => setLights({ sunAzimuth })}
-          />
-          <SliderField
-            label={t("mmdSunElevation")}
-            value={lights.sunElevation}
-            min={5}
-            max={89}
-            step={1}
-            display={`${lights.sunElevation.toFixed(0)}°`}
-            onChange={(sunElevation) => setLights({ sunElevation })}
-          />
-          <button type="button" className="button-ghost mmd-reset-fx" onClick={() => resetLights()}>
-            {t("mmdLightsReset")}
-          </button>
+          <NestedPanel title={t("mmdSectionLightManual")}>
+            <SliderField
+              label={t("mmdAmbientIntensity")}
+              value={lights.ambientIntensity}
+              min={0}
+              max={2}
+              step={0.01}
+              display={lights.ambientIntensity.toFixed(2)}
+              onChange={(ambientIntensity) => setLights({ ambientIntensity })}
+            />
+            <SliderField
+              label={t("mmdSunIntensity")}
+              value={lights.sunIntensity}
+              min={0}
+              max={4}
+              step={0.01}
+              display={lights.sunIntensity.toFixed(2)}
+              onChange={(sunIntensity) => setLights({ sunIntensity })}
+            />
+            <SliderField
+              label={t("mmdSunAzimuth")}
+              value={lights.sunAzimuth}
+              min={-180}
+              max={180}
+              step={1}
+              display={`${lights.sunAzimuth.toFixed(0)}°`}
+              onChange={(sunAzimuth) => setLights({ sunAzimuth })}
+            />
+            <SliderField
+              label={t("mmdSunElevation")}
+              value={lights.sunElevation}
+              min={5}
+              max={89}
+              step={1}
+              display={`${lights.sunElevation.toFixed(0)}°`}
+              onChange={(sunElevation) => setLights({ sunElevation })}
+            />
+            <button type="button" className="button-ghost mmd-reset-fx" onClick={() => resetLights()}>
+              {t("mmdLightsReset")}
+            </button>
+          </NestedPanel>
         </PanelSection>
 
-        <PanelSection title={t("mmdSectionShadows")} collapsible defaultOpen>
+        <PanelSection title={t("mmdSectionShadows")} collapsible defaultOpen={false}>
           <label className="mmd-field">
             <span>{t("mmdShadowQuality")}</span>
             <MmdSelect
@@ -812,9 +801,8 @@ export function MmdSidePanel({
               onChange={(groundShadowOpacity) => setLights({ groundShadowOpacity })}
             />
           ) : null}
-          <p className="mmd-note">{t("mmdShadowHint")}</p>
           {lights.shadowMode !== "off" ? (
-            <PanelSection title={t("mmdSectionShadowAdvanced")} collapsible defaultOpen={false}>
+            <NestedPanel title={t("mmdSectionShadowAdvanced")}>
               <SliderField
                 label={t("mmdSunDistance")}
                 value={lights.sunDistance}
@@ -874,7 +862,7 @@ export function MmdSidePanel({
                 display={lights.shadowCameraSize.toFixed(0)}
                 onChange={(shadowCameraSize) => setLights({ shadowCameraSize })}
               />
-            </PanelSection>
+            </NestedPanel>
           ) : null}
         </PanelSection>
 
@@ -892,43 +880,14 @@ export function MmdSidePanel({
               }))}
             />
           </label>
-          {backendDisabledPostFx ? <p className="mmd-note">{t("mmdPostFxWebgpuDisabled")}</p> : null}
+          {backendDisabledPostFx && t("mmdPostFxWebgpuDisabled") ? (
+            <p className="mmd-note">{t("mmdPostFxWebgpuDisabled")}</p>
+          ) : null}
           {!backendDisabledPostFx && postFx !== "off" ? (
             <>
-              <p className="mmd-note">{t("mmdLookPresetHint")}</p>
               <SliderField label={t("mmdFxBloom")} value={postFxTune.bloom} min={0} max={1.5} step={0.01} display={postFxTune.bloom.toFixed(2)} disabled={fxDisabled} onChange={(bloom) => setPostFxTune({ bloom })} />
-              <label className="mmd-check">
-                <input
-                  type="checkbox"
-                  checked={postFxTune.bloomSelective}
-                  disabled={fxDisabled || postFxTune.bloom < 0.001}
-                  onChange={(event) => setPostFxTune({ bloomSelective: event.target.checked })}
-                />
-                <span>{t("mmdFxBloomSelective")}</span>
-              </label>
+              <SliderField label={t("mmdFxSsr")} value={postFxTune.ssr} min={0} max={1} step={0.01} display={postFxTune.ssr.toFixed(2)} disabled={fxDisabled} onChange={(ssr) => setPostFxTune({ ssr })} />
               <SliderField label={t("mmdFxVignette")} value={postFxTune.vignette} min={0} max={0.8} step={0.01} display={postFxTune.vignette.toFixed(2)} disabled={fxDisabled} onChange={(vignette) => setPostFxTune({ vignette })} />
-              <label className="mmd-field">
-                <span>{t("mmdFxLut")}</span>
-                <MmdSelect
-                  value={postFxTune.lut}
-                  disabled={fxDisabled}
-                  ariaLabel={t("mmdFxLut")}
-                  onChange={(next) => setPostFxTune({ lut: next as MmdLutLook })}
-                  options={(["none", "warm", "cool", "film"] as MmdLutLook[]).map((look) => ({
-                    value: look,
-                    label: lutLabel(look, t),
-                  }))}
-                />
-              </label>
-              <label className="mmd-check">
-                <input
-                  type="checkbox"
-                  checked={postFxTune.toneMapping}
-                  disabled={fxDisabled}
-                  onChange={(event) => setPostFxTune({ toneMapping: event.target.checked })}
-                />
-                <span>{t("mmdFxToneMapping")}</span>
-              </label>
               <button type="button" className="button-ghost mmd-reset-fx" disabled={fxDisabled} onClick={() => resetPostFxTune()}>
                 {t("mmdFxReset")}
               </button>
@@ -957,14 +916,24 @@ export function MmdSidePanel({
                     />
                     <span>{t("mmdFxDofLockModel")}</span>
                   </label>
-                  {postFxTune.dofLockModel ? <p className="mmd-note">{t("mmdFxDofLockModelHint")}</p> : null}
+                  {postFxTune.dofLockModel && t("mmdFxDofLockModelHint") ? (
+                    <p className="mmd-note">{t("mmdFxDofLockModelHint")}</p>
+                  ) : null}
                 </>
               ) : null}
               <SliderField label={t("mmdFxTiltShift")} value={postFxTune.tiltShift} min={0} max={1} step={0.01} display={postFxTune.tiltShift.toFixed(2)} disabled={fxDisabled} onChange={(tiltShift) => setPostFxTune({ tiltShift })} />
-              <p className="mmd-note">{t("mmdFxAdvancedNote")}</p>
             </PanelSection>
 
             <PanelSection title={t("mmdSectionFxGrade")} collapsible defaultOpen={false}>
+              <label className="mmd-check">
+                <input
+                  type="checkbox"
+                  checked={postFxTune.bloomSelective}
+                  disabled={fxDisabled || postFxTune.bloom < 0.001}
+                  onChange={(event) => setPostFxTune({ bloomSelective: event.target.checked })}
+                />
+                <span>{t("mmdFxBloomSelective")}</span>
+              </label>
               <SliderField label={t("mmdFxBloomThreshold")} value={postFxTune.bloomThreshold} min={0.2} max={1} step={0.01} display={postFxTune.bloomThreshold.toFixed(2)} disabled={fxDisabled || postFxTune.bloom < 0.001} onChange={(bloomThreshold) => setPostFxTune({ bloomThreshold })} />
               <SliderField label={t("mmdFxBloomRadius")} value={postFxTune.bloomRadius} min={0.05} max={1.2} step={0.01} display={postFxTune.bloomRadius.toFixed(2)} disabled={fxDisabled || postFxTune.bloom < 0.001} onChange={(bloomRadius) => setPostFxTune({ bloomRadius })} />
               <SliderField label={t("mmdFxBrightness")} value={postFxTune.brightness} min={-0.3} max={0.3} step={0.01} display={postFxTune.brightness.toFixed(2)} disabled={fxDisabled} onChange={(brightness) => setPostFxTune({ brightness })} />
@@ -975,6 +944,28 @@ export function MmdSidePanel({
               <SliderField label={t("mmdFxGrain")} value={postFxTune.grain} min={0} max={1} step={0.01} display={postFxTune.grain.toFixed(2)} disabled={fxDisabled} onChange={(grain) => setPostFxTune({ grain })} />
               <SliderField label={t("mmdFxSsao")} value={postFxTune.ssao} min={0} max={1} step={0.01} display={postFxTune.ssao.toFixed(2)} disabled={fxDisabled} onChange={(ssao) => setPostFxTune({ ssao })} />
               <SliderField label={t("mmdFxOutline")} value={postFxTune.outline} min={0} max={1} step={0.01} display={postFxTune.outline.toFixed(2)} disabled={fxDisabled} onChange={(outline) => setPostFxTune({ outline })} />
+              <label className="mmd-field">
+                <span>{t("mmdFxLut")}</span>
+                <MmdSelect
+                  value={postFxTune.lut}
+                  disabled={fxDisabled}
+                  ariaLabel={t("mmdFxLut")}
+                  onChange={(next) => setPostFxTune({ lut: next as MmdLutLook })}
+                  options={(["none", "warm", "cool", "film"] as MmdLutLook[]).map((look) => ({
+                    value: look,
+                    label: lutLabel(look, t),
+                  }))}
+                />
+              </label>
+              <label className="mmd-check">
+                <input
+                  type="checkbox"
+                  checked={postFxTune.toneMapping}
+                  disabled={fxDisabled}
+                  onChange={(event) => setPostFxTune({ toneMapping: event.target.checked })}
+                />
+                <span>{t("mmdFxToneMapping")}</span>
+              </label>
             </PanelSection>
 
             <PanelSection title={t("mmdSectionFxAa")} collapsible defaultOpen={false}>
@@ -1303,7 +1294,7 @@ export function MmdSidePanel({
               </button>
             ) : null}
           </div>
-          <p className="mmd-note">{t("mmdProjectHint")}</p>
+          {t("mmdProjectHint") ? <p className="mmd-note">{t("mmdProjectHint")}</p> : null}
           <div className="mmd-model-list">
             {projectList.length ? projectList.map((project) => (
               <div key={project.id} className={project.id === lastProjectId ? "mmd-model-item is-selected" : "mmd-model-item"}>
