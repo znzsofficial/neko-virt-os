@@ -1,5 +1,6 @@
 import { Icon } from "@iconify-icon/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { appPrompt } from "../dialogStore";
 import { consumeBrowserOpenUrl } from "../fileOpen";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
 
@@ -290,10 +291,15 @@ export function BrowserApp() {
     navigate(url, mode);
   }
 
-  function editBookmarkTitle(url: string) {
+  async function editBookmarkTitle(url: string) {
     const bookmark = bookmarks.find((entry) => entry.url === url);
     if (!bookmark) return;
-    const nextTitle = window.prompt(t("browserEditBookmark"), bookmark.title);
+    const nextTitle = await appPrompt({
+      title: t("dialogPromptTitle"),
+      message: t("browserEditBookmark"),
+      defaultValue: bookmark.title,
+      confirmLabel: t("dialogConfirm"),
+    });
     if (!nextTitle || !nextTitle.trim()) return;
     setBookmarks((current) => current.map((entry) => entry.url === url ? { ...entry, title: nextTitle.trim() } : entry));
   }

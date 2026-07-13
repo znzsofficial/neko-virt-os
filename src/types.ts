@@ -82,6 +82,7 @@ export type FsStore = {
   deleteSelectedFile: () => Promise<void>;
   deleteFileByName: (name: string) => Promise<FsFile | null>;
   deleteFileById: (id: string) => Promise<FsFile | null>;
+  deleteFilesByIds: (ids: string[]) => Promise<number>;
   restoreSelectedFile: () => Promise<void>;
   restoreFileById: (id: string) => Promise<void>;
   permanentlyDeleteSelectedFile: () => Promise<void>;

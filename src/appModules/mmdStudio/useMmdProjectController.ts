@@ -112,11 +112,18 @@ function collectProjectSettings(): MmdProjectSettings {
   };
 }
 
-async function waitForSceneApi(apiRef: MutableRefObject<MmdSceneApi | null>, timeoutMs = 4000) {
+export type MmdProjectLoadProgress = {
+  phase: "prepare" | "assets" | "hydrate" | "media" | "done";
+  current: number;
+  total: number;
+  projectName: string;
+};
+
+async function waitForSceneApi(apiRef: MutableRefObject<MmdSceneApi | null>, timeoutMs = 12_000) {
   const started = performance.now();
   while (performance.now() - started < timeoutMs) {
     if (apiRef.current) return apiRef.current;
-    await new Promise((resolve) => window.setTimeout(resolve, 50));
+    await new Promise((resolve) => window.setTimeout(resolve, 40));
   }
   return apiRef.current;
 }
@@ -290,23 +297,39 @@ export function useMmdProjectController({
     return record;
   }
 
+  const [loadProgress, setLoadProgress] = useState<MmdProjectLoadProgress | null>(null);
+
   async function loadProjectRecord(record: MmdProjectRecord) {
     setProjectBusy(true);
+    const displayName = record.isAutosave ? t("mmdProjectContinueAutosave") : record.name;
+    const setPhase = (
+      phase: MmdProjectLoadProgress["phase"],
+      current = 0,
+      total = 0,
+    ) => {
+      setLoadProgress({ phase, current, total, projectName: displayName });
+    };
     try {
+      setPhase("prepare");
+      useMmdStudioStore.getState().setStatus("loading", displayName);
       const targetBackend = record.settings.backend;
       const currentBackend = useMmdStudioStore.getState().backend;
       if (targetBackend !== currentBackend) {
         useMmdStudioStore.getState().setBackend(targetBackend);
       }
-      const api = await waitForSceneApi(apiRef);
+      // Canvas may still be mounting after leaving project home.
+      const api = await waitForSceneApi(apiRef, 15_000);
       if (!api) throw new Error("Scene API unavailable");
 
       applyProjectSettings(record.settings, { applyBackend: false });
       setProjectName(record.isAutosave ? useMmdStudioStore.getState().projectName : record.name);
       if (!record.isAutosave) setLastProjectId(record.id);
 
+      const modelCount = Math.max(1, record.models.length);
       const hydrateModels: MmdHydrateModelInput[] = [];
-      for (const model of record.models) {
+      for (let index = 0; index < record.models.length; index += 1) {
+        const model = record.models[index]!;
+        setPhase("assets", index + 1, modelCount);
         const modelFile = await loadMmdProjectAsset(model.modelAssetId);
         if (!modelFile) continue;
         const companions: File[] = [];
@@ -340,11 +363,14 @@ export function useMmdProjectController({
           cameraMotionFile,
         });
       }
+
+      setPhase("hydrate", hydrateModels.length, hydrateModels.length || 1);
       await hydrateMmdModels(api, hydrateModels, {
         physics: record.settings.physicsEnabled,
         clearFirst: true,
       });
 
+      setPhase("media");
       if (record.audioAssetId) {
         const audio = await loadMmdProjectAsset(record.audioAssetId);
         if (audio) await handleAudio(audio);
@@ -363,8 +389,10 @@ export function useMmdProjectController({
         setSkyHdr(null);
       }
 
+      setPhase("done");
       seek(record.settings.currentTime);
       setTextureInfo(t("mmdProjectLoaded"));
+      useMmdStudioStore.getState().setStatus("ready");
       addNotification({
         title: t("mmdProject"),
         message: record.isAutosave ? t("mmdProjectRestored") : t("mmdProjectLoaded"),
@@ -373,7 +401,21 @@ export function useMmdProjectController({
         appId: "mmd-studio",
         duration: 3500,
       });
+    } catch (error) {
+      useMmdStudioStore.getState().setStatus(
+        "error",
+        error instanceof Error ? error.message : t("mmdProjectLoadFailed"),
+      );
+      addNotification({
+        title: t("mmdProject"),
+        message: error instanceof Error ? error.message : t("mmdProjectLoadFailed"),
+        type: "error",
+        category: "media",
+        appId: "mmd-studio",
+      });
+      throw error;
     } finally {
+      setLoadProgress(null);
       setProjectBusy(false);
     }
   }
@@ -537,6 +579,7 @@ export function useMmdProjectController({
   return {
     projectList,
     projectBusy,
+    loadProgress,
     projectName,
     setProjectName,
     lastProjectId,

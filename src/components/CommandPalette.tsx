@@ -8,6 +8,7 @@ import { getFileOpenApp, queueBrowserOpenUrl } from "../fileOpen";
 import { useFsStore } from "../fsStore";
 import { readLocalBookmarks, readLocalCalendarEvents, readLocalTasks } from "../localData";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
+import { openFilesFolder } from "../shell/filesBridge";
 import { useDesktopStore } from "../windowStore";
 type CommandItem = {
   id: string;
@@ -59,8 +60,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       icon: file.kind === "folder" ? "solar:folder-with-files-bold-duotone" : "solar:document-text-bold-duotone",
       run: () => {
         if (file.kind === "folder") {
-          const openFolder = (globalThis as any).__files_open_folder as ((folderId: string | null) => void) | undefined;
-          openFolder?.(file.id);
+          openFilesFolder(file.id);
           openApp("files");
           return;
         }

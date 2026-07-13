@@ -1,6 +1,7 @@
 import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
 import { useEffect, useState } from "react";
+import { appConfirm } from "../dialogStore";
 import { useFsStore } from "../fsStore";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
@@ -45,14 +46,26 @@ export function SettingsApp() {
   }
 
   async function resetLocalFiles() {
-    if (!window.confirm(t("confirmResetFiles"))) return;
+    const ok = await appConfirm({
+      title: t("dialogConfirmTitle"),
+      message: t("confirmResetFiles"),
+      confirmLabel: t("dialogConfirm"),
+      danger: true,
+    });
+    if (!ok) return;
     await resetVirtualFiles();
     navigator.storage?.estimate().then(setStorage).catch(() => setStorage(null));
     addNotification({ title: t("virtualStorageReset"), message: t("virtualStorageResetMessage"), type: "success", category: "system", appId: "settings" });
   }
 
   async function clearSiteData() {
-    if (!window.confirm(t("confirmClearSiteData"))) return;
+    const ok = await appConfirm({
+      title: t("dialogConfirmTitle"),
+      message: t("confirmClearSiteData"),
+      confirmLabel: t("dialogConfirm"),
+      danger: true,
+    });
+    if (!ok) return;
     if ("caches" in window) {
       const keys = await caches.keys();
       await Promise.all(keys.map((key) => caches.delete(key)));

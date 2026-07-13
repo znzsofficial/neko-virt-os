@@ -96,11 +96,14 @@ export const useDesktopStore = create<DesktopStore>((set, get) => ({
       windows: state.windows.map((win) => win.id === id ? { ...win, workspaceId } : win),
       activeWindowId: state.activeWindowId === id ? null : state.activeWindowId,
     })),
-  closeWindow: (id) =>
+  closeWindow: (id) => {
+    const ui = useOsUiStore.getState();
+    if (ui.immersiveWindowId === id) ui.exitImmersive();
     set((state) => ({
       windows: state.windows.filter((win) => win.id !== id),
       activeWindowId: state.activeWindowId === id ? null : state.activeWindowId,
-    })),
+    }));
+  },
   focusWindow: (id) =>
     set((state) => ({
       windows: state.windows.map((win) =>
@@ -108,13 +111,16 @@ export const useDesktopStore = create<DesktopStore>((set, get) => ({
       ),
       activeWindowId: id,
     })),
-  minimizeWindow: (id) =>
+  minimizeWindow: (id) => {
+    const ui = useOsUiStore.getState();
+    if (ui.immersiveWindowId === id) ui.exitImmersive();
     set((state) => ({
       windows: state.windows.map((win) =>
         win.id === id ? { ...win, minimized: true } : win,
       ),
       activeWindowId: state.activeWindowId === id ? null : state.activeWindowId,
-    })),
+    }));
+  },
   restoreWindow: (id) =>
     set((state) => ({
       windows: state.windows.map((win) =>

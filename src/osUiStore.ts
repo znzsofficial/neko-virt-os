@@ -20,6 +20,11 @@ type OsUiStore = {
   setNotificationPrefs: (patch: Partial<NotificationPrefs>) => void;
   widgetsCollapsed: boolean;
   setWidgetsCollapsed: (collapsed: boolean) => void;
+  /** When set, that window fills the viewport and OS chrome is hidden. */
+  immersiveWindowId: string | null;
+  enterImmersive: (windowId: string) => void;
+  exitImmersive: () => void;
+  toggleImmersive: (windowId: string) => void;
 };
 
 const WORKSPACE_KEY = "neko-virt-os.workspace.v1";
@@ -85,4 +90,11 @@ export const useOsUiStore = create<OsUiStore>((set) => ({
     localStorage.setItem(WIDGETS_KEY, collapsed ? "1" : "0");
     set({ widgetsCollapsed: collapsed });
   },
+  immersiveWindowId: null,
+  enterImmersive: (windowId) => set({ immersiveWindowId: windowId }),
+  exitImmersive: () => set({ immersiveWindowId: null }),
+  toggleImmersive: (windowId) =>
+    set((state) => ({
+      immersiveWindowId: state.immersiveWindowId === windowId ? null : windowId,
+    })),
 }));

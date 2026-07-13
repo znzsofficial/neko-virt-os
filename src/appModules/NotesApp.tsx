@@ -3,7 +3,7 @@ import { clsx } from "clsx";
 import { useEffect, useState } from "react";
 import { useFsStore } from "../fsStore";
 import { useLanguageStore } from "../languageStore";
-import { clearNoteWindowDirty, getNoteWindowFile, setNoteWindowDirty, setNoteWindowFile } from "../notesWindowState";
+import { clearNoteWindowDirty, getNoteWindowFile, setNoteWindowDirty, setNoteWindowFile } from "../shell/windowLifecycle";
 import { useDesktopStore } from "../windowStore";
 
 export function NotesApp({ windowId }: { windowId?: string }) {

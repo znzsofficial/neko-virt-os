@@ -49,9 +49,79 @@ export async function collectFilesFromDataTransfer(dataTransfer: DataTransfer): 
   return files.length ? files : Array.from(dataTransfer.files ?? []);
 }
 
-export function pickPrimaryModel(files: File[]) {
+export function modelRelativePath(file: File) {
+  const path = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+  return path.replaceAll("\\", "/");
+}
+
+/** Directory portion of webkitRelativePath (or empty for bare files). */
+export function relativeDirOf(file: File) {
+  const normalized = modelRelativePath(file);
+  const slash = normalized.lastIndexOf("/");
+  return slash >= 0 ? normalized.slice(0, slash) : "";
+}
+
+export function listModelFiles(files: File[]) {
   const models = findMmdModelFiles(files);
+  return [...models].sort((a, b) => {
+    const da = relativeDirOf(a);
+    const db = relativeDirOf(b);
+    if (da !== db) return da.localeCompare(db, "zh");
+    return a.name.localeCompare(b.name, "zh");
+  });
+}
+
+export function pickPrimaryModel(files: File[]) {
+  const models = listModelFiles(files);
   return models[0] ?? null;
+}
+
+/**
+ * Default multi-select: prefer one model per directory (typical pack layout),
+ * otherwise select all when they share a single folder.
+ */
+export function defaultSelectedModels(models: File[]) {
+  const selected: Record<string, boolean> = {};
+  if (!models.length) return selected;
+  const byDir = new Map<string, File[]>();
+  for (const model of models) {
+    const dir = relativeDirOf(model) || ".";
+    const list = byDir.get(dir) ?? [];
+    list.push(model);
+    byDir.set(dir, list);
+  }
+  if (byDir.size === 1) {
+    for (const model of models) selected[modelRelativePath(model)] = true;
+    return selected;
+  }
+  // Multiple subfolders: pick first model in each folder by default.
+  for (const list of byDir.values()) {
+    const first = list[0];
+    if (first) selected[modelRelativePath(first)] = true;
+    for (let i = 1; i < list.length; i += 1) {
+      selected[modelRelativePath(list[i]!)] = false;
+    }
+  }
+  return selected;
+}
+
+/**
+ * Companion pack for a model: prefer files under the same relative directory
+ * (and nested), fall back to the full drop set so loose tex packs still resolve.
+ */
+export function companionsForModel(modelFile: File, allFiles: File[]) {
+  const dir = relativeDirOf(modelFile);
+  if (!dir) return allFiles.length ? allFiles : [modelFile];
+  const prefix = `${dir}/`;
+  const nested = allFiles.filter((file) => {
+    const full = modelRelativePath(file);
+    return full === modelRelativePath(modelFile) || full.startsWith(prefix) || relativeDirOf(file) === dir;
+  });
+  // Always include the model itself.
+  if (!nested.some((file) => modelRelativePath(file) === modelRelativePath(modelFile))) {
+    nested.unshift(modelFile);
+  }
+  return nested.length > 1 ? nested : allFiles.length ? allFiles : [modelFile];
 }
 
 export function pickPrimaryMotion(files: File[]) {

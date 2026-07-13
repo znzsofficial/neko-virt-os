@@ -1,5 +1,6 @@
 import { Icon } from "@iconify-icon/react";
 import { formatFileTime } from "../fileUtils";
+import { appConfirm } from "../dialogStore";
 import { useFsStore } from "../fsStore";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
@@ -31,14 +32,26 @@ export function TrashApp() {
   async function deleteForever(id: string) {
     const file = trashedFiles.find((entry) => entry.id === id);
     if (!file) return;
-    if (!window.confirm(phrase(t, "confirmPermanentDeletePrefix", file.name, "confirmPermanentDeleteSuffix"))) return;
+    const ok = await appConfirm({
+      title: t("dialogConfirmTitle"),
+      message: phrase(t, "confirmPermanentDeletePrefix", file.name, "confirmPermanentDeleteSuffix"),
+      confirmLabel: t("deleteForever"),
+      danger: true,
+    });
+    if (!ok) return;
     await permanentlyDeleteFileById(id);
     addNotification({ title: t("fileDeleted"), message: `${file.name}${t("permanentlyDeletedSuffix")}`, type: "success", category: "files", appId: "trash" });
   }
 
   async function clearTrash() {
     if (!trashedFiles.length) return;
-    if (!window.confirm(phrase(t, "confirmEmptyTrashPrefix", trashedFiles.length, "confirmEmptyTrashSuffix"))) return;
+    const ok = await appConfirm({
+      title: t("dialogConfirmTitle"),
+      message: phrase(t, "confirmEmptyTrashPrefix", trashedFiles.length, "confirmEmptyTrashSuffix"),
+      confirmLabel: t("emptyTrash"),
+      danger: true,
+    });
+    if (!ok) return;
     await emptyTrash();
     addNotification({ title: t("trashEmptied"), message: t("trashEmptiedMessage"), type: "success", category: "files", appId: "trash" });
   }

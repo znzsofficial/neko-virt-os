@@ -473,7 +473,7 @@ export function MmdSidePanel({
             <>
               <label className="mmd-field">
                 <span>{t("mmdMorphSearch")}</span>
-                <input value={morphSearch} onChange={(event) => setMorphSearch(event.target.value)} />
+                <input type="search" className="mmd-text-input" value={morphSearch} onChange={(event) => setMorphSearch(event.target.value)} spellCheck={false} />
               </label>
               {(() => {
                 const needle = morphSearch.trim().toLowerCase();
@@ -1018,18 +1018,15 @@ export function MmdSidePanel({
             </label>
           </div>
           {exportBitrate === "custom" ? (
-            <label className="mmd-field">
-              <span>{t("mmdExportCustomVideoMbps")}</span>
-              <input
-                type="number"
-                min={0.5}
-                max={200}
-                step={0.5}
-                value={exportCustomVideoMbps}
-                disabled={recording}
-                onChange={(event) => setExportCustomVideoMbps(Number(event.target.value))}
-              />
-            </label>
+            <NumberField
+              label={t("mmdExportCustomVideoMbps")}
+              value={exportCustomVideoMbps}
+              min={0.5}
+              max={200}
+              step={0.5}
+              disabled={recording}
+              onChange={setExportCustomVideoMbps}
+            />
           ) : null}
           <label className="mmd-field">
             <span>{t("mmdExportAudioBitrate")}</span>
@@ -1045,23 +1042,21 @@ export function MmdSidePanel({
             />
           </label>
           {exportAudioBitrate === "custom" ? (
-            <label className="mmd-field">
-              <span>{t("mmdExportCustomAudioKbps")}</span>
-              <input
-                type="number"
-                min={32}
-                max={512}
-                step={16}
-                value={exportCustomAudioKbps}
-                disabled={recording || !exportIncludeAudio}
-                onChange={(event) => setExportCustomAudioKbps(Number(event.target.value))}
-              />
-            </label>
+            <NumberField
+              label={t("mmdExportCustomAudioKbps")}
+              value={exportCustomAudioKbps}
+              min={32}
+              max={512}
+              step={16}
+              disabled={recording || !exportIncludeAudio}
+              onChange={setExportCustomAudioKbps}
+            />
           ) : null}
           <label className="mmd-field">
             <span>{t("mmdExportFilePrefix")}</span>
             <input
               type="text"
+              className="mmd-text-input"
               value={exportFilePrefix}
               disabled={recording}
               maxLength={48}
@@ -1133,6 +1128,7 @@ export function MmdSidePanel({
             <span>{t("mmdProjectName")}</span>
             <input
               type="text"
+              className="mmd-text-input"
               value={projectName}
               disabled={recording || projectBusy}
               maxLength={64}

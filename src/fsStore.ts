@@ -171,6 +171,29 @@ export const useFsStore = create<FsStore>((set, get) => ({
     });
     return file;
   },
+  deleteFilesByIds: async (ids) => {
+    const unique = [...new Set(ids)].filter(Boolean);
+    let count = 0;
+    for (const id of unique) {
+      const file = get().files.find((item) => item.id === id && !item.trashed);
+      if (!file) continue;
+      await deleteFile(id);
+      count += 1;
+    }
+    if (!count) return 0;
+    const files = await listFiles();
+    const selectedStill = get().selectedFileId && files.some((f) => f.id === get().selectedFileId && !f.trashed)
+      ? get().selectedFileId
+      : files.find((item) => !item.trashed)?.id ?? null;
+    const selectedFile = selectedStill ? files.find((f) => f.id === selectedStill) ?? null : null;
+    set({
+      files,
+      selectedFileId: selectedStill,
+      draft: selectedFile?.kind === "text" ? selectedFile.content : "",
+      dirty: false,
+    });
+    return count;
+  },
   restoreSelectedFile: async () => {
     const selectedFileId = get().selectedFileId;
     if (!selectedFileId) return;

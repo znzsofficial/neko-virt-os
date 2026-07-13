@@ -5,7 +5,7 @@ import { appDescriptionKeys, appTitleKeys, getAppIcon } from "../appText";
 import { apps } from "../apps";
 import { useFsStore } from "../fsStore";
 import { useLanguageStore } from "../languageStore";
-import { requestCloseWindow } from "../notesWindowState";
+import { requestCloseWindow } from "../shell/windowLifecycle";
 import { type BrowserPerformance, type DeviceSnapshot, formatBytes, getDeviceRows, readHighEntropyDeviceInfo, type StorageSnapshot } from "../systemInfo";
 import { useDesktopStore } from "../windowStore";
 

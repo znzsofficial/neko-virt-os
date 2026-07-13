@@ -8,6 +8,7 @@ import { useFsStore } from "../fsStore";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
 import type { AppId, FileMutationResult } from "../types";
 import type { FsFile } from "../virtualFs";
+import { openFilesFolder } from "../shell/filesBridge";
 import { useDesktopStore } from "../windowStore";
 
 type TerminalContext = {
@@ -136,8 +137,7 @@ export function TerminalApp({ windowId }: { windowId?: string }) {
       selectFile,
       openNotes: () => openApp("notes"),
       openFolder: (folderId) => {
-        const openFolder = (globalThis as any).__files_open_folder as ((targetFolderId: string | null) => void) | undefined;
-        openFolder?.(folderId);
+        openFilesFolder(folderId);
         openApp("files");
       },
       openApp: (appId) => {
