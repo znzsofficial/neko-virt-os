@@ -25,6 +25,8 @@ export type MmdLutLook = "none" | "warm" | "cool" | "film";
 export type MmdShadowMode = "off" | "map";
 export type MmdShadowMapSize = 512 | 1024 | 2048 | 4096;
 export type MmdShadowQuality = "performance" | "balanced" | "quality" | "ultra" | "custom";
+/** One-click lighting looks (direction + intensity + shadow pack). */
+export type MmdLightLook = "default" | "studio" | "outdoor" | "sunset" | "anime" | "dramatic" | "soft" | "custom";
 
 export type MmdLightSettings = {
   ambientIntensity: number;
@@ -392,7 +394,13 @@ type MmdStudioStore = {
   skyAsEnvironment: boolean;
   envIntensity: number;
   showGrid: boolean;
+  /** Viewport transform gizmo for selected model. */
+  showGizmo: boolean;
+  gizmoMode: "translate" | "rotate" | "scale";
+  showLightHelper: boolean;
+  showSkeletonHelper: boolean;
   lights: MmdLightSettings;
+  lightLook: MmdLightLook;
   status: "idle" | "loading" | "ready" | "error";
   statusMessage: string;
   webgpuAvailable: boolean;
@@ -447,7 +455,12 @@ type MmdStudioStore = {
   setSkyAsEnvironment: (enabled: boolean) => void;
   setEnvIntensity: (value: number) => void;
   setShowGrid: (show: boolean) => void;
+  setShowGizmo: (show: boolean) => void;
+  setGizmoMode: (mode: "translate" | "rotate" | "scale") => void;
+  setShowLightHelper: (show: boolean) => void;
+  setShowSkeletonHelper: (show: boolean) => void;
   setLights: (partial: Partial<MmdLightSettings>) => void;
+  applyLightLook: (look: Exclude<MmdLightLook, "custom">) => void;
   applyShadowQuality: (quality: Exclude<MmdShadowQuality, "custom">) => void;
   resetLights: () => void;
   setStatus: (status: MmdStudioStore["status"], message?: string) => void;
@@ -504,6 +517,107 @@ export const DEFAULT_LIGHTS: MmdLightSettings = Object.freeze({
   shadowCameraSize: 28,
   groundShadowOpacity: 0.45,
 });
+
+/** One-click lighting looks (sun direction + ambient + shadow pack). */
+export const LIGHT_LOOK_PRESETS: Record<Exclude<MmdLightLook, "custom">, Partial<MmdLightSettings>> = {
+  default: { ...DEFAULT_LIGHTS },
+  studio: {
+    ambientIntensity: 0.42,
+    sunIntensity: 0.72,
+    sunAzimuth: 28,
+    sunElevation: 58,
+    sunDistance: 38,
+    sunCastShadow: true,
+    shadowMode: "map",
+    shadowQuality: "balanced",
+    shadowMapSize: 2048,
+    shadowBias: -0.0002,
+    shadowNormalBias: 0.04,
+    shadowRadius: 2.2,
+    shadowCameraSize: 26,
+    groundShadowOpacity: 0.38,
+  },
+  outdoor: {
+    ambientIntensity: 0.42,
+    sunIntensity: 1.55,
+    sunAzimuth: -38,
+    sunElevation: 62,
+    sunDistance: 52,
+    sunCastShadow: true,
+    shadowMode: "map",
+    shadowQuality: "quality",
+    shadowMapSize: 2048,
+    shadowBias: -0.00022,
+    shadowNormalBias: 0.035,
+    shadowRadius: 1.6,
+    shadowCameraSize: 34,
+    groundShadowOpacity: 0.5,
+  },
+  sunset: {
+    ambientIntensity: 0.38,
+    sunIntensity: 1.35,
+    sunAzimuth: 125,
+    sunElevation: 14,
+    sunDistance: 48,
+    sunCastShadow: true,
+    shadowMode: "map",
+    shadowQuality: "balanced",
+    shadowMapSize: 2048,
+    shadowBias: -0.0002,
+    shadowNormalBias: 0.045,
+    shadowRadius: 2.8,
+    shadowCameraSize: 30,
+    groundShadowOpacity: 0.48,
+  },
+  anime: {
+    ambientIntensity: 0.4,
+    sunIntensity: 0.85,
+    sunAzimuth: 42,
+    sunElevation: 38,
+    sunDistance: 40,
+    sunCastShadow: true,
+    shadowMode: "map",
+    shadowQuality: "balanced",
+    shadowMapSize: 2048,
+    shadowBias: -0.00018,
+    shadowNormalBias: 0.05,
+    shadowRadius: 1.2,
+    shadowCameraSize: 26,
+    groundShadowOpacity: 0.36,
+  },
+  dramatic: {
+    ambientIntensity: 0.18,
+    sunIntensity: 1.85,
+    sunAzimuth: -72,
+    sunElevation: 26,
+    sunDistance: 46,
+    sunCastShadow: true,
+    shadowMode: "map",
+    shadowQuality: "quality",
+    shadowMapSize: 2048,
+    shadowBias: -0.00025,
+    shadowNormalBias: 0.03,
+    shadowRadius: 1.4,
+    shadowCameraSize: 30,
+    groundShadowOpacity: 0.58,
+  },
+  soft: {
+    ambientIntensity: 0.48,
+    sunIntensity: 0.4,
+    sunAzimuth: 18,
+    sunElevation: 68,
+    sunDistance: 36,
+    sunCastShadow: true,
+    shadowMode: "map",
+    shadowQuality: "performance",
+    shadowMapSize: 1024,
+    shadowBias: -0.00015,
+    shadowNormalBias: 0.05,
+    shadowRadius: 3.5,
+    shadowCameraSize: 24,
+    groundShadowOpacity: 0.24,
+  },
+};
 
 /** One-click shadow quality packs (map shadows only). */
 export const SHADOW_QUALITY_PRESETS: Record<
@@ -773,6 +887,26 @@ function loadLights(): MmdLightSettings {
   }
 }
 
+function lightsRoughlyEqual(a: MmdLightSettings, b: MmdLightSettings) {
+  const keys = Object.keys(DEFAULT_LIGHTS) as (keyof MmdLightSettings)[];
+  return keys.every((key) => {
+    const av = a[key];
+    const bv = b[key];
+    if (typeof av === "number" && typeof bv === "number") {
+      return Math.abs(av - bv) < 1e-4;
+    }
+    return av === bv;
+  });
+}
+
+export function matchLightLook(lights: MmdLightSettings): MmdLightLook {
+  for (const look of Object.keys(LIGHT_LOOK_PRESETS) as Exclude<MmdLightLook, "custom">[]) {
+    const candidate = sanitizeLights({ ...DEFAULT_LIGHTS, ...LIGHT_LOOK_PRESETS[look] });
+    if (lightsRoughlyEqual(lights, candidate)) return look;
+  }
+  return "custom";
+}
+
 function clampNum(value: unknown, min: number, max: number, fallback: number) {
   if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, value));
@@ -828,7 +962,14 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
   skyAsEnvironment: true,
   envIntensity: 1,
   showGrid: true,
-  lights: loadLights(),
+  showGizmo: true,
+  gizmoMode: "translate",
+  showLightHelper: false,
+  showSkeletonHelper: false,
+  ...(() => {
+    const lights = loadLights();
+    return { lights, lightLook: matchLightLook(lights) };
+  })(),
   status: "idle",
   statusMessage: "",
   webgpuAvailable: typeof navigator !== "undefined" && Boolean((navigator as Navigator & { gpu?: unknown }).gpu),
@@ -975,12 +1116,32 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
   setSkyAsEnvironment: (skyAsEnvironment) => set({ skyAsEnvironment }),
   setEnvIntensity: (envIntensity) => set({ envIntensity: Math.min(3, Math.max(0, envIntensity)) }),
   setShowGrid: (showGrid) => set({ showGrid }),
+  setShowGizmo: (showGizmo) => set({ showGizmo }),
+  setGizmoMode: (gizmoMode) => set({ gizmoMode, showGizmo: true }),
+  setShowLightHelper: (showLightHelper) => set({ showLightHelper }),
+  setShowSkeletonHelper: (showSkeletonHelper) => set({ showSkeletonHelper }),
   setLights: (partial) => {
     const prev = get().lights;
     let shadowMode = partial.shadowMode !== undefined ? sanitizeShadowMode(partial.shadowMode) : prev.shadowMode;
     if (partial.sunCastShadow !== undefined && partial.shadowMode === undefined) {
       shadowMode = partial.sunCastShadow ? "map" : "off";
     }
+    const lightingKeys: (keyof MmdLightSettings)[] = [
+      "ambientIntensity",
+      "sunIntensity",
+      "sunAzimuth",
+      "sunElevation",
+      "sunDistance",
+      "sunCastShadow",
+      "shadowMode",
+      "shadowMapSize",
+      "shadowBias",
+      "shadowNormalBias",
+      "shadowRadius",
+      "shadowCameraSize",
+      "groundShadowOpacity",
+    ];
+    const touchesLighting = lightingKeys.some((key) => partial[key] !== undefined);
     const shadowDetailKeys = [
       "shadowMode",
       "shadowMapSize",
@@ -1000,18 +1161,24 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
       shadowQuality: manualShadowEdit ? "custom" : (partial.shadowQuality ?? prev.shadowQuality),
     });
     persistLights(lights);
-    set({ lights });
+    set({ lights, lightLook: touchesLighting ? "custom" : get().lightLook });
+  },
+  applyLightLook: (look) => {
+    const pack = LIGHT_LOOK_PRESETS[look];
+    const lights = sanitizeLights({ ...DEFAULT_LIGHTS, ...pack });
+    persistLights(lights);
+    set({ lights, lightLook: look });
   },
   applyShadowQuality: (quality: Exclude<MmdShadowQuality, "custom">) => {
     const pack = SHADOW_QUALITY_PRESETS[quality];
     const lights = sanitizeLights({ ...get().lights, ...pack, shadowQuality: quality });
     persistLights(lights);
-    set({ lights });
+    set({ lights, lightLook: "custom" });
   },
   resetLights: () => {
     const lights = { ...DEFAULT_LIGHTS };
     persistLights(lights);
-    set({ lights });
+    set({ lights, lightLook: "default" });
   },
   setStatus: (status, statusMessage = "") => {
     const state = get();

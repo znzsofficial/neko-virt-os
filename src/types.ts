@@ -1,4 +1,4 @@
-import type { FsFile } from "./virtualFs";
+import type { FsFile } from "./fs";
 import type { AppId } from "./apps";
 
 export type { AppId } from "./apps";

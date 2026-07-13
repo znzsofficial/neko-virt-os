@@ -5,7 +5,7 @@ import { useLanguageStore } from "../languageStore";
 import { useOsUiStore } from "../osUiStore";
 import { formatBytes } from "../systemInfo";
 import { useDesktopStore } from "../windowStore";
-import { useFsStore } from "../fsStore";
+import { useFsStore } from "../fs";
 
 export function DesktopWidgets() {
   const t = useLanguageStore((state) => state.t);

@@ -27,6 +27,7 @@ import {
   type MmdExportCodec,
   type MmdExportMode,
   type MmdExportResolution,
+  type MmdLightLook,
   type MmdLutLook,
   type MmdMsaaSamples,
   type MmdPostFxPreset,
@@ -34,6 +35,7 @@ import {
   type MmdShadowMode,
   type MmdShadowQuality,
   type MmdSmaaQuality,
+  LIGHT_LOOK_PRESETS,
 } from "./mmdStudioStore";
 
 export type MmdSidePanelProps = {
@@ -98,6 +100,16 @@ function codecLabel(value: MmdExportCodec, t: ReturnType<typeof useLanguageStore
   if (value === "vp8") return "VP8 (WebM)";
   if (value === "vp9") return "VP9 (WebM)";
   return t("mmdCodecAuto");
+}
+
+function lightLookLabel(look: Exclude<MmdLightLook, "custom">, t: ReturnType<typeof useLanguageStore.getState>["t"]) {
+  if (look === "default") return t("mmdLightLookDefault");
+  if (look === "studio") return t("mmdLightLookStudio");
+  if (look === "outdoor") return t("mmdLightLookOutdoor");
+  if (look === "sunset") return t("mmdLightLookSunset");
+  if (look === "anime") return t("mmdLightLookAnime");
+  if (look === "dramatic") return t("mmdLightLookDramatic");
+  return t("mmdLightLookSoft");
 }
 
 export function MmdSidePanel({
@@ -169,8 +181,18 @@ export function MmdSidePanel({
   const setEnvIntensity = useMmdStudioStore((state) => state.setEnvIntensity);
   const showGrid = useMmdStudioStore((state) => state.showGrid);
   const setShowGrid = useMmdStudioStore((state) => state.setShowGrid);
+  const showGizmo = useMmdStudioStore((state) => state.showGizmo);
+  const setShowGizmo = useMmdStudioStore((state) => state.setShowGizmo);
+  const gizmoMode = useMmdStudioStore((state) => state.gizmoMode);
+  const setGizmoMode = useMmdStudioStore((state) => state.setGizmoMode);
+  const showLightHelper = useMmdStudioStore((state) => state.showLightHelper);
+  const setShowLightHelper = useMmdStudioStore((state) => state.setShowLightHelper);
+  const showSkeletonHelper = useMmdStudioStore((state) => state.showSkeletonHelper);
+  const setShowSkeletonHelper = useMmdStudioStore((state) => state.setShowSkeletonHelper);
   const lights = useMmdStudioStore((state) => state.lights);
+  const lightLook = useMmdStudioStore((state) => state.lightLook);
   const setLights = useMmdStudioStore((state) => state.setLights);
+  const applyLightLook = useMmdStudioStore((state) => state.applyLightLook);
   const applyShadowQuality = useMmdStudioStore((state) => state.applyShadowQuality);
   const resetLights = useMmdStudioStore((state) => state.resetLights);
   const selectedModel = models.find((item) => item.id === selectedModelId) ?? null;
@@ -390,6 +412,30 @@ export function MmdSidePanel({
         <PanelSection title={t("mmdSectionTransform")} collapsible defaultOpen>
           {selectedModel ? (
             <>
+              <div className="mmd-seg mmd-gizmo-mode-seg" role="group" aria-label={t("mmdGizmoMode")}>
+                {([
+                  ["translate", "mmdGizmoTranslate"],
+                  ["rotate", "mmdGizmoRotate"],
+                  ["scale", "mmdGizmoScale"],
+                ] as const).map(([mode, key]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={gizmoMode === mode && showGizmo ? "button-ghost is-active" : "button-ghost"}
+                    onClick={() => setGizmoMode(mode)}
+                  >
+                    {t(key)}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className={showGizmo ? "button-ghost is-active" : "button-ghost"}
+                  onClick={() => setShowGizmo(!showGizmo)}
+                  title={t("mmdShowGizmo")}
+                >
+                  Gizmo
+                </button>
+              </div>
               <p className="mmd-note">{t("mmdTransformPos")}</p>
               <div className="mmd-field-row mmd-field-row-3">
                 <NumberField
@@ -612,9 +658,73 @@ export function MmdSidePanel({
             <input type="checkbox" checked={showGrid} onChange={(event) => setShowGrid(event.target.checked)} />
             <span>{t("mmdShowGrid")}</span>
           </label>
+          <label className="mmd-check">
+            <input type="checkbox" checked={showGizmo} onChange={(event) => setShowGizmo(event.target.checked)} />
+            <span>{t("mmdShowGizmo")}</span>
+          </label>
+          {showGizmo ? (
+            <>
+              <label className="mmd-field">
+                <span>{t("mmdGizmoMode")}</span>
+                <MmdSelect
+                  value={gizmoMode}
+                  ariaLabel={t("mmdGizmoMode")}
+                  onChange={(next) => setGizmoMode(next as "translate" | "rotate" | "scale")}
+                  options={[
+                    { value: "translate", label: t("mmdGizmoTranslate") },
+                    { value: "rotate", label: t("mmdGizmoRotate") },
+                    { value: "scale", label: t("mmdGizmoScale") },
+                  ]}
+                />
+              </label>
+              <p className="mmd-note">{t("mmdGizmoHint")}</p>
+            </>
+          ) : null}
+          <label className="mmd-check">
+            <input type="checkbox" checked={showLightHelper} onChange={(event) => setShowLightHelper(event.target.checked)} />
+            <span>{t("mmdShowLightHelper")}</span>
+          </label>
+          <label className="mmd-check">
+            <input type="checkbox" checked={showSkeletonHelper} onChange={(event) => setShowSkeletonHelper(event.target.checked)} />
+            <span>{t("mmdShowSkeletonHelper")}</span>
+          </label>
         </PanelSection>
 
         <PanelSection title={t("mmdSectionLights")}>
+          <label className="mmd-field">
+            <span>{t("mmdLightLook")}</span>
+            <MmdSelect
+              value={lightLook}
+              ariaLabel={t("mmdLightLook")}
+              onChange={(next) => {
+                const look = next as MmdLightLook;
+                if (look === "custom") return;
+                applyLightLook(look);
+              }}
+              options={[
+                { value: "default", label: t("mmdLightLookDefault") },
+                { value: "studio", label: t("mmdLightLookStudio") },
+                { value: "outdoor", label: t("mmdLightLookOutdoor") },
+                { value: "sunset", label: t("mmdLightLookSunset") },
+                { value: "anime", label: t("mmdLightLookAnime") },
+                { value: "dramatic", label: t("mmdLightLookDramatic") },
+                { value: "soft", label: t("mmdLightLookSoft") },
+                { value: "custom", label: t("mmdLightLookCustom"), disabled: true },
+              ]}
+            />
+          </label>
+          <div className="mmd-seg mmd-light-look-seg" role="group" aria-label={t("mmdLightLook")}>
+            {(Object.keys(LIGHT_LOOK_PRESETS) as Exclude<MmdLightLook, "custom">[]).map((look) => (
+              <button
+                key={look}
+                type="button"
+                className={lightLook === look ? "button-ghost is-active" : "button-ghost"}
+                onClick={() => applyLightLook(look)}
+              >
+                {lightLookLabel(look, t)}
+              </button>
+            ))}
+          </div>
           <SliderField
             label={t("mmdAmbientIntensity")}
             value={lights.ambientIntensity}

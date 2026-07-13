@@ -14,7 +14,7 @@ import {
   updateFileContent,
 } from "./virtualFs";
 import { findEntryByNameInFolder, findFileByName, getFileNameError, getMoveError } from "./fileUtils";
-import type { FsStore } from "./types";
+import type { FsStore } from "../types";
 
 export const useFsStore = create<FsStore>((set, get) => ({
   files: [],

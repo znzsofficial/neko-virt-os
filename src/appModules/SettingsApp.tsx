@@ -2,7 +2,7 @@ import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
 import { useEffect, useState } from "react";
 import { appConfirm } from "../dialogStore";
-import { useFsStore } from "../fsStore";
+import { useFsStore } from "../fs";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
 import { ACCENT_HUES, applyThemeSettings, readThemeSettings, resolveThemeMode, THEME_STORAGE_KEY, WALLPAPERS } from "../theme";

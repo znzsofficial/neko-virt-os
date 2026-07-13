@@ -3,7 +3,7 @@ import { clsx } from "clsx";
 import { useEffect, useState } from "react";
 import { appDescriptionKeys, appTitleKeys, getAppIcon } from "../appText";
 import { apps } from "../apps";
-import { useFsStore } from "../fsStore";
+import { useFsStore } from "../fs";
 import { useLanguageStore } from "../languageStore";
 import { requestCloseWindow } from "../shell/windowLifecycle";
 import { type BrowserPerformance, type DeviceSnapshot, formatBytes, getDeviceRows, readHighEntropyDeviceInfo, type StorageSnapshot } from "../systemInfo";

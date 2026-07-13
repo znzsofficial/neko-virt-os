@@ -83,6 +83,8 @@ export type MmdRuntimeHandle = {
   addModel: (modelFile: File, companionFiles?: readonly File[], options?: MmdAddModelOptions) => Promise<MmdLoadReport>;
   removeModel: (id: string) => void;
   selectModel: (id: string | null) => void;
+  /** Scene root Object3D for gizmo / helpers (null if missing). */
+  getModelRoot: (id: string | null) => THREE.Object3D | null;
   setModelVisible: (id: string, visible: boolean) => void;
   setModelTransform: (id: string, patch: Partial<MmdModelTransform>) => void;
   loadMotion: (file: File, slot?: MmdMotionSlot, modelId?: string | null) => Promise<void>;
@@ -416,6 +418,10 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
     selectModel(id) {
       if (id && !entries.has(id)) return;
       selectedId = id;
+    },
+    getModelRoot(id) {
+      if (!id) return null;
+      return entries.get(id)?.model.root ?? null;
     },
     setModelVisible(id, visible) {
       const entry = entries.get(id);

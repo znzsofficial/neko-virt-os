@@ -1,6 +1,6 @@
-import { Grid, OrbitControls } from "@react-three/drei";
+import { Grid, OrbitControls, TransformControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import {
   createMmdRuntimeHandle,
@@ -24,6 +24,7 @@ export type MmdSceneApi = {
   selectModel: (id: string | null) => void;
   setModelVisible: (id: string, visible: boolean) => void;
   setModelTransform: (id: string, patch: Partial<MmdModelTransform>) => void;
+  getModelRoot: (id: string | null) => THREE.Object3D | null;
   loadMotion: (file: File, slot?: MmdMotionSlot, modelId?: string | null) => Promise<void>;
   setMorphWeight: (modelId: string, morphName: string, weight: number) => void;
   setMaterialVisible: (modelId: string, materialName: string, visible: boolean) => void;
@@ -79,6 +80,166 @@ function isTypingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
+}
+
+function ModelTransformGizmo({
+  runtime,
+  selectedModelId,
+  mode,
+  enabled,
+  orbitRef,
+}: {
+  runtime: ReturnType<typeof createMmdRuntimeHandle>;
+  selectedModelId: string | null;
+  mode: "translate" | "rotate" | "scale";
+  enabled: boolean;
+  orbitRef: React.MutableRefObject<any>;
+}) {
+  const controlsRef = useRef<any>(null);
+  const setSelectedModelId = useMmdStudioStore((state) => state.setSelectedModelId);
+  const models = useMmdStudioStore((state) => state.models);
+  const effectiveId = selectedModelId && models.some((model) => model.id === selectedModelId)
+    ? selectedModelId
+    : models.find((model) => model.visible)?.id ?? models[0]?.id ?? null;
+  const root = effectiveId ? runtime.getModelRoot(effectiveId) : null;
+  const selectedModel = models.find((item) => item.id === effectiveId) ?? null;
+
+  // Ensure store selection exists when gizmo is on (otherwise nothing attaches).
+  useEffect(() => {
+    if (!enabled || !effectiveId) return;
+    if (selectedModelId !== effectiveId) {
+      runtime.selectModel(effectiveId);
+      setSelectedModelId(effectiveId);
+    }
+  }, [effectiveId, enabled, runtime, selectedModelId, setSelectedModelId]);
+
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const onDraggingChanged = (event: { value: boolean }) => {
+      if (orbitRef.current) {
+        // Keep orbit usable in free camera; disable only while dragging gizmo.
+        const free = useMmdStudioStore.getState().cameraMode === "free";
+        orbitRef.current.enabled = free && !event.value;
+      }
+    };
+    controls.addEventListener("dragging-changed", onDraggingChanged);
+    return () => {
+      controls.removeEventListener("dragging-changed", onDraggingChanged);
+      if (orbitRef.current) {
+        orbitRef.current.enabled = useMmdStudioStore.getState().cameraMode === "free";
+      }
+    };
+  }, [orbitRef, root, mode, effectiveId]);
+
+  function commitFromObject() {
+    if (!root || !effectiveId) return;
+    const euler = new THREE.Euler().setFromQuaternion(root.quaternion, "XYZ");
+    const scale = (root.scale.x + root.scale.y + root.scale.z) / 3;
+    const patch = {
+      positionX: root.position.x,
+      positionY: root.position.y,
+      positionZ: root.position.z,
+      rotationX: THREE.MathUtils.radToDeg(euler.x),
+      rotationY: THREE.MathUtils.radToDeg(euler.y),
+      rotationZ: THREE.MathUtils.radToDeg(euler.z),
+      scale: Math.min(10, Math.max(0.01, scale)),
+    };
+    runtime.setModelTransform(effectiveId, patch);
+    const state = useMmdStudioStore.getState();
+    const model = state.models.find((item) => item.id === effectiveId);
+    if (!model) return;
+    state.patchModel(effectiveId, { transform: { ...model.transform, ...patch } });
+  }
+
+  if (!enabled || !root || !selectedModel?.visible) return null;
+
+  // size ~1.5 reads better on MMD-scale characters; remount when model/mode changes.
+  return (
+    <TransformControls
+      key={`${effectiveId}-${mode}`}
+      ref={controlsRef}
+      object={root}
+      mode={mode}
+      size={1.5}
+      space="world"
+      onObjectChange={() => commitFromObject()}
+    />
+  );
+}
+
+function DirectionalLightDebugHelper({ lightRef, enabled }: { lightRef: React.RefObject<THREE.DirectionalLight | null>; enabled: boolean }) {
+  const { scene } = useThree();
+  const helperRef = useRef<THREE.DirectionalLightHelper | null>(null);
+
+  useLayoutEffect(() => {
+    const light = lightRef.current;
+    if (!enabled || !light) {
+      if (helperRef.current) {
+        scene.remove(helperRef.current);
+        helperRef.current.dispose();
+        helperRef.current = null;
+      }
+      return;
+    }
+    const helper = new THREE.DirectionalLightHelper(light, 4, 0xffcc66);
+    helperRef.current = helper;
+    scene.add(helper);
+    return () => {
+      scene.remove(helper);
+      helper.dispose();
+      if (helperRef.current === helper) helperRef.current = null;
+    };
+  }, [enabled, lightRef, scene]);
+
+  useFrame(() => {
+    helperRef.current?.update();
+  });
+
+  return null;
+}
+
+function SelectedSkeletonHelper({
+  runtime,
+  selectedModelId,
+  enabled,
+}: {
+  runtime: ReturnType<typeof createMmdRuntimeHandle>;
+  selectedModelId: string | null;
+  enabled: boolean;
+}) {
+  const { scene } = useThree();
+  const helperRef = useRef<THREE.SkeletonHelper | null>(null);
+  const root = selectedModelId ? runtime.getModelRoot(selectedModelId) : null;
+
+  useLayoutEffect(() => {
+    if (helperRef.current) {
+      scene.remove(helperRef.current);
+      helperRef.current = null;
+    }
+    if (!enabled || !root) return;
+    let skinned: THREE.Object3D | null = null;
+    root.traverse((obj) => {
+      if (!skinned && (obj as THREE.SkinnedMesh).isSkinnedMesh) {
+        skinned = obj;
+      }
+    });
+    if (!skinned) return;
+    const helper = new THREE.SkeletonHelper(skinned);
+    const mat = helper.material as THREE.LineBasicMaterial;
+    mat.depthTest = false;
+    mat.transparent = true;
+    mat.opacity = 0.85;
+    helper.frustumCulled = false;
+    helperRef.current = helper;
+    scene.add(helper);
+    return () => {
+      scene.remove(helper);
+      if (helperRef.current === helper) helperRef.current = null;
+    };
+  }, [enabled, root, scene]);
+
+  return null;
 }
 
 function snapshotToStore(models: RuntimeModelSnapshot[]): MmdSceneModel[] {
@@ -138,6 +299,13 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
   const postFxRaw = useMmdStudioStore((state) => state.postFx);
   const postFx: MmdPostFxPreset = backend === "webgl" ? postFxRaw : "off";
   const showGrid = useMmdStudioStore((state) => state.showGrid);
+  const showGizmo = useMmdStudioStore((state) => state.showGizmo);
+  const gizmoMode = useMmdStudioStore((state) => state.gizmoMode);
+  const showLightHelper = useMmdStudioStore((state) => state.showLightHelper);
+  const showSkeletonHelper = useMmdStudioStore((state) => state.showSkeletonHelper);
+  const selectedModelId = useMmdStudioStore((state) => state.selectedModelId);
+  const models = useMmdStudioStore((state) => state.models);
+  const exportingOffline = useMmdStudioStore((state) => state.exportingOffline);
   const skyMode = useMmdStudioStore((state) => state.skyMode);
   const skyAsBackground = useMmdStudioStore((state) => state.skyAsBackground);
   const skyAsEnvironment = useMmdStudioStore((state) => state.skyAsEnvironment);
@@ -206,6 +374,7 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
           transform: { ...model.transform, ...patch },
         });
       },
+      getModelRoot: (id) => runtime.getModelRoot(id),
       loadMotion: async (file, slot = "body", modelId = null) => {
         setStatus("loading");
         try {
@@ -865,6 +1034,21 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
         maxPolarAngle={Math.PI - 0.02}
         rotateSpeed={cameraRotateSpeed}
       />
+      {!exportingOffline && !recording && showGizmo && models.length > 0 ? (
+        <ModelTransformGizmo
+          runtime={runtime}
+          selectedModelId={selectedModelId}
+          mode={gizmoMode}
+          enabled
+          orbitRef={controls}
+        />
+      ) : null}
+      {!exportingOffline && !recording && showLightHelper && sunEnabled ? (
+        <DirectionalLightDebugHelper lightRef={dirLightRef} enabled />
+      ) : null}
+      {!exportingOffline && !recording && showSkeletonHelper ? (
+        <SelectedSkeletonHelper runtime={runtime} selectedModelId={selectedModelId} enabled />
+      ) : null}
       {backend === "webgl" && postFx !== "off" ? (
         <Suspense fallback={null}>
           <MmdPostFx preset={postFx} />

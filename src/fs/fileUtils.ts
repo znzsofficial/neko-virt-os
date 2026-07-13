@@ -1,5 +1,5 @@
+import type { FileMutationErrorCode, FileSortMode } from "../types";
 import type { FsFile } from "./virtualFs";
-import type { FileMutationErrorCode, FileSortMode } from "./types";
 
 export function findFileByName(files: FsFile[], name: string) {
   const normalized = name.trim().toLowerCase();

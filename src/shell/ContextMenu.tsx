@@ -2,15 +2,15 @@ import { Icon } from "@iconify-icon/react";
 import { apps } from "../apps";
 import { appTitleKeys } from "../appText";
 import { appAlert, appConfirm, appPrompt } from "../dialogStore";
-import { translateFileError } from "../fileErrorUtils";
-import { getFileOpenApp } from "../fileOpen";
-import { useFsStore } from "../fsStore";
+import { translateFileError } from "../fs";
+import { getFileOpenApp } from "../fs";
+import { useFsStore } from "../fs";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
 import type { ContextMenuState, WorkspaceId } from "../types";
 import { useDesktopStore } from "../windowStore";
 import { useDesktopPinsStore } from "./desktopPinsStore";
-import { openFilesFolder, startFilesCreateFile, startFilesCreateFolder, useFilesBridgeStore } from "./filesBridge";
+import { getFilesBridgeHandlersForTest, openFilesFolder, startFilesCreateFile, startFilesCreateFolder } from "./filesBridge";
 import { phrase } from "./phrase";
 import { requestCloseWindow } from "./windowLifecycle";
 
@@ -116,7 +116,7 @@ export function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose
   }
 
   async function createFileFromMenu() {
-    if (useFilesBridgeStore.getState().startCreateFile) {
+    if (getFilesBridgeHandlersForTest().startCreateFile) {
       startFilesCreateFile();
       return;
     }
@@ -135,7 +135,7 @@ export function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose
   }
 
   async function createFolderFromMenu() {
-    if (useFilesBridgeStore.getState().createFolder) {
+    if (getFilesBridgeHandlersForTest().createFolder) {
       await startFilesCreateFolder();
       return;
     }

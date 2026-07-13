@@ -7,7 +7,7 @@ import { Launcher } from "./components/Launcher";
 import { NotificationOverlay } from "./components/NotificationOverlay";
 import { Taskbar } from "./components/Taskbar";
 import { WindowSwitcher } from "./components/WindowSwitcher";
-import { useFsStore } from "./fsStore";
+import { useFsStore } from "./fs";
 import { useLanguageStore } from "./languageStore";
 import { useOsUiStore } from "./osUiStore";
 import { ContextMenu } from "./shell/ContextMenu";

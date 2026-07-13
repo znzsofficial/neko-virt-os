@@ -1,7 +1,7 @@
 import { Icon } from "@iconify-icon/react";
-import { formatFileTime } from "../fileUtils";
+import { formatFileTime } from "../fs";
 import { appConfirm } from "../dialogStore";
-import { useFsStore } from "../fsStore";
+import { useFsStore } from "../fs";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
 

@@ -1,7 +1,7 @@
 import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
 import { useEffect, useState } from "react";
-import { useFsStore } from "../fsStore";
+import { useFsStore } from "../fs";
 import { useLanguageStore } from "../languageStore";
 import { clearNoteWindowDirty, getNoteWindowFile, setNoteWindowDirty, setNoteWindowFile } from "../shell/windowLifecycle";
 import { useDesktopStore } from "../windowStore";

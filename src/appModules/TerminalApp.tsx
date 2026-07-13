@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apps } from "../apps";
 import { appTitleKeys } from "../appText";
-import { translateFileError } from "../fileErrorUtils";
-import { formatFileSize, formatFileTime, resolveEntryPath, resolveFolderPath, splitFsPath } from "../fileUtils";
 import { useDownloadStore } from "../downloadStore";
-import { useFsStore } from "../fsStore";
+import {
+  formatFileSize,
+  formatFileTime,
+  resolveEntryPath,
+  resolveFolderPath,
+  splitFsPath,
+  translateFileError,
+  useFsStore,
+  type FsFile,
+} from "../fs";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
 import type { AppId, FileMutationResult } from "../types";
-import type { FsFile } from "../virtualFs";
 import { openFilesFolder } from "../shell/filesBridge";
 import { useDesktopStore } from "../windowStore";
 

@@ -1,7 +1,7 @@
 import { Icon } from "@iconify-icon/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { appPrompt } from "../dialogStore";
-import { consumeBrowserOpenUrl } from "../fileOpen";
+import { consumeBrowserOpenUrl } from "../fs";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
 
 const defaultBookmarkSeed = [

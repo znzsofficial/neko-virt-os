@@ -3,15 +3,19 @@ import { clsx } from "clsx";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { NavItem } from "../components/NavItem";
 import { appAlert, appConfirm, appPrompt } from "../dialogStore";
-import { translateFileError } from "../fileErrorUtils";
-import { getFileOpenApp } from "../fileOpen";
-import { formatFileSize, formatFileTime, sortFiles } from "../fileUtils";
-import { useFsStore } from "../fsStore";
+import {
+  formatFileSize,
+  formatFileTime,
+  getFileOpenApp,
+  sortFiles,
+  translateFileError,
+  useFsStore,
+  type FsFile,
+} from "../fs";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
 import type { FileSortMode } from "../types";
-import type { FsFile } from "../virtualFs";
-import { useFilesBridgeStore } from "../shell/filesBridge";
+import { registerFilesBridgeHandlers } from "../shell/filesBridge";
 import { useDesktopStore } from "../windowStore";
 
 const DETAILS_WIDTH_KEY = "neko-virt-os.files-details-width.v1";
@@ -246,8 +250,30 @@ export function FilesApp() {
     addNotification({ title: t("fileCreated"), message: `${result.file?.name ?? t("newFile")}${t("createdSuffix")}`, type: "success", category: "files", appId: "files" });
   }
 
+  const folderHistoryIndexRef = useRef(folderHistoryIndex);
+  folderHistoryIndexRef.current = folderHistoryIndex;
+  const folderHistoryRef = useRef(folderHistory);
+  folderHistoryRef.current = folderHistory;
+  const sectionRef = useRef(section);
+  sectionRef.current = section;
+  const currentFolderIdRef = useRef(currentFolderId);
+  currentFolderIdRef.current = currentFolderId;
+
+  function navigateToFolder(folderId: string | null, mode: "push" | "replace" = "push") {
+    setCurrentFolderId(folderId);
+    setSelectedIds([]);
+    setAnchorId(null);
+    if (mode === "replace") {
+      const historyIndex = folderHistoryIndexRef.current;
+      setFolderHistory((current) => current.map((entry, index) => (index === historyIndex ? folderId : entry)));
+      return;
+    }
+    setFolderHistory((current) => [...current.slice(0, folderHistoryIndexRef.current + 1), folderId]);
+    setFolderHistoryIndex((current) => current + 1);
+  }
+
   function startCreateFile() {
-    if (section === "home") setSection("files");
+    if (sectionRef.current === "home") setSection("files");
     setCreatingFile(true);
     setNewFileDraft("Untitled.md");
   }
@@ -262,23 +288,11 @@ export function FilesApp() {
     navigateToFolder(folderId);
   }
 
-  function navigateToFolder(folderId: string | null, mode: "push" | "replace" = "push") {
-    setCurrentFolderId(folderId);
-    setSelectedIds([]);
-    setAnchorId(null);
-    if (mode === "replace") {
-      setFolderHistory((current) => current.map((entry, index) => (index === folderHistoryIndex ? folderId : entry)));
-      return;
-    }
-    setFolderHistory((current) => [...current.slice(0, folderHistoryIndex + 1), folderId]);
-    setFolderHistoryIndex((current) => current + 1);
-  }
-
   function stepFolderHistory(direction: -1 | 1) {
     setFolderHistoryIndex((current) => {
       const nextIndex = current + direction;
-      const nextFolderId = folderHistory[nextIndex];
-      if (nextIndex < 0 || nextIndex >= folderHistory.length || nextFolderId === undefined) return current;
+      const nextFolderId = folderHistoryRef.current[nextIndex];
+      if (nextIndex < 0 || nextIndex >= folderHistoryRef.current.length || nextFolderId === undefined) return current;
       setCurrentFolderId(nextFolderId);
       setSelectedIds([]);
       setAnchorId(null);
@@ -294,7 +308,7 @@ export function FilesApp() {
       confirmLabel: t("createFolder"),
     });
     if (!name || !name.trim()) return;
-    const parentId = section === "home" ? null : currentFolderId;
+    const parentId = sectionRef.current === "home" ? null : currentFolderIdRef.current;
     const result = await createFolder(name, parentId);
     if (result.error) {
       addNotification({ title: t("createFailed"), message: translateFileError(result.error, t), type: "error", category: "files", appId: "files" });
@@ -306,18 +320,22 @@ export function FilesApp() {
     }
   }
 
-  useEffect(() => {
-    useFilesBridgeStore.getState().setHandlers({
-      startCreateFile,
-      createFolder: createFolderInCurrentLocation,
-      openFolder: openFolderLocation,
-    });
+  // Stable bridge handlers (refs hold latest section/folder); register once per mount.
+  const bridgeHandlersRef = useRef({
+    startCreateFile,
+    createFolder: createFolderInCurrentLocation,
+    openFolder: openFolderLocation,
   });
+  bridgeHandlersRef.current.startCreateFile = startCreateFile;
+  bridgeHandlersRef.current.createFolder = createFolderInCurrentLocation;
+  bridgeHandlersRef.current.openFolder = openFolderLocation;
 
   useEffect(() => {
-    return () => {
-      useFilesBridgeStore.getState().clearHandlers();
-    };
+    return registerFilesBridgeHandlers({
+      startCreateFile: () => bridgeHandlersRef.current.startCreateFile(),
+      createFolder: () => bridgeHandlersRef.current.createFolder(),
+      openFolder: (folderId) => bridgeHandlersRef.current.openFolder(folderId),
+    });
   }, []);
 
   useEffect(() => {

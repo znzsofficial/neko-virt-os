@@ -1,5 +1,5 @@
-import type { TranslationKey } from "./languageStore";
-import type { FileMutationErrorCode } from "./types";
+import type { TranslationKey } from "../languageStore";
+import type { FileMutationErrorCode } from "../types";
 
 const fileErrorKeyMap: Record<FileMutationErrorCode, TranslationKey> = {
   empty_name: "fileNameEmptyError",

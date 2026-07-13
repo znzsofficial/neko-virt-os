@@ -64,6 +64,26 @@
   font-size: 12px;
 }
 
+.mmd-seg .button-ghost.is-active {
+  background: var(--os-primary-soft);
+  color: var(--os-ink);
+}
+
+.mmd-gizmo-mode-seg {
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.mmd-light-look-seg {
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+.mmd-light-look-seg .button-ghost {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .mmd-inline-field,
 .mmd-field {
   display: grid;
@@ -1285,6 +1305,9 @@ body.mmd-resizing-transport * {
 }
 
 .mmd-timeline {
+  --mmd-timeline-rail-inset-x: 12px;
+  --mmd-timeline-rail-inset-top: 16px;
+  --mmd-timeline-rail-inset-bottom: 10px;
   position: relative;
   width: 100%;
   min-height: 48px;
@@ -1308,11 +1331,13 @@ body.mmd-resizing-transport * {
   border-color: color-mix(in oklch, var(--os-primary) 35%, var(--os-border));
 }
 
-/* Shared coordinate space for track, progress, ticks, handles (inset rail).
-   Horizontal inset must stay in sync with TIMELINE_RAIL_INSET_X in MmdTimelineBar.tsx */
+/* Shared coordinate space for track, progress, ticks, handles (inset rail). */
 .mmd-timeline-rail {
   position: absolute;
-  inset: 16px 12px 10px;
+  inset:
+    var(--mmd-timeline-rail-inset-top)
+    var(--mmd-timeline-rail-inset-x)
+    var(--mmd-timeline-rail-inset-bottom);
 }
 
 .mmd-timeline-track {

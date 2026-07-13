@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from "dexie";
 import { nanoid } from "nanoid";
-import { useLanguageStore } from "./languageStore";
+import { useLanguageStore } from "../languageStore";
 
 export type FsFile = {
   id: string;

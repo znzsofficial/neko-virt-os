@@ -28,8 +28,14 @@ export type MmdTimelineBarProps = {
   onClearRange?: () => void;
 };
 
-/** Must match `.mmd-timeline-rail` horizontal inset in mmd-studio.css */
-const TIMELINE_RAIL_INSET_X = 12;
+const TIMELINE_RAIL_INSET_X_FALLBACK = 12;
+
+function readTimelineRailInsetX(element: HTMLElement | null) {
+  if (!element) return TIMELINE_RAIL_INSET_X_FALLBACK;
+  const raw = getComputedStyle(element).getPropertyValue("--mmd-timeline-rail-inset-x").trim();
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) ? parsed : TIMELINE_RAIL_INSET_X_FALLBACK;
+}
 
 function pickTickStep(duration: number, fps: number) {
   const candidates = [1 / Math.max(1, fps), 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
@@ -128,11 +134,13 @@ export function MmdTimelineBar({
   const rangeWidth = Math.max(0, outRatio - inRatio);
 
   function timelineRatio(clientX: number) {
-    const box = timelineRef.current?.getBoundingClientRect();
+    const node = timelineRef.current;
+    const box = node?.getBoundingClientRect();
     if (!box || box.width <= 0 || safeDuration <= 0) return 0;
-    // Match CSS rail inset so scrub lines up with the painted track.
-    const usable = Math.max(1, box.width - TIMELINE_RAIL_INSET_X * 2);
-    return Math.min(1, Math.max(0, (clientX - box.left - TIMELINE_RAIL_INSET_X) / usable));
+    // Read CSS --mmd-timeline-rail-inset-x so paint + pointer share one source of truth.
+    const railInset = readTimelineRailInsetX(node);
+    const usable = Math.max(1, box.width - railInset * 2);
+    return Math.min(1, Math.max(0, (clientX - box.left - railInset) / usable));
   }
 
   function timelineTimeFromClientX(clientX: number) {

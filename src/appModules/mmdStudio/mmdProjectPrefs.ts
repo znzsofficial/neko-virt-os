@@ -1,5 +1,5 @@
-import { createFolder, listFiles, createTextFile, updateFileContent, type FsFile } from "../../virtualFs";
-import { findEntryByNameInFolder } from "../../fileUtils";
+import { createFolder, listFiles, createTextFile, updateFileContent, type FsFile } from "../../fs";
+import { findEntryByNameInFolder } from "../../fs";
 
 const FOLDER_KEY = "neko-virt-os.mmd-project-folder.v1";
 const DEFAULT_FOLDER_NAME = "MMD Projects";

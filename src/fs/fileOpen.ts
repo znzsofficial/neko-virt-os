@@ -1,4 +1,4 @@
-import type { AppId } from "./apps";
+import type { AppId } from "../apps";
 import type { FsFile } from "./virtualFs";
 
 const BROWSER_PENDING_URL_KEY = "neko-virt-os.browser-pending-url.v1";
