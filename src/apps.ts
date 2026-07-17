@@ -162,7 +162,7 @@ export const apps = [
     icon: "solar:settings-bold-duotone",
     description: "系统偏好和数据管理",
     descriptionKey: "descSettings",
-    defaultSize: { width: 560, height: 420 },
+    defaultSize: { width: 820, height: 580 },
   },
   {
     id: "mmd-studio",

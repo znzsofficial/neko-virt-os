@@ -46,20 +46,20 @@ export function DesktopWidgets() {
         <button type="button" className="button-ghost" onClick={() => setWidgetsCollapsed(true)}>{t("widgetsHide")}</button>
       </header>
 
-      <section className="desktop-widget" onDoubleClick={() => openApp("timer")}>
+      <section className="desktop-widget tint-sky" onDoubleClick={() => openApp("timer")}>
         <span>{t("localTime")}</span>
         <strong>{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</strong>
         <small>{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</small>
       </section>
 
-      <section className="desktop-widget" onDoubleClick={() => openApp("tasks")}>
+      <section className="desktop-widget tint-mint" onDoubleClick={() => openApp("tasks")}>
         <span>{t("widgetsTasks")}</span>
         {tasks.length ? tasks.map((task) => (
           <p key={task.id}>{task.text}</p>
         )) : <p className="is-muted">{t("noTasks")}</p>}
       </section>
 
-      <section className="desktop-widget" onDoubleClick={() => openApp("calendar")}>
+      <section className="desktop-widget tint-violet" onDoubleClick={() => openApp("calendar")}>
         <span>{t("widgetsEvents")}</span>
         {events.length ? events.map((event) => (
           <p key={event.id}>
@@ -69,7 +69,7 @@ export function DesktopWidgets() {
         )) : <p className="is-muted">{t("calendarNoEvents")}</p>}
       </section>
 
-      <section className="desktop-widget" onDoubleClick={() => openApp("task-manager")}>
+      <section className="desktop-widget tint-amber" onDoubleClick={() => openApp("task-manager")}>
         <span>{t("widgetsSystem")}</span>
         <p>{t("widgetsWindows")}: {windows.length}</p>
         <p>{t("widgetsFiles")}: {files.filter((file) => !file.trashed).length}</p>

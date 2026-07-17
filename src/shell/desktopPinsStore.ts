@@ -13,7 +13,6 @@ const DEFAULT_PINNED: AppId[] = [
   "mmd-studio",
   "settings",
   "task-manager",
-  "about",
 ];
 
 type DesktopPinsStore = {

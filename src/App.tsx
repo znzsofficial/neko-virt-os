@@ -3,7 +3,9 @@ import { clsx } from "clsx";
 import { useHotkeys } from "react-hotkeys-hook";
 import { lazy, Suspense, useEffect, useState, type MouseEvent } from "react";
 import { AppDialogHost } from "./components/AppDialogHost";
+import { FpsOverlay } from "./components/FpsOverlay";
 import { Launcher } from "./components/Launcher";
+import { LockScreen } from "./components/LockScreen";
 import { NotificationOverlay } from "./components/NotificationOverlay";
 import { Taskbar } from "./components/Taskbar";
 import { WindowSwitcher } from "./components/WindowSwitcher";
@@ -35,6 +37,7 @@ export function App() {
   const restoreWindow = useDesktopStore((state) => state.restoreWindow);
   const activeWorkspace = useOsUiStore((state) => state.activeWorkspace);
   const immersiveWindowId = useOsUiStore((state) => state.immersiveWindowId);
+  const sessionLocked = useOsUiStore((state) => state.sessionLocked);
   const exitImmersive = useOsUiStore((state) => state.exitImmersive);
   const initFs = useFsStore((state) => state.init);
   const t = useLanguageStore((state) => state.t);
@@ -172,6 +175,8 @@ export function App() {
       {!isImmersive ? <NotificationOverlay /> : null}
       <AppDialogHost />
       {!isImmersive ? <Taskbar /> : null}
+      <FpsOverlay />
+      {sessionLocked ? <LockScreen /> : null}
     </main>
   );
 }

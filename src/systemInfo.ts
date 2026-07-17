@@ -61,10 +61,9 @@ export function getBrowserName(snapshot?: DeviceSnapshot) {
   return match ? `${match[1] === "Edg" ? "Edge" : match[1]} ${match[2]}` : ua;
 }
 
-export function getDeviceRows(storage: StorageSnapshot | null, device: DeviceSnapshot | undefined, t: (key: TranslationKey) => string) {
+export function getDeviceRows(_storage: StorageSnapshot | null, device: DeviceSnapshot | undefined, t: (key: TranslationKey) => string) {
   const nav = navigator as BrowserNavigator;
   const screenInfo = window.screen;
-  const connection = nav.connection;
   const heap = (performance as BrowserPerformance).memory;
 
   return [
@@ -82,8 +81,6 @@ export function getDeviceRows(storage: StorageSnapshot | null, device: DeviceSna
     [t("viewport"), `${window.innerWidth} x ${window.innerHeight}`],
     [t("colorDepth"), `${screenInfo.colorDepth}-bit`],
     [t("touchPoints"), `${navigator.maxTouchPoints || 0}`],
-    [t("network"), connection?.effectiveType ? `${connection.effectiveType}${connection.downlink ? `, ${connection.downlink} Mbps` : ""}${connection.rtt ? `, ${connection.rtt}ms` : ""}` : t("unavailable")],
-    [t("storage"), getStorageLabel(storage)],
     [t("secureContext"), window.isSecureContext ? t("yes") : t("no")],
   ];
 }

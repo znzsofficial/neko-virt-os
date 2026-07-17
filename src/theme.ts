@@ -24,17 +24,49 @@ export const WALLPAPERS: Record<ThemeSettings["wallpaperId"], { labelKey: Transl
 
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = { accentColor: "blue", density: "cozy", theme: "system", wallpaperId: "system", wallpaperLightId: "system", wallpaperDarkId: "system", wallpaperFit: "cover", wallpaperOverlay: "standard" };
 
+export const ACCENT_COLORS = [
+  "blue",
+  "cyan",
+  "emerald",
+  "mint",
+  "amber",
+  "coral",
+  "rose",
+  "purple",
+  "violet",
+  "slate",
+] as const satisfies readonly ThemeSettings["accentColor"][];
+
 export const ACCENT_HUES: Record<ThemeSettings["accentColor"], string> = {
   blue: "250",
-  purple: "300",
+  cyan: "210",
   emerald: "150",
+  mint: "170",
   amber: "75",
+  coral: "35",
+  rose: "10",
+  purple: "300",
+  violet: "285",
+  slate: "250",
+};
+
+export const ACCENT_CHROMA: Record<ThemeSettings["accentColor"], string> = {
+  blue: "0.145",
+  cyan: "0.12",
+  emerald: "0.14",
+  mint: "0.11",
+  amber: "0.13",
+  coral: "0.14",
+  rose: "0.15",
+  purple: "0.16",
+  violet: "0.14",
+  slate: "0.04",
 };
 
 const WALLPAPER_FITS: ThemeSettings["wallpaperFit"][] = ["cover", "contain", "stretch", "tile"];
 
 export function normalizeThemeSettings(value: Partial<ThemeSettings> & { accentColor?: string } = {}): ThemeSettings {
-  const accentColor = (["blue", "purple", "emerald", "amber"] as const).includes(value.accentColor as ThemeSettings["accentColor"])
+  const accentColor = (ACCENT_COLORS as readonly string[]).includes(value.accentColor as string)
     ? (value.accentColor as ThemeSettings["accentColor"])
     : DEFAULT_THEME_SETTINGS.accentColor;
 
@@ -74,13 +106,63 @@ export function readThemeSettings(): ThemeSettings {
   }
 }
 
+/** Merge patch, persist, and apply to the document. */
+export function updateThemeSettings(patch: Partial<ThemeSettings>): ThemeSettings {
+  const next = normalizeThemeSettings({ ...readThemeSettings(), ...patch });
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // ignore quota
+  }
+  applyThemeSettings(next);
+  return next;
+}
+
 export function applyThemeSettings(theme: ThemeSettings) {
   const root = document.documentElement;
   const effectiveTheme = resolveThemeMode(theme.theme);
+  const hue = ACCENT_HUES[theme.accentColor] ?? ACCENT_HUES.blue;
+  const chroma = ACCENT_CHROMA[theme.accentColor] ?? ACCENT_CHROMA.blue;
+  const primaryL = effectiveTheme === "dark" ? "0.72" : "0.52";
+  const primaryStrongL = effectiveTheme === "dark" ? "0.64" : "0.45";
+  const accentL = effectiveTheme === "dark" ? "0.78" : "0.65";
+  const softBg =
+    effectiveTheme === "dark"
+      ? `oklch(0.26 ${Math.min(0.08, Number(chroma))} ${hue})`
+      : `oklch(0.94 ${Math.min(0.04, Number(chroma) * 0.25)} ${hue})`;
+
   root.setAttribute("data-accent", theme.accentColor);
   root.setAttribute("data-density", theme.density);
   root.setAttribute("data-theme-mode", theme.theme);
   root.setAttribute("data-theme", effectiveTheme);
+
+  // Inline tokens so accent changes always recompute (attribute-only CSS can look like a no-op).
+  root.style.setProperty("--os-primary-color", hue);
+  root.style.setProperty("--os-primary-chroma", chroma);
+  root.style.setProperty("--os-primary", `oklch(${primaryL} ${chroma} ${hue})`);
+  root.style.setProperty("--os-primary-strong", `oklch(${primaryStrongL} ${chroma} ${hue})`);
+  root.style.setProperty("--os-primary-soft", softBg);
+  root.style.setProperty("--os-accent", `oklch(${accentL} ${chroma} ${hue})`);
+  root.style.setProperty("--os-accent-soft", softBg);
+  root.style.setProperty("--os-focus", `oklch(${accentL} ${chroma} ${hue})`);
+  root.style.setProperty("--os-focus-ring", `oklch(${accentL} ${chroma} ${hue} / 0.28)`);
+  root.style.setProperty(
+    "--os-selection",
+    effectiveTheme === "dark"
+      ? `oklch(0.29 ${Math.min(0.08, Number(chroma))} ${hue} / 0.72)`
+      : `oklch(0.98 ${Math.min(0.04, Number(chroma) * 0.2)} ${hue} / 0.78)`,
+  );
+  root.style.setProperty(
+    "--os-selection-border",
+    effectiveTheme === "dark" ? `oklch(0.57 ${chroma} ${hue})` : `oklch(0.78 ${Math.min(0.08, Number(chroma))} ${hue})`,
+  );
+  root.style.setProperty(
+    "--os-wallpaper-glow-a",
+    effectiveTheme === "dark"
+      ? `oklch(0.3 ${Math.min(0.08, Number(chroma))} ${hue} / 0.24)`
+      : `oklch(0.93 ${Math.min(0.04, Number(chroma) * 0.2)} ${hue} / 0.24)`,
+  );
+
   // Drive native chrome (scrollbars, form controls) with the resolved theme.
   root.style.colorScheme = effectiveTheme;
   const colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');

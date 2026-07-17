@@ -1,4 +1,10 @@
 import { create } from "zustand";
+import {
+  applyDeveloperPrefs,
+  readDeveloperPrefs,
+  updateDeveloperPrefs,
+  type DeveloperPrefs,
+} from "./developerPrefs";
 
 export type NotificationCategory = "system" | "files" | "apps" | "media";
 
@@ -16,16 +22,27 @@ type OsUiStore = {
   notificationCenterOpen: boolean;
   setNotificationCenterOpen: (open: boolean) => void;
   toggleNotificationCenter: () => void;
+  controlCenterOpen: boolean;
+  setControlCenterOpen: (open: boolean) => void;
+  toggleControlCenter: () => void;
+  sessionLocked: boolean;
+  lockSession: () => void;
+  unlockSession: () => void;
   notificationPrefs: NotificationPrefs;
   setNotificationPrefs: (patch: Partial<NotificationPrefs>) => void;
   widgetsCollapsed: boolean;
   setWidgetsCollapsed: (collapsed: boolean) => void;
+  developerPrefs: DeveloperPrefs;
+  setDeveloperPrefs: (patch: Partial<DeveloperPrefs>) => void;
   /** When set, that window fills the viewport and OS chrome is hidden. */
   immersiveWindowId: string | null;
   enterImmersive: (windowId: string) => void;
   exitImmersive: () => void;
   toggleImmersive: (windowId: string) => void;
 };
+
+const initialDeveloperPrefs = readDeveloperPrefs();
+applyDeveloperPrefs(initialDeveloperPrefs);
 
 const WORKSPACE_KEY = "neko-virt-os.workspace.v1";
 const NOTIFY_PREFS_KEY = "neko-virt-os.notification-prefs.v1";
@@ -77,8 +94,36 @@ export const useOsUiStore = create<OsUiStore>((set) => ({
     set({ activeWorkspace: workspace });
   },
   notificationCenterOpen: false,
-  setNotificationCenterOpen: (open) => set({ notificationCenterOpen: open }),
-  toggleNotificationCenter: () => set((state) => ({ notificationCenterOpen: !state.notificationCenterOpen })),
+  setNotificationCenterOpen: (open) =>
+    set((state) => ({
+      notificationCenterOpen: open,
+      controlCenterOpen: open ? false : state.controlCenterOpen,
+    })),
+  toggleNotificationCenter: () =>
+    set((state) => {
+      const open = !state.notificationCenterOpen;
+      return {
+        notificationCenterOpen: open,
+        controlCenterOpen: open ? false : state.controlCenterOpen,
+      };
+    }),
+  controlCenterOpen: false,
+  setControlCenterOpen: (open) =>
+    set((state) => ({
+      controlCenterOpen: open,
+      notificationCenterOpen: open ? false : state.notificationCenterOpen,
+    })),
+  toggleControlCenter: () =>
+    set((state) => {
+      const open = !state.controlCenterOpen;
+      return {
+        controlCenterOpen: open,
+        notificationCenterOpen: open ? false : state.notificationCenterOpen,
+      };
+    }),
+  sessionLocked: false,
+  lockSession: () => set({ sessionLocked: true, controlCenterOpen: false, notificationCenterOpen: false }),
+  unlockSession: () => set({ sessionLocked: false }),
   notificationPrefs: loadPrefs(),
   setNotificationPrefs: (patch) => set((state) => {
     const notificationPrefs = { ...state.notificationPrefs, ...patch };
@@ -89,6 +134,10 @@ export const useOsUiStore = create<OsUiStore>((set) => ({
   setWidgetsCollapsed: (collapsed) => {
     localStorage.setItem(WIDGETS_KEY, collapsed ? "1" : "0");
     set({ widgetsCollapsed: collapsed });
+  },
+  developerPrefs: initialDeveloperPrefs,
+  setDeveloperPrefs: (patch) => {
+    set({ developerPrefs: updateDeveloperPrefs(patch) });
   },
   immersiveWindowId: null,
   enterImmersive: (windowId) => set({ immersiveWindowId: windowId }),

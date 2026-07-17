@@ -2,13 +2,13 @@ import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { appTitleKeys, getAppIcon } from "../appText";
+import { ControlCenter } from "./ControlCenter";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
-import { useOsUiStore, type WorkspaceId } from "../osUiStore";
+import { useOsUiStore } from "../osUiStore";
 import { useDesktopStore } from "../windowStore";
 
 const weekdayKeys = ["weekdaySun", "weekdayMon", "weekdayTue", "weekdayWed", "weekdayThu", "weekdayFri", "weekdaySat"] as const;
-const WORKSPACES: WorkspaceId[] = [0, 1, 2];
 
 export function Taskbar() {
   const windows = useDesktopStore((state) => state.windows);
@@ -17,16 +17,18 @@ export function Taskbar() {
   const toggleTaskbarWindow = useDesktopStore((state) => state.toggleTaskbarWindow);
   const resetWindowLayout = useDesktopStore((state) => state.resetWindowLayout);
   const activeWorkspace = useOsUiStore((state) => state.activeWorkspace);
-  const setActiveWorkspace = useOsUiStore((state) => state.setActiveWorkspace);
-  const focusWindow = useDesktopStore((state) => state.focusWindow);
-  const restoreWindow = useDesktopStore((state) => state.restoreWindow);
   const toggleNotificationCenter = useOsUiStore((state) => state.toggleNotificationCenter);
+  const controlCenterOpen = useOsUiStore((state) => state.controlCenterOpen);
+  const toggleControlCenter = useOsUiStore((state) => state.toggleControlCenter);
+  const setControlCenterOpen = useOsUiStore((state) => state.setControlCenterOpen);
+  const dndEnabled = useOsUiStore((state) => state.notificationPrefs.dndEnabled);
   const historyCount = useNotificationStore((state) => state.history.length);
   const liveCount = useNotificationStore((state) => state.notifications.length);
   const t = useLanguageStore((state) => state.t);
   const [timeStr, setTimeStr] = useState("");
   const [clockOpen, setClockOpen] = useState(false);
   const clockRef = useRef<HTMLDivElement>(null);
+  const controlRef = useRef<HTMLDivElement>(null);
   const [cursor, setCursor] = useState(() => new Date());
   const today = new Date();
   const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -54,28 +56,16 @@ export function Taskbar() {
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
-      if (!clockRef.current?.contains(event.target as Node)) setClockOpen(false);
+      const target = event.target as Node;
+      if (!clockRef.current?.contains(target)) setClockOpen(false);
+      if (!controlRef.current?.contains(target)) setControlCenterOpen(false);
     }
     window.addEventListener("mousedown", handlePointerDown);
     return () => window.removeEventListener("mousedown", handlePointerDown);
-  }, []);
+  }, [setControlCenterOpen]);
 
   function moveMonth(delta: number) {
     setCursor((current) => new Date(current.getFullYear(), current.getMonth() + delta, 1));
-  }
-
-  function switchWorkspace(workspace: WorkspaceId) {
-    setActiveWorkspace(workspace);
-    const top = windows
-      .filter((window) => (window.workspaceId ?? 0) === workspace)
-      .slice()
-      .sort((a, b) => b.z - a.z)[0];
-    if (top) {
-      restoreWindow(top.id);
-      focusWindow(top.id);
-      return;
-    }
-    useDesktopStore.setState({ activeWindowId: null });
   }
 
   return (
@@ -84,26 +74,16 @@ export function Taskbar() {
         <Icon icon="solar:cat-bold-duotone" width={22} height={22} />
       </button>
 
-      <div className="workspace-switcher" aria-label={t("workspaces")}>
-        {WORKSPACES.map((workspace) => (
-          <button
-            key={workspace}
-            type="button"
-            className={clsx("workspace-dot", activeWorkspace === workspace && "is-active")}
-            onClick={() => switchWorkspace(workspace)}
-            title={`${t("workspace")} ${workspace + 1}`}
-            aria-pressed={activeWorkspace === workspace}
-          >
-            {workspace + 1}
-          </button>
-        ))}
-      </div>
-
       <div className="taskbar-apps">
         {workspaceWindows.map((window) => (
           <button
             key={window.id}
-            className={clsx("taskbar-item", activeWindowId === window.id && !window.minimized && "is-active", window.minimized && "is-minimized")}
+            className={clsx(
+              "taskbar-item",
+              "is-running",
+              activeWindowId === window.id && !window.minimized && "is-active",
+              window.minimized && "is-minimized",
+            )}
             data-context-kind="taskbar-window"
             data-context-id={window.id}
             data-app-id={window.appId}
@@ -128,9 +108,38 @@ export function Taskbar() {
           <Icon icon="solar:bell-bold-duotone" width={15} height={15} />
           {liveCount || historyCount ? <em>{liveCount || historyCount}</em> : null}
         </button>
-        <span className="tray-pill"><Icon icon="solar:database-bold-duotone" width={15} height={15} /> {t("localLabel")}</span>
+        <div className="tray-control" ref={controlRef}>
+          <button
+            type="button"
+            className={clsx("tray-button", controlCenterOpen && "is-active")}
+            onClick={() => {
+              setClockOpen(false);
+              toggleControlCenter();
+            }}
+            title={t("controlCenter")}
+            aria-label={t("controlCenter")}
+            aria-haspopup="dialog"
+            aria-expanded={controlCenterOpen}
+          >
+            <Icon icon="solar:widget-4-bold-duotone" width={15} height={15} />
+          </button>
+          <ControlCenter />
+        </div>
+        <span className={clsx("tray-pill", dndEnabled && "is-dnd")}>
+          <Icon icon={dndEnabled ? "solar:moon-sleep-bold-duotone" : "solar:database-bold-duotone"} width={15} height={15} />
+          {dndEnabled ? t("notificationDndToggle") : t("localLabel")}
+        </span>
         <div className="tray-clock" ref={clockRef}>
-          <button type="button" className="tray-clock-button" onClick={() => setClockOpen((open) => !open)} aria-haspopup="dialog" aria-expanded={clockOpen}>
+          <button
+            type="button"
+            className="tray-clock-button"
+            onClick={() => {
+              setControlCenterOpen(false);
+              setClockOpen((open) => !open);
+            }}
+            aria-haspopup="dialog"
+            aria-expanded={clockOpen}
+          >
             <span>{timeStr}</span>
           </button>
           {clockOpen ? (

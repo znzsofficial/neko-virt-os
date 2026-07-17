@@ -40,13 +40,15 @@ export const useDesktopStore = create<DesktopStore>((set, get) => ({
   desktopLayoutMode: loadDesktopLayoutMode(),
   desktopIconPositions: loadIconPositions(),
   openApp: (appId) => {
-    const app = apps.find((item) => item.id === appId);
+    // About is integrated into Settings.
+    const resolvedId = appId === "about" ? "settings" : appId;
+    const app = apps.find((item) => item.id === resolvedId);
     if (!app) return null;
     const t = useLanguageStore.getState().t;
-    useLauncherStore.getState().recordAppLaunch(appId);
+    useLauncherStore.getState().recordAppLaunch(resolvedId);
     const allowsMultiple = "multiInstance" in app && app.multiInstance;
 
-    const existing = get().windows.find((win) => win.appId === appId);
+    const existing = get().windows.find((win) => win.appId === resolvedId);
     if (existing && !allowsMultiple) {
       const existingWorkspace = (existing.workspaceId ?? 0) as WorkspaceId;
       useOsUiStore.getState().setActiveWorkspace(existingWorkspace);
@@ -59,7 +61,7 @@ export const useDesktopStore = create<DesktopStore>((set, get) => ({
     const z = nextZ(get().windows);
     const offset = get().windows.length * 28;
     const windowId = nanoid(8);
-    const instanceCount = get().windows.filter((win) => win.appId === appId).length + 1;
+    const instanceCount = get().windows.filter((win) => win.appId === resolvedId).length + 1;
     const bounds = snapWindowBounds({
       x: 140 + offset,
       y: 100 + offset,
@@ -73,7 +75,7 @@ export const useDesktopStore = create<DesktopStore>((set, get) => ({
         ...state.windows,
         {
           id: windowId,
-          appId,
+          appId: resolvedId,
           title: allowsMultiple && instanceCount > 1 ? `${t(app.titleKey)} ${instanceCount}` : t(app.titleKey),
           icon: app.icon,
           x: bounds.x,

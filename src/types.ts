@@ -139,7 +139,17 @@ export type WallpaperId =
   | "neon-street";
 
 export type ThemeSettings = {
-  accentColor: "blue" | "purple" | "emerald" | "amber";
+  accentColor:
+    | "blue"
+    | "cyan"
+    | "emerald"
+    | "mint"
+    | "amber"
+    | "coral"
+    | "rose"
+    | "purple"
+    | "violet"
+    | "slate";
   density: "compact" | "cozy";
   theme: "system" | "light" | "dark";
   wallpaperId: WallpaperId;
