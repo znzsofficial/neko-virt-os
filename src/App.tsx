@@ -15,6 +15,7 @@ import { useOsUiStore } from "./osUiStore";
 import { ContextMenu } from "./shell/ContextMenu";
 import { Desktop } from "./shell/Desktop";
 import { SystemWindow } from "./shell/SystemWindow";
+import { useIdleLock } from "./hooks/useIdleLock";
 import { applyThemeSettings, readThemeSettings, THEME_STORAGE_KEY } from "./theme";
 import type { ContextMenuState } from "./types";
 import { useDesktopStore } from "./windowStore";
@@ -41,6 +42,7 @@ export function App() {
   const exitImmersive = useOsUiStore((state) => state.exitImmersive);
   const initFs = useFsStore((state) => state.init);
   const t = useLanguageStore((state) => state.t);
+  useIdleLock();
   const workspaceWindows = windows.filter((window) => (window.workspaceId ?? 0) === activeWorkspace);
   const switcherWindows = workspaceWindows.slice().sort((a, b) => b.z - a.z);
   const isImmersive = Boolean(immersiveWindowId);

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { Notification } from "./types";
 import { nanoid } from "nanoid";
-import { isWithinDnd, useOsUiStore } from "./osUiStore";
+import { BANNER_DURATION_MS, isWithinDnd, useOsUiStore, type NotificationCategory } from "./osUiStore";
 
 type NotificationStore = {
   notifications: Notification[];
@@ -28,11 +28,17 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
   history: [],
   addNotification: (n) => {
     const prefs = useOsUiStore.getState().notificationPrefs;
+    const category = (n.category ?? "system") as NotificationCategory;
+    if (prefs.categories[category] === false && !n.sticky) {
+      return;
+    }
+
     const inDnd = isWithinDnd(prefs);
     const id = nanoid(6);
     const createdAt = Date.now();
-    const category = n.category ?? "system";
-    const entry = { ...n, id, createdAt, category, progress: 1 };
+    const defaultDuration = BANNER_DURATION_MS[prefs.bannerDuration] ?? 3500;
+    const duration = n.duration === 0 ? 0 : (n.duration ?? defaultDuration);
+    const entry = { ...n, id, createdAt, category, duration, progress: 1 };
     const duplicateKey = `${n.type ?? "info"}:${n.title}:${n.message}`;
     const duplicateIds = useNotificationStore.getState().notifications
       .filter((item) => `${item.type ?? "info"}:${item.title}:${item.message}` === duplicateKey)
@@ -50,13 +56,13 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
     }));
 
     if (inDnd && !n.sticky) return;
-    if (n.duration !== 0) {
+    if (duration !== 0) {
       const timer = window.setTimeout(() => {
         set((state) => ({
           notifications: state.notifications.filter((item) => item.id !== id),
         }));
         notificationTimers.delete(id);
-      }, n.duration ?? 3500);
+      }, duration);
       notificationTimers.set(id, timer);
     }
   },

@@ -12,11 +12,17 @@ describe("normalizeDeveloperPrefs", () => {
         animationQuality: "power",
         showFps: true,
         debugBorders: true,
+        reduceMotion: true,
+        largeTargets: true,
+        highContrast: true,
       }),
     ).toEqual({
       animationQuality: "power",
       showFps: true,
       debugBorders: true,
+      reduceMotion: true,
+      largeTargets: true,
+      highContrast: true,
     });
   });
 

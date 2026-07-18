@@ -1,6 +1,6 @@
 import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { appConfirm } from "../dialogStore";
 import { useFsStore } from "../fs";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
@@ -12,7 +12,16 @@ import {
 } from "../networkInfo";
 import { useNotificationStore } from "../notificationStore";
 import { APP_VERSION, OPEN_SOURCE_PACKAGES } from "../openSourceLicenses";
-import { useOsUiStore } from "../osUiStore";
+import {
+  useOsUiStore,
+  type BannerDuration,
+  type NotificationCategory,
+} from "../osUiStore";
+import {
+  applySettingsBackup,
+  downloadSettingsBackup,
+  parseSettingsBackup,
+} from "../settingsBackup";
 import {
   ACCENT_CHROMA,
   ACCENT_COLORS,
@@ -31,6 +40,7 @@ import {
   type DeviceSnapshot,
   type StorageSnapshot,
 } from "../systemInfo";
+import type { AutoLockMinutes } from "../systemPrefs";
 import { useDesktopStore } from "../windowStore";
 
 type SettingsSection = "general" | "appearance" | "notifications" | "network" | "data" | "developer" | "about";
@@ -58,12 +68,20 @@ export function SettingsApp() {
   const language = useLanguageStore((state) => state.language);
   const setLanguage = useLanguageStore((state) => state.setLanguage);
   const t = useLanguageStore((state) => state.t);
-  const dndEnabled = useOsUiStore((state) => state.notificationPrefs.dndEnabled);
-  const dndStart = useOsUiStore((state) => state.notificationPrefs.dndStart);
-  const dndEnd = useOsUiStore((state) => state.notificationPrefs.dndEnd);
+  const notificationPrefs = useOsUiStore((state) => state.notificationPrefs);
   const setNotificationPrefs = useOsUiStore((state) => state.setNotificationPrefs);
   const developerPrefs = useOsUiStore((state) => state.developerPrefs);
   const setDeveloperPrefs = useOsUiStore((state) => state.setDeveloperPrefs);
+  const systemPrefs = useOsUiStore((state) => state.systemPrefs);
+  const setSystemPrefs = useOsUiStore((state) => state.setSystemPrefs);
+  const widgetsCollapsed = useOsUiStore((state) => state.widgetsCollapsed);
+  const setWidgetsCollapsed = useOsUiStore((state) => state.setWidgetsCollapsed);
+  const desktopLayoutMode = useDesktopStore((state) => state.desktopLayoutMode);
+  const setDesktopLayoutMode = useDesktopStore((state) => state.setDesktopLayoutMode);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const dndEnabled = notificationPrefs.dndEnabled;
+  const dndStart = notificationPrefs.dndStart;
+  const dndEnd = notificationPrefs.dndEnd;
 
   useEffect(() => {
     navigator.storage?.estimate().then(setStorage).catch(() => setStorage(null));
@@ -213,6 +231,36 @@ export function SettingsApp() {
     }
   }
 
+  function exportSettings() {
+    downloadSettingsBackup();
+    addNotification({ title: t("settingsExportDone"), message: "", type: "success", category: "system", appId: "settings" });
+  }
+
+  async function importSettingsFile(file: File) {
+    const ok = await appConfirm({
+      title: t("dialogConfirmTitle"),
+      message: t("confirmImportSettings"),
+      confirmLabel: t("dialogConfirm"),
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      const text = await file.text();
+      const backup = parseSettingsBackup(text);
+      applySettingsBackup(backup);
+      addNotification({ title: t("settingsImportDone"), message: "", type: "success", category: "system", appId: "settings" });
+      window.setTimeout(() => window.location.reload(), 400);
+    } catch {
+      addNotification({
+        title: t("settingsImportFailed"),
+        message: t("settingsImportFailedMessage"),
+        type: "error",
+        category: "system",
+        appId: "settings",
+      });
+    }
+  }
+
   const navItems: { id: SettingsSection; icon: string; label: TranslationKey; tint: string }[] = [
     { id: "general", icon: "solar:slider-minimalistic-horizontal-bold-duotone", label: "settingsNavGeneral", tint: "tint-sky" },
     { id: "appearance", icon: "solar:pallete-2-bold-duotone", label: "settingsNavAppearance", tint: "tint-violet" },
@@ -261,6 +309,146 @@ export function SettingsApp() {
                     <strong>{lang === "zh" ? t("languageChinese") : t("languageEnglish")}</strong>
                   </button>
                 ))}
+              </div>
+            </section>
+
+            <section className="settings-card">
+              <header className="settings-card-head">
+                <strong>{t("settingsTimeFormat")}</strong>
+              </header>
+              <div className="settings-choice-grid">
+                {([
+                  { hour12: false, label: t("settingsTime24h") },
+                  { hour12: true, label: t("settingsTime12h") },
+                ]).map((item) => (
+                  <button
+                    key={String(item.hour12)}
+                    type="button"
+                    className={clsx("settings-choice-card", systemPrefs.hour12 === item.hour12 && "is-active")}
+                    onClick={() => setSystemPrefs({ hour12: item.hour12 })}
+                  >
+                    <strong>{item.label}</strong>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="settings-card">
+              <header className="settings-card-head">
+                <strong>{t("settingsAutoLock")}</strong>
+              </header>
+              <div className="settings-select-group">
+                {([
+                  { minutes: 0 as AutoLockMinutes, label: t("settingsAutoLockNever") },
+                  { minutes: 5 as AutoLockMinutes, label: t("settingsAutoLock5") },
+                  { minutes: 15 as AutoLockMinutes, label: t("settingsAutoLock15") },
+                  { minutes: 30 as AutoLockMinutes, label: t("settingsAutoLock30") },
+                ]).map((item) => (
+                  <button
+                    key={item.minutes}
+                    type="button"
+                    className={clsx("settings-btn-pill", systemPrefs.autoLockMinutes === item.minutes && "is-active")}
+                    onClick={() => setSystemPrefs({ autoLockMinutes: item.minutes })}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="settings-card">
+              <div className="settings-row-line">
+                <strong>{t("settingsTaskbarLabels")}</strong>
+                <button
+                  type="button"
+                  className={clsx("settings-switch", systemPrefs.taskbarShowLabels && "is-on")}
+                  aria-pressed={systemPrefs.taskbarShowLabels}
+                  onClick={() => setSystemPrefs({ taskbarShowLabels: !systemPrefs.taskbarShowLabels })}
+                >
+                  <i />
+                </button>
+              </div>
+              <div className="settings-row-line">
+                <strong>{t("settingsTaskbarAutoHide")}</strong>
+                <button
+                  type="button"
+                  className={clsx("settings-switch", systemPrefs.taskbarAutoHide && "is-on")}
+                  aria-pressed={systemPrefs.taskbarAutoHide}
+                  onClick={() => setSystemPrefs({ taskbarAutoHide: !systemPrefs.taskbarAutoHide })}
+                >
+                  <i />
+                </button>
+              </div>
+              <div className="settings-row-line">
+                <strong>{t("settingsDesktopWidgets")}</strong>
+                <button
+                  type="button"
+                  className={clsx("settings-switch", !widgetsCollapsed && "is-on")}
+                  aria-pressed={!widgetsCollapsed}
+                  onClick={() => setWidgetsCollapsed(!widgetsCollapsed)}
+                >
+                  <i />
+                </button>
+              </div>
+            </section>
+
+            <section className="settings-card">
+              <header className="settings-card-head">
+                <strong>{t("settingsDesktopLayout")}</strong>
+              </header>
+              <div className="settings-choice-grid">
+                {([
+                  { mode: "grid" as const, label: t("settingsDesktopLayoutGrid") },
+                  { mode: "free" as const, label: t("settingsDesktopLayoutFree") },
+                ]).map((item) => (
+                  <button
+                    key={item.mode}
+                    type="button"
+                    className={clsx("settings-choice-card", desktopLayoutMode === item.mode && "is-active")}
+                    onClick={() => setDesktopLayoutMode(item.mode)}
+                  >
+                    <strong>{item.label}</strong>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="settings-card">
+              <header className="settings-card-head">
+                <strong>{t("settingsAccessibility")}</strong>
+              </header>
+              <div className="settings-row-line">
+                <strong>{t("settingsReduceMotion")}</strong>
+                <button
+                  type="button"
+                  className={clsx("settings-switch", developerPrefs.reduceMotion && "is-on")}
+                  aria-pressed={developerPrefs.reduceMotion}
+                  onClick={() => setDeveloperPrefs({ reduceMotion: !developerPrefs.reduceMotion })}
+                >
+                  <i />
+                </button>
+              </div>
+              <div className="settings-row-line">
+                <strong>{t("settingsLargeTargets")}</strong>
+                <button
+                  type="button"
+                  className={clsx("settings-switch", developerPrefs.largeTargets && "is-on")}
+                  aria-pressed={developerPrefs.largeTargets}
+                  onClick={() => setDeveloperPrefs({ largeTargets: !developerPrefs.largeTargets })}
+                >
+                  <i />
+                </button>
+              </div>
+              <div className="settings-row-line">
+                <strong>{t("settingsHighContrast")}</strong>
+                <button
+                  type="button"
+                  className={clsx("settings-switch", developerPrefs.highContrast && "is-on")}
+                  aria-pressed={developerPrefs.highContrast}
+                  onClick={() => setDeveloperPrefs({ highContrast: !developerPrefs.highContrast })}
+                >
+                  <i />
+                </button>
               </div>
             </section>
           </div>
@@ -453,6 +641,60 @@ export function SettingsApp() {
                 </label>
               </div>
             </section>
+
+            <section className="settings-card">
+              <header className="settings-card-head">
+                <strong>{t("settingsBannerDuration")}</strong>
+              </header>
+              <div className="settings-select-group">
+                {([
+                  { id: "short" as BannerDuration, label: t("settingsBannerShort") },
+                  { id: "standard" as BannerDuration, label: t("settingsBannerStandard") },
+                  { id: "long" as BannerDuration, label: t("settingsBannerLong") },
+                ]).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={clsx("settings-btn-pill", notificationPrefs.bannerDuration === item.id && "is-active")}
+                    onClick={() => setNotificationPrefs({ bannerDuration: item.id })}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="settings-card">
+              <header className="settings-card-head">
+                <strong>{t("settingsNotifyCategories")}</strong>
+              </header>
+              {([
+                { id: "system" as NotificationCategory, label: t("notificationCategorySystem") },
+                { id: "files" as NotificationCategory, label: t("notificationCategoryFiles") },
+                { id: "apps" as NotificationCategory, label: t("notificationCategoryApps") },
+                { id: "media" as NotificationCategory, label: t("notificationCategoryMedia") },
+              ]).map((item) => (
+                <div key={item.id} className="settings-row-line">
+                  <strong>{item.label}</strong>
+                  <button
+                    type="button"
+                    className={clsx("settings-switch", notificationPrefs.categories[item.id] && "is-on")}
+                    aria-pressed={notificationPrefs.categories[item.id]}
+                    onClick={() =>
+                      setNotificationPrefs((current) => ({
+                        ...current,
+                        categories: {
+                          ...current.categories,
+                          [item.id]: !current.categories[item.id],
+                        },
+                      }))
+                    }
+                  >
+                    <i />
+                  </button>
+                </div>
+              ))}
+            </section>
           </div>
         ) : null}
 
@@ -501,6 +743,25 @@ export function SettingsApp() {
             </dl>
 
             <section className="settings-card">
+              <div className="settings-row-line">
+                <strong>{t("settingsExport")}</strong>
+                <button type="button" className="settings-btn-pill" onClick={exportSettings}>{t("settingsExport")}</button>
+              </div>
+              <div className="settings-row-line">
+                <strong>{t("settingsImport")}</strong>
+                <button type="button" className="settings-btn-pill" onClick={() => importInputRef.current?.click()}>{t("settingsImport")}</button>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  hidden
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void importSettingsFile(file);
+                  }}
+                />
+              </div>
               <div className="settings-row-line">
                 <strong>{t("clearCache")}</strong>
                 <button type="button" className="settings-btn-pill" onClick={() => void clearCacheStorage()}>{t("clearCache")}</button>

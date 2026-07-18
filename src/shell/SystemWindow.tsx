@@ -184,30 +184,37 @@ export function SystemWindow({ window }: { window: WindowState }) {
               onClick={(event) => event.stopPropagation()}
               onDoubleClick={(event) => event.stopPropagation()}
             >
-              <button type="button" aria-label={`${t("minimizeWindowLabel")}${windowTitle}`} onClick={requestMinimize}>
-                <span aria-hidden="true">-</span>
+              <button type="button" className="window-action is-minimize" aria-label={`${t("minimizeWindowLabel")}${windowTitle}`} onClick={requestMinimize}>
+                <Icon icon="lucide:minus" width={16} height={16} />
               </button>
               {canFullscreen ? (
                 <button
                   type="button"
+                  className="window-action is-fullscreen"
                   aria-label={`${t("fullscreenWindowLabel")}${windowTitle}`}
                   onClick={() => {
                     focusWindow(window.id);
                     toggleImmersive(window.id);
                   }}
                 >
-                  <span aria-hidden="true">⛶</span>
+                  <Icon icon="lucide:maximize-2" width={14} height={14} />
                 </button>
               ) : null}
               <button
                 type="button"
+                className="window-action is-maximize"
                 aria-label={`${window.maximized ? t("restoreWindowLabel") : t("maximizeWindowLabel")}${windowTitle}`}
                 onClick={() => toggleMaximize(window.id)}
               >
-                <span aria-hidden="true">{window.maximized ? "□" : "▢"}</span>
+                <Icon icon={window.maximized ? "lucide:copy" : "lucide:square"} width={14} height={14} />
               </button>
-              <button type="button" aria-label={`${t("closeWindowLabel")}${windowTitle}`} onClick={() => requestCloseWindow(window, closeWindow)}>
-                <span aria-hidden="true">×</span>
+              <button
+                type="button"
+                className="window-action is-close"
+                aria-label={`${t("closeWindowLabel")}${windowTitle}`}
+                onClick={() => requestCloseWindow(window, closeWindow)}
+              >
+                <Icon icon="lucide:x" width={16} height={16} />
               </button>
             </div>
           </header>

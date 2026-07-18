@@ -4,6 +4,7 @@ import { getPendingTasks, getUpcomingEvents } from "../localData";
 import { useLanguageStore } from "../languageStore";
 import { useOsUiStore } from "../osUiStore";
 import { formatBytes } from "../systemInfo";
+import { formatClockTime } from "../systemPrefs";
 import { useDesktopStore } from "../windowStore";
 import { useFsStore } from "../fs";
 
@@ -11,6 +12,7 @@ export function DesktopWidgets() {
   const t = useLanguageStore((state) => state.t);
   const collapsed = useOsUiStore((state) => state.widgetsCollapsed);
   const setWidgetsCollapsed = useOsUiStore((state) => state.setWidgetsCollapsed);
+  const hour12 = useOsUiStore((state) => state.systemPrefs.hour12);
   const openApp = useDesktopStore((state) => state.openApp);
   const windows = useDesktopStore((state) => state.windows);
   const files = useFsStore((state) => state.files);
@@ -48,7 +50,7 @@ export function DesktopWidgets() {
 
       <section className="desktop-widget tint-sky" onDoubleClick={() => openApp("timer")}>
         <span>{t("localTime")}</span>
-        <strong>{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</strong>
+        <strong>{formatClockTime(now, hour12)}</strong>
         <small>{now.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</small>
       </section>
 

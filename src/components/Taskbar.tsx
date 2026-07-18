@@ -6,6 +6,7 @@ import { ControlCenter } from "./ControlCenter";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
 import { useOsUiStore } from "../osUiStore";
+import { formatClockTime } from "../systemPrefs";
 import { useDesktopStore } from "../windowStore";
 
 const weekdayKeys = ["weekdaySun", "weekdayMon", "weekdayTue", "weekdayWed", "weekdayThu", "weekdayFri", "weekdaySat"] as const;
@@ -22,6 +23,9 @@ export function Taskbar() {
   const toggleControlCenter = useOsUiStore((state) => state.toggleControlCenter);
   const setControlCenterOpen = useOsUiStore((state) => state.setControlCenterOpen);
   const dndEnabled = useOsUiStore((state) => state.notificationPrefs.dndEnabled);
+  const hour12 = useOsUiStore((state) => state.systemPrefs.hour12);
+  const taskbarShowLabels = useOsUiStore((state) => state.systemPrefs.taskbarShowLabels);
+  const taskbarAutoHide = useOsUiStore((state) => state.systemPrefs.taskbarAutoHide);
   const historyCount = useNotificationStore((state) => state.history.length);
   const liveCount = useNotificationStore((state) => state.notifications.length);
   const t = useLanguageStore((state) => state.t);
@@ -46,13 +50,13 @@ export function Taskbar() {
   useEffect(() => {
     function updateClock() {
       const now = new Date();
-      setTimeStr(now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }));
+      setTimeStr(formatClockTime(now, hour12));
       setCursor((current) => current.getMonth() === now.getMonth() && current.getFullYear() === now.getFullYear() ? current : new Date(now.getFullYear(), now.getMonth(), 1));
     }
     updateClock();
     const interval = setInterval(updateClock, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [hour12]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -69,7 +73,10 @@ export function Taskbar() {
   }
 
   return (
-    <footer className="taskbar" onMouseDown={(event) => event.stopPropagation()}>
+    <footer
+      className={clsx("taskbar", taskbarAutoHide && "is-autohide", !taskbarShowLabels && "is-icons-only")}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
       <button className="start-button" onClick={toggleLauncher} aria-label={t("openLauncher")}>
         <Icon icon="solar:cat-bold-duotone" width={22} height={22} />
       </button>
@@ -83,14 +90,16 @@ export function Taskbar() {
               "is-running",
               activeWindowId === window.id && !window.minimized && "is-active",
               window.minimized && "is-minimized",
+              !taskbarShowLabels && "is-icon-only",
             )}
             data-context-kind="taskbar-window"
             data-context-id={window.id}
             data-app-id={window.appId}
+            title={t(appTitleKeys[window.appId])}
             onClick={() => toggleTaskbarWindow(window.id)}
           >
             <Icon icon={getAppIcon(window.appId, window.icon)} width={18} height={18} />
-            <span>{t(appTitleKeys[window.appId])}</span>
+            {taskbarShowLabels ? <span>{t(appTitleKeys[window.appId])}</span> : null}
           </button>
         ))}
       </div>
@@ -152,7 +161,7 @@ export function Taskbar() {
                 </div>
                 <button type="button" className="button-ghost" onClick={() => moveMonth(1)}>{t("next")}</button>
               </div>
-              <div className="tray-clock-bigtime">{today.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}</div>
+              <div className="tray-clock-bigtime">{formatClockTime(today, hour12)}</div>
               <div className="calendar-grid tray-clock-grid">
                 {weekdayKeys.map((dayKey) => <strong key={dayKey}>{t(dayKey)}</strong>)}
                 {cells.map((day, index) => {

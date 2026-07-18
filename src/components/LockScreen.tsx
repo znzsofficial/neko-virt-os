@@ -2,10 +2,12 @@ import { Icon } from "@iconify-icon/react";
 import { useEffect, useState } from "react";
 import { useLanguageStore } from "../languageStore";
 import { useOsUiStore } from "../osUiStore";
+import { formatClockTime } from "../systemPrefs";
 
 export function LockScreen() {
   const t = useLanguageStore((state) => state.t);
   const unlockSession = useOsUiStore((state) => state.unlockSession);
+  const hour12 = useOsUiStore((state) => state.systemPrefs.hour12);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -35,7 +37,7 @@ export function LockScreen() {
       <div className="os-lock-content">
         <Icon className="boot-cat" icon="solar:cat-bold-duotone" width={48} height={48} />
         <div className="os-lock-time">
-          {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
+          {formatClockTime(now, hour12)}
         </div>
         <p className="os-lock-date">
           {now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
