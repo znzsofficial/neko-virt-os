@@ -104,12 +104,19 @@ export type MmdRuntimeHandle = {
   /** Re-seed soft-body pose from current animation (fix floating / stuck cloth). */
   resetPhysics: (seconds?: number) => void;
   update: (seconds: number, physics: boolean, camera: THREE.PerspectiveCamera, aspect: number, useMotionCamera: boolean) => void;
+  /** Bind/unbind official MMD TSL pipeline (WebGPU). Re-attaches eligible models. */
+  bindTslPipeline: (pipeline: import("./mmdTslPipeline").MmdTslPipeline | null) => void;
+  hasTslPipeline: () => boolean;
   dispose: () => void;
 };
 
 type RuntimeEntryWithPhysics = RuntimeEntry & {
   /** Dedicated Bullet world — do not share across models. */
   physicsBackend: MmdPhysicsBackend | null;
+  /** Attached to @yohawing/three-mmd-loader/webgpu TSL facade. */
+  tslAttached?: boolean;
+  /** Waiting for bindTslPipeline — classic MMD materials must not be drawn on WebGPU. */
+  tslPending?: boolean;
 };
 
 let nextModelSeq = 1;
@@ -177,7 +184,10 @@ function disposeEntryPhysics(entry: RuntimeEntryWithPhysics) {
 }
 
 export type MmdRuntimeOptions = {
-  /** When true, strip WebGL-only MMD shaders and use MeshStandard for scene lights. */
+  /**
+   * WebGPU path: prefer official `/webgpu` TSL pipeline (toon + sparse morphs).
+   * Falls back to MeshStandard strip if pipeline is unavailable.
+   */
   webGpu?: boolean;
 };
 
@@ -197,6 +207,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
   const lightColor = new THREE.Color(1, 1, 1);
   let lightIntensity = 1;
   const webGpuMode = Boolean(options.webGpu);
+  let tslPipeline: import("./mmdTslPipeline").MmdTslPipeline | null = null;
 
   function lightingContext() {
     // Shared vectors — consumers copy into uniforms immediately.
@@ -234,9 +245,93 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
     }
   }
 
+  function isStrippedForWebGpu(entry: RuntimeEntryWithPhysics) {
+    const mats = Array.isArray(entry.model.mesh.material)
+      ? entry.model.mesh.material
+      : [entry.model.mesh.material];
+    return mats.some((m) => m?.userData?.mmdWebGpuStripped);
+  }
+
+  function detachTsl(entry: RuntimeEntryWithPhysics) {
+    if (!tslPipeline || !entry.tslAttached) return;
+    try {
+      tslPipeline.detach({ root: entry.model.root, mesh: entry.model.mesh });
+    } catch {
+      // ignore
+    }
+    entry.tslAttached = false;
+  }
+
+  function attachTsl(entry: RuntimeEntryWithPhysics) {
+    if (!tslPipeline || entry.tslAttached) return false;
+    // MeshStandard strip path cannot be re-upgraded to TSL without reload.
+    if (isStrippedForWebGpu(entry)) return false;
+    try {
+      const ok = tslPipeline.attach(
+        { root: entry.model.root, mesh: entry.model.mesh },
+        {
+          // Prefer scene sun so TSL toon gets a real light direction/color.
+          light: directionalLight ?? undefined,
+          // Studio: ground map shadows on WebGL only; TSL self-shadow off.
+          selfShadowEnabled: false,
+          sparseMorphs: true,
+        },
+      );
+      entry.tslAttached = ok;
+      if (ok) {
+        entry.tslPending = false;
+        // receiveOnly: do not stomp TSL material flags / self-shadow uniforms.
+        enforceModelCastOnlyShadows(entry.model.root, { receiveOnly: true });
+        entry.model.root.visible = entry.visible;
+      }
+      return ok;
+    } catch {
+      entry.tslAttached = false;
+      return false;
+    }
+  }
+
+  /** Pipeline needs a DirectionalLight for toon; re-attach once sun exists. */
+  function ensureTslLightBinding() {
+    if (!tslPipeline || !webGpuMode || !directionalLight) return;
+    const needsLight = tslPipeline.light == null || tslPipeline.light !== directionalLight;
+    if (!needsLight) {
+      // Still attach any pending models.
+      for (const entry of entries.values()) {
+        if (entry.tslPending || (!entry.tslAttached && !isStrippedForWebGpu(entry))) {
+          if (!attachTsl(entry) && entry.tslPending) {
+            stripWebGlOnlyMaterialShaders(entry.model.root);
+            entry.tslPending = false;
+            entry.model.root.visible = entry.visible;
+            applyMaterialOverrides(entry, lightingContext());
+            refreshMaterialTextures(entry);
+          }
+        }
+      }
+      return;
+    }
+    // Re-bind all TSL models so closed-over pipeline light matches scene sun.
+    for (const entry of entries.values()) {
+      if (entry.tslAttached) detachTsl(entry);
+    }
+    for (const entry of entries.values()) {
+      if (isStrippedForWebGpu(entry)) continue;
+      if (!attachTsl(entry)) {
+        if (webGpuMode) {
+          stripWebGlOnlyMaterialShaders(entry.model.root);
+          entry.tslPending = false;
+          entry.model.root.visible = entry.visible;
+          applyMaterialOverrides(entry, lightingContext());
+          refreshMaterialTextures(entry);
+        }
+      }
+    }
+  }
+
   function removeEntry(id: string) {
     const entry = entries.get(id);
     if (!entry) return;
+    detachTsl(entry);
     scene.remove(entry.model.root);
     disposeEntryPhysics(entry);
     disposeModelObject(entry);
@@ -271,17 +366,54 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
     });
     let model;
     try {
-      model = await loader.loadModel(modelFile);
+      // Official WebGPU path: structural load flags from /webgpu createModelLoadOptions.
+      let loadOpts: Record<string, unknown> | undefined;
+      if (webGpuMode) {
+        try {
+          const { getTslModelLoadOptions } = await import("./mmdTslPipeline");
+          loadOpts = await getTslModelLoadOptions();
+        } catch {
+          loadOpts = undefined;
+        }
+      }
+      model = loadOpts
+        ? await loader.loadModel(modelFile, loadOpts as Parameters<ThreeMmdLoader["loadModel"]>[1])
+        : await loader.loadModel(modelFile);
     } catch (error) {
       physicsBackend?.dispose?.();
       throw error;
     }
-    if (webGpuMode) {
-      // Replace MMD MeshToon+onBeforeCompile with MeshStandard so scene lights work.
-      stripWebGlOnlyMaterialShaders(model.root);
+
+    let tslAttached = false;
+    let tslPending = false;
+    if (webGpuMode && tslPipeline) {
+      try {
+        tslAttached = Boolean(
+          tslPipeline.attach(
+            { root: model.root, mesh: model.mesh },
+            {
+              light: directionalLight ?? undefined,
+              selfShadowEnabled: false,
+              sparseMorphs: true,
+            },
+          ),
+        );
+      } catch {
+        tslAttached = false;
+      }
+      // Pipeline present but attach failed → irreversible MeshStandard fallback.
+      if (!tslAttached) {
+        stripWebGlOnlyMaterialShaders(model.root);
+      }
+    } else if (webGpuMode && !tslPipeline) {
+      // Do NOT strip while waiting for bind — strip is irreversible for TSL.
+      // Hide until attach succeeds (classic onBeforeCompile crashes WebGPU NodeBuilder).
+      tslPending = true;
+      model.root.visible = false;
     }
+
     enableModelShadows(model);
-    enforceModelCastOnlyShadows(model.root);
+    enforceModelCastOnlyShadows(model.root, { receiveOnly: tslAttached || tslPending });
     scene.add(model.root);
 
     const morphNames = extractMorphNames(model);
@@ -329,6 +461,8 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       modelFile,
       companionFiles: companionFiles.length ? [...companionFiles] : [modelFile],
       physicsBackend,
+      tslAttached,
+      tslPending,
     };
     // Tag root + meshes so post FX (DOF lock / selective bloom) can target a model id.
     model.root.userData.mmdModelId = id;
@@ -338,8 +472,12 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
     entries.set(id, entry);
     syncEntryWorldMatrix(entry);
     applyMaterialVisibility(entry);
-    applyMaterialOverrides(entry, lightingContext());
-    refreshMaterialTextures(entry);
+    if (tslAttached) {
+      entry.model.root.visible = entry.visible;
+    } else if (!tslPending) {
+      applyMaterialOverrides(entry, lightingContext());
+      refreshMaterialTextures(entry);
+    }
 
     return {
       entry,
@@ -473,9 +611,15 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       const entry = entries.get(id);
       if (!entry) return;
       entry.visible = visible;
+      if (entry.tslPending) {
+        entry.model.root.visible = false;
+        return;
+      }
       applyMaterialVisibility(entry);
-      applyMaterialOverrides(entry, lightingContext());
-      refreshMaterialTextures(entry);
+      if (!entry.tslAttached) {
+        applyMaterialOverrides(entry, lightingContext());
+        refreshMaterialTextures(entry);
+      }
     },
     setModelTransform(id, patch) {
       const entry = entries.get(id);
@@ -500,8 +644,10 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       const entry = entries.get(modelId);
       if (!entry) return;
       entry.materialOverrides[materialName] = mergeMaterialOverride(entry.materialOverrides[materialName], patch);
-      applyMaterialOverrides(entry, lightingContext());
-      refreshMaterialTextures(entry);
+      if (!entry.tslAttached) {
+        applyMaterialOverrides(entry, lightingContext());
+        refreshMaterialTextures(entry);
+      }
     },
     setLighting(options) {
       envIntensity = Math.max(0, options.envIntensity);
@@ -509,7 +655,10 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       directionalLight = options.directionalLight;
       if (options.envMap !== undefined) envMap = options.envMap;
       refreshDirectionalLightState();
+      // Bind sun into TSL pipeline (closed-over light) + attach any pending models.
+      ensureTslLightBinding();
       for (const entry of entries.values()) {
+        if (entry.tslAttached || entry.tslPending) continue;
         const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
         if (directionalLight) syncMmdSpecularDirection(materials, directionalLight);
         applyMaterialOverrides(entry, lightingContext());
@@ -634,11 +783,14 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
         applyMorphOverrides(entry);
         // Restore user scale for rendering (physics ran at unit scale).
         if (physicsOn) syncEntryWorldMatrix(entry, false);
-        const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
-        if (directionalLight) syncMmdSpecularDirection(materials, directionalLight);
-        applyMaterialOverrides(entry, lightingContext());
-        // Material hooks may re-enable receive/self-shadow; keep ground-only receive.
-        enforceModelCastOnlyShadows(entry.model.root);
+        if (entry.tslAttached) {
+          enforceModelCastOnlyShadows(entry.model.root, { receiveOnly: true });
+        } else if (!entry.tslPending) {
+          const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
+          if (directionalLight) syncMmdSpecularDirection(materials, directionalLight);
+          applyMaterialOverrides(entry, lightingContext());
+          enforceModelCastOnlyShadows(entry.model.root);
+        }
         if (useMotionCamera && !cameraApplied && entry.hasCameraTrack) {
           const cameraState = entry.model.runtime.cameraState();
           if (cameraState) {
@@ -648,8 +800,33 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
         }
       }
     },
+    bindTslPipeline(pipeline) {
+      if (tslPipeline === pipeline) {
+        if (pipeline) ensureTslLightBinding();
+        return;
+      }
+      for (const entry of entries.values()) detachTsl(entry);
+      tslPipeline = pipeline;
+      if (!pipeline) return;
+      // Prefer attaching with scene sun when already known.
+      ensureTslLightBinding();
+      for (const entry of entries.values()) {
+        if (!webGpuMode || entry.tslAttached || isStrippedForWebGpu(entry)) continue;
+        if (!attachTsl(entry)) {
+          stripWebGlOnlyMaterialShaders(entry.model.root);
+          entry.tslPending = false;
+          entry.model.root.visible = entry.visible;
+          applyMaterialOverrides(entry, lightingContext());
+          refreshMaterialTextures(entry);
+        }
+      }
+    },
+    hasTslPipeline() {
+      return tslPipeline != null;
+    },
     dispose() {
       for (const id of [...entries.keys()]) removeEntry(id);
+      tslPipeline = null;
       lastPhysicsSeconds.clear();
       selectedId = null;
       duration = 0;

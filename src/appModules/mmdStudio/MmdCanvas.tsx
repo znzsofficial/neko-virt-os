@@ -18,6 +18,7 @@ import { MmdPostFx } from "./MmdPostFx";
 import { getActivePmremEnvMap, MmdSky, subscribePmremEnvMap } from "./MmdSky";
 import { useMmdStudioStore, type MmdPostFxPreset, type MmdRendererBackend, type MmdSceneModel } from "./mmdStudioStore";
 import { sunPositionFromAngles } from "./mmdProjectDb";
+import { createStudioMmdTslPipeline, type MmdTslPipeline } from "./mmdTslPipeline";
 
 export type MmdSceneApi = {
   addModel: (modelFile: File, companionFiles?: File[], options?: MmdAddModelOptions) => Promise<MmdLoadReport>;
@@ -362,12 +363,60 @@ function snapshotToStore(models: RuntimeModelSnapshot[]): MmdSceneModel[] {
   }));
 }
 
+type GlWithTsl = THREE.WebGLRenderer & {
+  userData?: { mmdTslPipeline?: MmdTslPipeline | null };
+};
+
+function readTslPipeline(gl: THREE.WebGLRenderer): MmdTslPipeline | null {
+  return (gl as GlWithTsl).userData?.mmdTslPipeline ?? null;
+}
+
+/**
+ * Official TSL render owner only — bind lives in StudioScene (single place).
+ * priority 1: takes over R3F auto-render; gizmo overlays at priority 2.
+ */
+function MmdWebGpuTslBridge({ enabled }: { enabled: boolean }) {
+  const { gl, scene, camera } = useThree();
+
+  useFrame(() => {
+    if (!enabled) return;
+    const pipeline = readTslPipeline(gl as THREE.WebGLRenderer);
+    try {
+      if (pipeline) {
+        pipeline.render(scene, camera);
+      } else {
+        (gl as THREE.WebGLRenderer).autoClear = true;
+        gl.render(scene, camera);
+      }
+    } catch {
+      try {
+        gl.render(scene, camera);
+      } catch {
+        // ignore
+      }
+    }
+  }, 1);
+
+  return null;
+}
+
 function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backend }: Props) {
   const { scene, camera, gl, size } = useThree();
   const runtime = useMemo(
     () => createMmdRuntimeHandle(scene, { webGpu: backend === "webgpu" }),
     [backend, scene],
   );
+  // Single bind site for official TSL pipeline (before hydrate / addModel).
+  useLayoutEffect(() => {
+    if (backend !== "webgpu") {
+      runtime.bindTslPipeline(null);
+      return;
+    }
+    runtime.bindTslPipeline(readTslPipeline(gl as THREE.WebGLRenderer));
+    return () => {
+      runtime.bindTslPipeline(null);
+    };
+  }, [backend, gl, runtime]);
   const preserveModelsRef = useRef(preserveModelsOnUnmount);
   preserveModelsRef.current = preserveModelsOnUnmount;
   const controls = useRef<any>(null);
@@ -785,6 +834,15 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
       });
       captureStreamRef.current = null;
       runtime.dispose();
+      // Dispose official TSL pipeline before losing the WebGPU device.
+      try {
+        const pipeline = readTslPipeline(gl as THREE.WebGLRenderer);
+        pipeline?.dispose();
+        const ud = (gl as GlWithTsl).userData;
+        if (ud) ud.mmdTslPipeline = null;
+      } catch {
+        // ignore
+      }
       // Explicitly release GPU resources before remounting another backend.
       try {
         (gl as THREE.WebGLRenderer).forceContextLoss?.();
@@ -1157,7 +1215,8 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
           enabled
           orbitRef={controls}
           gizmoDraggingRef={gizmoDraggingRef}
-          postFxActive={backend === "webgl" && postFx !== "off"}
+          // WebGPU TSL bridge also owns priority-1 render; gizmo only overlays.
+          postFxActive={backend === "webgpu" || (backend === "webgl" && postFx !== "off")}
         />
       ) : null}
       {!exportingOffline && !recording && showLightHelper && sunEnabled ? (
@@ -1172,6 +1231,7 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
           <MmdPostFx preset={postFx} />
         </Suspense>
       ) : null}
+      {backend === "webgpu" ? <MmdWebGpuTslBridge enabled /> : null}
     </>
   );
 }
@@ -1235,6 +1295,15 @@ export function MmdCanvas({ backend, audioRef, apiRef, preserveModelsOnUnmount =
         forceWebGL: false,
       } as ConstructorParameters<typeof mod.WebGPURenderer>[0]);
       await renderer.init();
+      // Official 0.7 `/webgpu` TSL facade — must exist before models load.
+      try {
+        const pipeline = await createStudioMmdTslPipeline(renderer, { selfShadowEnabled: false });
+        const ud = ((renderer as unknown as GlWithTsl).userData ??= {});
+        ud.mmdTslPipeline = pipeline;
+      } catch {
+        const ud = ((renderer as unknown as GlWithTsl).userData ??= {});
+        ud.mmdTslPipeline = null;
+      }
       return renderer;
     };
   }, [backend]);

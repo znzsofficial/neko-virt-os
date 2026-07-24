@@ -266,7 +266,11 @@ export function applyMaterialOverrides(
     if (!material) return;
     const name = entry.materialNames[index] ?? `Material ${index + 1}`;
     const override = entry.materialOverrides[name] ?? DEFAULT_MATERIAL_OVERRIDE;
-    // Skip WebGL-only enhance injection on WebGPU preview.
+    // Official TSL materials (WebGPU pipeline) — do not inject classic enhance.
+    if (material.userData?.mmdTslMaterialUniforms || material.userData?.mmdTslOutlineMaterial) {
+      return;
+    }
+    // Skip WebGL-only enhance injection on WebGPU MeshStandard fallback.
     if (material.userData?.mmdWebGpuStripped) {
       // MeshStandard uses scene.environment (equirect) — do not assign CubeUV PMREM to envMap.
       const std = material as THREE.MeshStandardMaterial;

@@ -7,7 +7,7 @@
 NekoVirtOS 内的浏览器 MMD 工作台：多模型预览、动作/表情/镜头、物理、HDR、后处理、地面真阴影、项目存取、离线/实时导出。
 
 - **成片路径：WebGL**
-- **WebGPU：实验预览**（无完整 toon / 后处理 / map 阴影；官方 `/webgpu` TSL pipeline 尚未接入）
+- **WebGPU：实验预览** — 已接官方 `@yohawing/three-mmd-loader/webgpu` **TSL pipeline**（toon + sparse morph；`pipeline.render`）；无 postprocessing / 无 WebGL map 阴影；TSL self-shadow 默认关（与 cast-only 策略一致）
 - 后处理：**WebGL-only**
 - **依赖**：`@yohawing/three-mmd-loader@0.7.0`（mmd-anim WASM 随包 0.3.1）；Bullet 脚本 `public/mmd/mmd_bullet.{js,wasm}` 与包内 physics 目录同步
 
@@ -43,7 +43,8 @@ src/appModules/mmdStudio/
   MmdProjectHome.tsx
   MmdSidePanel.tsx              # 侧栏；预设优先、NestedPanel
   MmdTimelineBar.tsx
-  MmdCanvas.tsx                 # 场景、Gizmo、setLighting + PMREM
+  MmdCanvas.tsx                 # 场景、Gizmo、WebGPU TSL bridge、setLighting + PMREM
+  mmdTslPipeline.ts             # createMmdTslPipeline 动态 import 封装
   mmdStudioStore.ts             # lights / postFxTune.ssr / gizmo
   mmdEnvMap.ts                  # PMREM 缓存
   mmdMaterialEnhance.ts         # toon enhance rev v8-ibl-fix
@@ -72,7 +73,13 @@ src/**/*.test.ts                # fileUtils / dialog / layout / filesBridge / en
 
 - 默认/成片：**WebGL**
 - WebGL ↔ WebGPU：快照 → 卸 Canvas → 新后端 hydrate
-- WebGPU：后处理 off；无 map 阴影；MMD 材质 strip 为 `MeshStandard`（吃 `scene.environment`，不挂 CubeUV `envMap`）
+- WebGPU：
+  1. `WebGPURenderer.init()` 后 `createMmdTslPipeline`（`mmdTslPipeline.ts`，挂 `gl.userData.mmdTslPipeline`）
+  2. `StudioScene` **唯一** `bindTslPipeline`；`loadModel(..., createModelLoadOptions())` + `pipeline.attach`（带 sun light）
+  3. pipeline 未绑定时 **不 strip**（`tslPending` + 隐藏 root）；bind/setLighting 后再 attach
+  4. attach **失败**才 `stripWebGlOnlyMaterialShaders` → MeshStandard（不可逆）
+  5. `MmdWebGpuTslBridge` 只负责 `useFrame(1)` → `pipeline.render`
+  6. 后处理 off；无 classic map 阴影；TSL self-shadow 默认 off；cast-only 用 `receiveOnly`
 
 ### 天空 vs 环境填充（易混）
 

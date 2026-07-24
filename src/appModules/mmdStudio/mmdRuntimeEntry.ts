@@ -150,12 +150,21 @@ export function enableModelShadows(model: ThreeMmdModel) {
   });
 }
 
+export type EnforceCastOnlyOptions = {
+  /**
+   * Only force receiveShadow=false (for TSL materials).
+   * Avoid mutating mmdMaterial.flags / uniforms that the official TSL pipeline owns.
+   */
+  receiveOnly?: boolean;
+};
+
 /** Re-assert cast-only after material/loader hooks that may flip receiveShadow back on. */
-export function enforceModelCastOnlyShadows(root: THREE.Object3D) {
+export function enforceModelCastOnlyShadows(root: THREE.Object3D, options: EnforceCastOnlyOptions = {}) {
   root.traverse((object) => {
     const mesh = object as THREE.Mesh;
     if (!mesh.isMesh) return;
     mesh.receiveShadow = false;
+    if (options.receiveOnly) return;
     const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     for (const material of list) {
       if (material) disableMmdSelfShadowUniforms(material);
