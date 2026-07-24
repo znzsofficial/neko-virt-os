@@ -3286,21 +3286,48 @@ body.files-resizing-details * {
 .qr-tool-app {
   display: grid;
   min-height: 0;
+  height: 100%;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
   background: var(--os-panel);
   padding: 14px;
+  overflow: auto;
+  align-content: stretch;
 }
 
 .qr-panel {
   display: grid;
   min-height: 0;
+  min-width: 0;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 10px;
   border: 1px solid var(--os-border);
   border-radius: 14px;
   background: var(--os-surface);
   padding: 12px;
+  overflow: hidden;
+}
+
+.qr-generate-panel {
+  /* header · field · preview(flex) · export(fixed) — export never shares space with QR */
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.qr-generate-panel .qr-field textarea {
+  min-height: 72px;
+  max-height: 140px;
+}
+
+.qr-export-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  gap: 8px;
+  margin: 0;
+  padding-top: 2px;
+  background: var(--os-surface);
 }
 
 .qr-panel header,
@@ -3345,18 +3372,26 @@ body.files-resizing-details * {
 
 .qr-preview-box {
   display: grid;
-  min-height: 238px;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  max-height: 100%;
   place-items: center;
   border: 1px dashed var(--os-border-strong);
   border-radius: 12px;
   background: var(--os-panel);
   padding: 12px;
+  overflow: hidden;
 }
 
 .qr-preview-box svg {
-  max-width: 100%;
+  display: block;
+  width: auto;
   height: auto;
+  max-width: 100%;
+  max-height: 100%;
   border-radius: 10px;
+  object-fit: contain;
 }
 
 .qr-upload {
@@ -3987,6 +4022,23 @@ body.files-resizing-details * {
   gap: 12px;
 }
 
+.settings-card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-card-title iconify-icon {
+  flex-shrink: 0;
+  color: color-mix(in oklch, var(--os-primary) 75%, var(--os-muted));
+}
+
+.settings-card-title strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
 .settings-badge-muted {
   flex-shrink: 0;
   border: 1px solid var(--os-border);
@@ -4054,6 +4106,29 @@ body.files-resizing-details * {
 .settings-row-line strong {
   font-size: 13px;
   font-weight: 600;
+}
+
+.settings-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-row-label iconify-icon {
+  flex-shrink: 0;
+  color: color-mix(in oklch, var(--os-primary) 70%, var(--os-muted));
+  opacity: 0.92;
+}
+
+.settings-choice-card .settings-choice-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--os-primary) 14%, var(--os-elevated));
+  color: color-mix(in oklch, var(--os-primary) 80%, var(--os-ink));
 }
 
 .settings-choice-card,
@@ -5811,9 +5886,25 @@ body.files-resizing-details * {
   text-align: left;
 }
 
+.control-center-action.tint-sky { --action-hue: oklch(0.72 0.14 230); }
+.control-center-action.tint-mint { --action-hue: oklch(0.74 0.13 160); }
 .control-center-action.tint-amber { --action-hue: oklch(0.8 0.14 85); }
 .control-center-action.tint-violet { --action-hue: oklch(0.7 0.16 300); }
 .control-center-action.tint-rose { --action-hue: oklch(0.72 0.15 20); }
+.control-center-action.tint-indigo { --action-hue: oklch(0.68 0.14 275); }
+
+.control-center-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.control-center-ws {
+  position: relative;
+}
+
+.control-center-ws iconify-icon {
+  display: none;
+}
 
 .control-center-action:hover {
   background:

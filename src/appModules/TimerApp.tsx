@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
+import { useOsUiStore } from "../osUiStore";
+import { formatClockTime } from "../systemPrefs";
 
 type TimerMode = "clock" | "stopwatch" | "countdown";
 
@@ -20,6 +22,7 @@ function formatSeconds(total: number) {
 export function TimerApp() {
   const t = useLanguageStore((state) => state.t);
   const addNotification = useNotificationStore((state) => state.addNotification);
+  const hour12 = useOsUiStore((state) => state.systemPrefs.hour12);
   const [mode, setMode] = useState<TimerMode>("countdown");
   const [now, setNow] = useState(() => new Date());
   const [stopwatchRunning, setStopwatchRunning] = useState(false);
@@ -131,7 +134,7 @@ export function TimerApp() {
       {mode === "clock" ? (
         <section>
           <span>{t("localTime")}</span>
-          <strong>{now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</strong>
+          <strong>{formatClockTime(now, hour12, true)}</strong>
           <p>{now.toLocaleDateString([], { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
         </section>
       ) : null}

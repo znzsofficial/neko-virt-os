@@ -18,7 +18,10 @@ const CUSTOM_KEY = "neko-virt-os.palette-custom.v1";
 function readCustom(): string[] {
   try {
     const raw = localStorage.getItem(CUSTOM_KEY);
-    return raw ? JSON.parse(raw) as string[] : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((c): c is string => typeof c === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(c));
   } catch {
     return [];
   }
@@ -62,7 +65,11 @@ export function PaletteApp() {
   const [contrastBg, setContrastBg] = useState("#242733");
 
   useEffect(() => {
-    localStorage.setItem(CUSTOM_KEY, JSON.stringify(custom));
+    try {
+      localStorage.setItem(CUSTOM_KEY, JSON.stringify(custom));
+    } catch {
+      // ignore
+    }
   }, [custom]);
 
   const rgb = useMemo(() => hexToRgb(picker), [picker]);

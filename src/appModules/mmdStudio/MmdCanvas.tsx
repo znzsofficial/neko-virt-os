@@ -3,6 +3,8 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { TransformControls as StdTransformControls } from "three-stdlib";
+import { useMmdVrStore } from "../../mmdVrShowcase/mmdVrStore";
+import { useVrDesktopStore } from "../../vrDesktop/vrDesktopStore";
 import {
   createMmdRuntimeHandle,
   type MmdAddModelOptions,
@@ -1240,6 +1242,9 @@ export function MmdCanvas({ backend, audioRef, apiRef, preserveModelsOnUnmount =
   const webgpuAvailable = useMmdStudioStore((state) => state.webgpuAvailable);
   const setBackend = useMmdStudioStore((state) => state.setBackend);
   const setWebgpuAvailable = useMmdStudioStore((state) => state.setWebgpuAvailable);
+  // Avoid dual WebGL cost while any immersive XR overlay is presenting.
+  const pauseForXr =
+    useMmdVrStore((state) => state.overlayOpen) || useVrDesktopStore((state) => state.overlayOpen);
 
   useEffect(() => {
     let cancelled = false;
@@ -1320,7 +1325,7 @@ export function MmdCanvas({ backend, audioRef, apiRef, preserveModelsOnUnmount =
       dpr={backend === "webgpu" ? 1 : [1, 1.75]}
       camera={{ position: [DEFAULT_CAM_POS.x, DEFAULT_CAM_POS.y, DEFAULT_CAM_POS.z], fov: 40, near: 0.1, far: 1000 }}
       gl={gl as any}
-      frameloop="always"
+      frameloop={pauseForXr ? "never" : "always"}
       onCreated={({ gl: renderer }) => {
         renderer.setClearColor("#0e1118");
         if (renderer.shadowMap) {

@@ -1,9 +1,23 @@
 import { create } from "zustand";
+import { createLocalPrefsStorage } from "../shared/localPrefs";
+import {
+  normalizeImmersiveAntialias,
+  normalizeImmersiveDpr,
+  normalizeImmersiveFrameRate,
+  normalizeImmersiveQuality,
+  type ImmersiveAntialiasPref,
+  type ImmersiveDprPref,
+  type ImmersiveFrameRatePref,
+  type ImmersiveRenderQuality,
+} from "../xr";
 import { getXrDiagnostics, getXrSystem } from "./vrSession";
 
-const PREFS_KEY = "neko-virt-os.vr-desktop.v1";
-
-export type VrRenderQuality = "high" | "balanced" | "low";
+export type VrRenderQuality = ImmersiveRenderQuality;
+/** Per-setting override; auto = follow renderQuality preset. */
+export type VrDprPref = ImmersiveDprPref;
+export type VrPanelScalePref = "auto" | "low" | "medium" | "high";
+export type VrFrameRatePref = ImmersiveFrameRatePref;
+export type VrAntialiasPref = ImmersiveAntialiasPref;
 
 export type VrDesktopPrefs = {
   /** Settings → Developer switch. */
@@ -14,6 +28,11 @@ export type VrDesktopPrefs = {
   renderQuality: VrRenderQuality;
   /** In-scene FPS readout for headset acceptance. */
   showFps: boolean;
+  /** Fine overrides (auto = use preset). */
+  dprPref: VrDprPref;
+  panelScalePref: VrPanelScalePref;
+  frameRatePref: VrFrameRatePref;
+  antialiasPref: VrAntialiasPref;
 };
 
 export type VrSessionPhase = "idle" | "entering" | "active" | "error";
@@ -52,38 +71,35 @@ type VrDesktopStore = {
   resetLayout: () => void;
 };
 
-function normalizeQuality(value: unknown): VrRenderQuality {
-  if (value === "high" || value === "balanced" || value === "low") return value;
-  return "balanced";
+function normalizePanelScale(value: unknown): VrPanelScalePref {
+  if (value === "auto" || value === "low" || value === "medium" || value === "high") return value;
+  return "auto";
 }
 
-function defaultPrefs(): VrDesktopPrefs {
-  return { enabled: true, softEdges: false, renderQuality: "balanced", showFps: false };
-}
-
-function readPrefs(): VrDesktopPrefs {
-  try {
-    const raw = localStorage.getItem(PREFS_KEY);
-    if (!raw) return defaultPrefs();
-    const parsed = JSON.parse(raw) as Partial<VrDesktopPrefs>;
-    return {
-      enabled: parsed.enabled !== false,
-      softEdges: Boolean(parsed.softEdges),
-      renderQuality: normalizeQuality(parsed.renderQuality),
-      showFps: Boolean(parsed.showFps),
-    };
-  } catch {
-    return defaultPrefs();
-  }
-}
-
-function writePrefs(prefs: VrDesktopPrefs) {
-  try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-  } catch {
-    // ignore
-  }
-}
+const prefsStorage = createLocalPrefsStorage<VrDesktopPrefs>({
+  key: "neko-virt-os.vr-desktop.v2",
+  legacyKey: "neko-virt-os.vr-desktop.v1",
+  defaults: () => ({
+    enabled: true,
+    softEdges: false,
+    renderQuality: "balanced",
+    showFps: false,
+    dprPref: "auto",
+    panelScalePref: "auto",
+    frameRatePref: "auto",
+    antialiasPref: "auto",
+  }),
+  normalize: (parsed) => ({
+    enabled: parsed.enabled !== false,
+    softEdges: Boolean(parsed.softEdges),
+    renderQuality: normalizeImmersiveQuality(parsed.renderQuality),
+    showFps: Boolean(parsed.showFps),
+    dprPref: normalizeImmersiveDpr(parsed.dprPref),
+    panelScalePref: normalizePanelScale(parsed.panelScalePref),
+    frameRatePref: normalizeImmersiveFrameRate(parsed.frameRatePref),
+    antialiasPref: normalizeImmersiveAntialias(parsed.antialiasPref),
+  }),
+});
 
 function computeCapability(): VrCapability {
   if (typeof window === "undefined") return "unknown";
@@ -124,13 +140,17 @@ export async function refreshVrCapability(): Promise<void> {
 }
 
 export const useVrDesktopStore = create<VrDesktopStore>((set, get) => ({
-  prefs: readPrefs(),
+  prefs: prefsStorage.read(),
   setPrefs: (patch) => {
     const prefs = { ...get().prefs, ...patch };
     if (patch.renderQuality != null) {
-      prefs.renderQuality = normalizeQuality(patch.renderQuality);
+      prefs.renderQuality = normalizeImmersiveQuality(patch.renderQuality);
     }
-    writePrefs(prefs);
+    if (patch.dprPref != null) prefs.dprPref = normalizeImmersiveDpr(patch.dprPref);
+    if (patch.panelScalePref != null) prefs.panelScalePref = normalizePanelScale(patch.panelScalePref);
+    if (patch.frameRatePref != null) prefs.frameRatePref = normalizeImmersiveFrameRate(patch.frameRatePref);
+    if (patch.antialiasPref != null) prefs.antialiasPref = normalizeImmersiveAntialias(patch.antialiasPref);
+    prefsStorage.write(prefs);
     set({ prefs });
     if (prefs.enabled) void refreshVrCapability();
   },
@@ -153,10 +173,16 @@ export const useVrDesktopStore = create<VrDesktopStore>((set, get) => ({
       lastError: null,
       overlayOpen: true,
       errorMessage: null,
+      // Stay "entering" until AttachPendingSession → active (or fail).
+      phase: "entering",
     }),
   refreshCapability: () => refreshVrCapability(),
   layoutEpoch: 0,
-  resetLayout: () => set((s) => ({ layoutEpoch: s.layoutEpoch + 1 })),
+  resetLayout: () => {
+    // Reset panel poses (persisted) + bump epoch so PlayerRig zeros XROrigin.
+    void import("./vrLayoutStore").then((m) => m.useVrLayoutStore.getState().resetPoses());
+    set((s) => ({ layoutEpoch: s.layoutEpoch + 1 }));
+  },
 }));
 
 export function formatVrCapabilityHint(

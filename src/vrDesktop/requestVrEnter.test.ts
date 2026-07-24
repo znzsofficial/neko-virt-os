@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useMmdVrStore } from "../mmdVrShowcase/mmdVrStore";
 import { requestVrDesktopEnter } from "./requestVrEnter";
-import { beginVrSessionFromClick, getXrDiagnostics, getXrSystem } from "./vrSession";
+import { beginVrSessionFromClick } from "./vrSession";
 import { useVrDesktopStore } from "./vrDesktopStore";
+import { getXrDiagnostics, getXrSystem } from "../xr/xrDetect";
 
-vi.mock("./vrSession", async () => {
-  const actual = await vi.importActual<typeof import("./vrSession")>("./vrSession");
+// requestImmersiveEnter imports xrDetect directly — mock the module path it uses.
+vi.mock("../xr/xrDetect", async () => {
+  const actual = await vi.importActual<typeof import("../xr/xrDetect")>("../xr/xrDetect");
   return {
     ...actual,
-    beginVrSessionFromClick: vi.fn(async () => ({ id: "s1" })),
     getXrSystem: vi.fn(() => ({ requestSession: vi.fn() })),
     getXrDiagnostics: vi.fn(() => ({
       secure: true,
@@ -16,6 +18,14 @@ vi.mock("./vrSession", async () => {
       host: "example.com",
       summary: "secure=true xr=true https://example.com",
     })),
+  };
+});
+
+vi.mock("./vrSession", async () => {
+  const actual = await vi.importActual<typeof import("./vrSession")>("./vrSession");
+  return {
+    ...actual,
+    beginVrSessionFromClick: vi.fn(async () => ({ id: "s1" })),
   };
 });
 
@@ -40,7 +50,16 @@ describe("requestVrDesktopEnter", () => {
       summary: "secure=true xr=true https://example.com",
     });
     useVrDesktopStore.setState({
-      prefs: { enabled: true, softEdges: false, renderQuality: "balanced", showFps: false },
+      prefs: {
+        enabled: true,
+        softEdges: false,
+        renderQuality: "balanced",
+        showFps: false,
+        dprPref: "auto",
+        panelScalePref: "auto",
+        frameRatePref: "auto",
+        antialiasPref: "auto",
+      },
       capability: "ready",
       sessionSupported: null,
       phase: "idle",
@@ -49,6 +68,7 @@ describe("requestVrDesktopEnter", () => {
       overlayOpen: false,
       layoutEpoch: 0,
     });
+    useMmdVrStore.setState({ overlayOpen: false, phase: "idle" });
   });
 
   it("fails without secure context", async () => {

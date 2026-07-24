@@ -1,7 +1,7 @@
 import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
 import { useEffect, useRef, useState } from "react";
-import { useDownloadStore } from "../downloadStore";
+import { downloadBlob } from "../downloadStore";
 import { useLanguageStore } from "../languageStore";
 
 export function RecorderApp() {
@@ -15,7 +15,6 @@ export function RecorderApp() {
   const chunksRef = useRef<BlobPart[]>([]);
   const unmountedRef = useRef(false);
   const t = useLanguageStore((state) => state.t);
-  const addDownload = useDownloadStore((state) => state.addDownload);
 
   useEffect(() => {
     if (!recording) return;
@@ -89,11 +88,17 @@ export function RecorderApp() {
   function saveRecording() {
     if (!audioUrl) return;
     const filename = `neko-recording-${new Date().toISOString().replace(/[:.]/g, "-")}.webm`;
-    addDownload({ name: filename, source: t("appRecorder"), size: chunksRef.current.reduce((total, chunk) => total + (chunk instanceof Blob ? chunk.size : 0), 0), mimeType: "audio/webm", url: audioUrl });
-    const link = document.createElement("a");
-    link.href = audioUrl;
-    link.download = filename;
-    link.click();
+    const size = chunksRef.current.reduce(
+      (total, chunk) => total + (chunk instanceof Blob ? chunk.size : 0),
+      0,
+    );
+    downloadBlob({
+      url: audioUrl,
+      name: filename,
+      source: t("appRecorder"),
+      size,
+      mimeType: "audio/webm",
+    });
   }
 
   const minutes = Math.floor(elapsed / 60).toString().padStart(2, "0");

@@ -1,4 +1,24 @@
-import type { VrRenderQuality } from "./vrDesktopStore";
+import {
+  applyCommonQualityAxes,
+  formatDprLabel,
+  formatFrameRateLabel,
+  formatOnOff,
+  scalePanelSize,
+  type ImmersiveAntialiasPref,
+  type ImmersiveDprPref,
+  type ImmersiveFrameRatePref,
+  type ImmersiveRenderQuality,
+} from "../xr";
+import type {
+  VrAntialiasPref,
+  VrDprPref,
+  VrFrameRatePref,
+  VrPanelScalePref,
+  VrRenderQuality,
+  VrDesktopPrefs,
+} from "./vrDesktopStore";
+
+export { scalePanelSize };
 
 /** Base panel canvas sizes before quality scale. */
 export const VR_PANEL_BASE = {
@@ -52,12 +72,53 @@ const PROFILES: Record<VrRenderQuality, VrRenderProfile> = {
   },
 };
 
-export function getVrRenderProfile(quality: VrRenderQuality): VrRenderProfile {
-  return PROFILES[quality] ?? PROFILES.balanced;
+const PANEL_SCALE_MAP: Record<Exclude<VrPanelScalePref, "auto">, number> = {
+  low: 0.55,
+  medium: 0.75,
+  high: 1,
+};
+
+export type VrQualityInput = Pick<
+  VrDesktopPrefs,
+  "renderQuality" | "dprPref" | "panelScalePref" | "frameRatePref" | "antialiasPref"
+>;
+
+export function getVrRenderProfile(
+  qualityOrPrefs: VrRenderQuality | VrQualityInput,
+): VrRenderProfile {
+  const quality =
+    typeof qualityOrPrefs === "string" ? qualityOrPrefs : qualityOrPrefs.renderQuality;
+  let base = { ...(PROFILES[quality] ?? PROFILES.balanced) };
+
+  if (typeof qualityOrPrefs === "string") return base;
+
+  const { dprPref, panelScalePref, frameRatePref, antialiasPref } = qualityOrPrefs;
+
+  base = applyCommonQualityAxes(base, {
+    dprPref: dprPref as ImmersiveDprPref,
+    frameRatePref: frameRatePref as ImmersiveFrameRatePref,
+    antialiasPref: antialiasPref as ImmersiveAntialiasPref,
+  });
+
+  if (panelScalePref && panelScalePref !== "auto") {
+    base.panelScale = PANEL_SCALE_MAP[panelScalePref] ?? base.panelScale;
+  }
+
+  return base;
 }
 
-export function scalePanelSize(base: number, scale: number): number {
-  const n = Math.max(64, Math.round(base * scale));
-  // Even dimensions play nicer with some GPUs.
-  return n % 2 === 0 ? n : n + 1;
+export function formatVrProfileSummary(
+  profile: VrRenderProfile,
+  language: "zh" | "en",
+): string {
+  const dpr = formatDprLabel(profile.dpr);
+  const aa = formatOnOff(profile.antialias, language);
+  const fps = formatFrameRateLabel(profile.frameRate);
+  if (language === "zh") {
+    return `DPR ${dpr} · AA ${aa} · 面板 ${Math.round(profile.panelScale * 100)}% · 目标 ${fps}`;
+  }
+  return `DPR ${dpr} · AA ${aa} · panels ${Math.round(profile.panelScale * 100)}% · target ${fps}`;
 }
+
+// Re-export quality alias types for convenience (same as store).
+export type { ImmersiveRenderQuality as SharedRenderQuality };

@@ -1,7 +1,7 @@
 import { Icon } from "@iconify-icon/react";
 import { useEffect, useState } from "react";
 import { useLanguageStore } from "../languageStore";
-import { readStickyNotes, writeStickyNotes, type StickyNote } from "../stickyBoardStorage";
+import { readStickyNotes, writeStickyNotes, type StickyNote } from "../shared";
 
 export function StickyBoardApp() {
   const [notes, setNotes] = useState<StickyNote[]>(readStickyNotes);

@@ -1,37 +1,15 @@
 import { clsx } from "clsx";
 import { useEffect, useMemo, useState } from "react";
 import { useLanguageStore } from "../languageStore";
+import {
+  readTasks,
+  writeTasks,
+  type LocalTaskItem,
+  type TaskPriority,
+} from "../shared/tasks/storage";
 
-type TaskPriority = "low" | "medium" | "high";
 type TaskFilter = "all" | "active" | "done";
-
-type LocalTask = {
-  id: string;
-  text: string;
-  done: boolean;
-  due?: string;
-  priority: TaskPriority;
-};
-
-const TASKS_STORAGE_KEY = "neko-virt-os.tasks.v2";
-const TASKS_LEGACY_KEY = "neko-virt-os.tasks.v1";
-
-function readTasks(): LocalTask[] {
-  try {
-    const raw = localStorage.getItem(TASKS_STORAGE_KEY) ?? localStorage.getItem(TASKS_LEGACY_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as Array<Partial<LocalTask> & { id: string; text: string; done: boolean }>;
-    return parsed.map((task) => ({
-      id: task.id,
-      text: task.text,
-      done: Boolean(task.done),
-      due: task.due,
-      priority: task.priority === "low" || task.priority === "high" ? task.priority : "medium",
-    }));
-  } catch {
-    return [];
-  }
-}
+type LocalTask = LocalTaskItem;
 
 export function TasksApp() {
   const [tasks, setTasks] = useState<LocalTask[]>(readTasks);
@@ -43,7 +21,7 @@ export function TasksApp() {
   const t = useLanguageStore((state) => state.t);
 
   useEffect(() => {
-    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+    writeTasks(tasks);
   }, [tasks]);
 
   const visibleTasks = useMemo(() => {

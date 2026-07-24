@@ -1,6 +1,8 @@
 import { Icon } from "@iconify-icon/react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useLanguageStore } from "../../languageStore";
+import { requestMmdVrEnter } from "../../mmdVrShowcase/requestMmdVrEnter";
+import type { MmdVrAssetSlot } from "../../mmdVrShowcase/mmdVrAssets";
 import { useNotificationStore } from "../../notificationStore";
 import { useOsUiStore } from "../../osUiStore";
 import {
@@ -469,6 +471,29 @@ export function MmdStudioApp({ windowId }: { windowId?: string } = {}) {
     }
   }
 
+  function enterMmdVrShowcase() {
+    const assets = apiRef.current?.exportProjectModels() ?? [];
+    if (!assets.length) {
+      addNotification({
+        title: t("settingsMmdVrShowcase"),
+        message: t("settingsMmdVrNoModel"),
+        type: "warning",
+        category: "media",
+        appId: "mmd-studio",
+      });
+      return;
+    }
+    setPlaying(false);
+    if (audioRef.current) audioRef.current.pause();
+    const slots: MmdVrAssetSlot[] = assets.slice(0, 3).map((model) => ({
+      modelFile: model.modelFile,
+      companionFiles: model.companionFiles?.length ? model.companionFiles : [model.modelFile],
+      bodyMotionFile: model.bodyMotionFile,
+      faceMotionFile: model.faceMotionFile,
+    }));
+    void requestMmdVrEnter({ t, addNotification, assets: slots, appId: "mmd-studio" });
+  }
+
   async function onDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setDragOver(false);
@@ -623,6 +648,15 @@ export function MmdStudioApp({ windowId }: { windowId?: string } = {}) {
             <button type="button" className="button-ghost" onClick={() => cameraMotionInputRef.current?.click()}>{t("mmdLoadCameraMotion")}</button>
             <button type="button" className="button-ghost" onClick={() => audioInputRef.current?.click()}>{t("mmdLoadAudio")}</button>
           </div>
+          <button
+            type="button"
+            className="button-primary"
+            title={t("settingsMmdVrSendFromStudio")}
+            onClick={enterMmdVrShowcase}
+          >
+            <Icon icon="solar:glasses-bold-duotone" width={16} height={16} />
+            {t("settingsMmdVrSendFromStudio")}
+          </button>
         </div>
         <div className="mmd-toolbar-group mmd-toolbar-meta">
           <label className="mmd-inline-field">

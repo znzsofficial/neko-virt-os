@@ -1,6 +1,6 @@
 import { clsx } from "clsx";
 import { useEffect, useRef, useState } from "react";
-import { useDownloadStore } from "../downloadStore";
+import { downloadBlob } from "../downloadStore";
 import { useLanguageStore } from "../languageStore";
 
 type ApiTestMethod = "GET" | "POST";
@@ -23,7 +23,6 @@ export function ApiTesterApp() {
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
   const t = useLanguageStore((state) => state.t);
-  const addDownload = useDownloadStore((state) => state.addDownload);
 
   useEffect(() => {
     return () => {
@@ -99,13 +98,13 @@ export function ApiTesterApp() {
       2,
     );
     const blob = new Blob([payload], { type: "application/json" });
-    const downloadUrl = URL.createObjectURL(blob);
     const filename = `api-response-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
-    addDownload({ name: filename, source: t("appApiTester"), size: blob.size, mimeType: "application/json", url: downloadUrl });
-    const link = document.createElement("a");
-    link.href = downloadUrl;
-    link.download = filename;
-    link.click();
+    downloadBlob({
+      blob,
+      name: filename,
+      source: t("appApiTester"),
+      mimeType: "application/json",
+    });
   }
 
   return (

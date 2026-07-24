@@ -6,10 +6,9 @@ import { ControlCenter } from "./ControlCenter";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
 import { useOsUiStore } from "../osUiStore";
+import { buildMonthCells, WEEKDAY_KEYS } from "../shared/calendar/monthGrid";
 import { formatClockTime } from "../systemPrefs";
 import { useDesktopStore } from "../windowStore";
-
-const weekdayKeys = ["weekdaySun", "weekdayMon", "weekdayTue", "weekdayWed", "weekdayThu", "weekdayFri", "weekdaySat"] as const;
 
 export function Taskbar() {
   const windows = useDesktopStore((state) => state.windows);
@@ -35,13 +34,10 @@ export function Taskbar() {
   const controlRef = useRef<HTMLDivElement>(null);
   const [cursor, setCursor] = useState(() => new Date());
   const today = new Date();
-  const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-  const startOffset = monthStart.getDay();
-  const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
-  const cells = useMemo(() => Array.from({ length: 42 }, (_, index) => {
-    const day = index - startOffset + 1;
-    return day >= 1 && day <= daysInMonth ? day : null;
-  }), [daysInMonth, startOffset]);
+  const cells = useMemo(
+    () => buildMonthCells(cursor.getFullYear(), cursor.getMonth()),
+    [cursor],
+  );
   const workspaceWindows = useMemo(
     () => windows.filter((window) => (window.workspaceId ?? 0) === activeWorkspace),
     [windows, activeWorkspace],
@@ -163,7 +159,7 @@ export function Taskbar() {
               </div>
               <div className="tray-clock-bigtime">{formatClockTime(today, hour12)}</div>
               <div className="calendar-grid tray-clock-grid">
-                {weekdayKeys.map((dayKey) => <strong key={dayKey}>{t(dayKey)}</strong>)}
+                {WEEKDAY_KEYS.map((dayKey) => <strong key={dayKey}>{t(dayKey)}</strong>)}
                 {cells.map((day, index) => {
                   const isToday = day === today.getDate() && cursor.getMonth() === today.getMonth() && cursor.getFullYear() === today.getFullYear();
                   return <span key={`${day}-${index}`} className={clsx(day && "has-day", isToday && "is-today")}>{day}</span>;

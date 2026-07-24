@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apps } from "../apps";
 import { appTitleKeys } from "../appText";
-import { useDownloadStore } from "../downloadStore";
+import { downloadBlob } from "../downloadStore";
 import {
   formatFileSize,
   formatFileTime,
@@ -32,7 +32,6 @@ type TerminalContext = {
   openNotes: () => void;
   openFolder: (id: string | null) => void;
   openApp: (appId: AppId) => void;
-  addDownload: (entry: { name: string; source: string; size?: number; mimeType?: string; url?: string }) => unknown;
   closeWindow: () => boolean;
   commandHistory: string[];
   language: "zh" | "en";
@@ -71,7 +70,6 @@ export function TerminalApp({ windowId }: { windowId?: string }) {
   const renameFileById = useFsStore((state) => state.renameFileById);
   const moveFileById = useFsStore((state) => state.moveFileById);
   const saveFileDraft = useFsStore((state) => state.saveFileDraft);
-  const addDownload = useDownloadStore((state) => state.addDownload);
   const selectFile = useFsStore((state) => state.selectFile);
   const openApp = useDesktopStore((state) => state.openApp);
   const closeWindow = useDesktopStore((state) => state.closeWindow);
@@ -149,7 +147,6 @@ export function TerminalApp({ windowId }: { windowId?: string }) {
       openApp: (appId) => {
         openApp(appId);
       },
-      addDownload,
       closeWindow: () => {
         if (!windowId) return false;
         closeWindow(windowId);
@@ -809,18 +806,11 @@ async function executeTerminalCommand(command: string, context: TerminalContext,
       if (!resolved) return [`download: ${filename}${t("terminalNoSuchFileSuffix")}`];
       if (resolved.kind !== "text") return [`download: ${filename}${t("terminalIsFolderSuffix")}`];
       const blob = new Blob([resolved.content], { type: "text/plain;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      context.addDownload({
+      downloadBlob({
+        blob,
         name: resolved.name,
         source: t("appTerminal"),
-        size: blob.size,
-        mimeType: blob.type,
-        url,
       });
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = resolved.name;
-      anchor.click();
       return [`${t("terminalDownloadedFilePrefix")}${resolved.name}`];
     }
     case "close": {

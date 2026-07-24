@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useMmdVrStore } from "../mmdVrShowcase/mmdVrStore";
 import { useOsUiStore } from "../osUiStore";
 import { useVrDesktopStore } from "../vrDesktop/vrDesktopStore";
 
@@ -36,7 +37,7 @@ export function useIdleLock() {
     const timer = window.setInterval(() => {
       if (useOsUiStore.getState().sessionLocked) return;
       // XR input does not fire window mousemove; do not idle-lock while VR is open.
-      if (useVrDesktopStore.getState().overlayOpen) {
+      if (useVrDesktopStore.getState().overlayOpen || useMmdVrStore.getState().overlayOpen) {
         lastActiveRef.current = Date.now();
         return;
       }

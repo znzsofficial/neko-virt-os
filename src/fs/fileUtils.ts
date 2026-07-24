@@ -95,9 +95,11 @@ export function sortFiles(files: FsFile[], sortMode: FileSortMode) {
 }
 
 export function formatFileSize(content: string) {
+  // Keep short labels for narrow terminal columns; full formatBytes is elsewhere.
   const bytes = new Blob([content]).size;
   if (bytes < 1024) return `${bytes} B`;
-  return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function formatFileTime(timestamp: number, locale: "zh" | "en" = "en") {

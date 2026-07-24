@@ -6,6 +6,8 @@ import { useOsUiStore, type WorkspaceId } from "../osUiStore";
 import { readThemeSettings, updateThemeSettings } from "../theme";
 import type { ThemeSettings } from "../types";
 import { useDesktopStore } from "../windowStore";
+import { requestMmdVrEnter } from "../mmdVrShowcase/requestMmdVrEnter";
+import { useMmdVrStore } from "../mmdVrShowcase/mmdVrStore";
 import { requestVrDesktopEnter } from "../vrDesktop/requestVrEnter";
 import { refreshVrCapability, useVrDesktopStore } from "../vrDesktop/vrDesktopStore";
 import { useNotificationStore } from "../notificationStore";
@@ -25,6 +27,7 @@ export function ControlCenter() {
   const openApp = useDesktopStore((state) => state.openApp);
   const vrEnabled = useVrDesktopStore((state) => state.prefs.enabled);
   const vrPhase = useVrDesktopStore((state) => state.phase);
+  const mmdVrPhase = useMmdVrStore((state) => state.phase);
   const addNotification = useNotificationStore((state) => state.addNotification);
   const focusWindow = useDesktopStore((state) => state.focusWindow);
   const restoreWindow = useDesktopStore((state) => state.restoreWindow);
@@ -168,12 +171,28 @@ export function ControlCenter() {
               void enter;
             }}
           >
-            <Icon icon="solar:virtual-reality-bold-duotone" width={16} height={16} />
+            <Icon icon="solar:glasses-bold-duotone" width={16} height={16} />
             {vrPhase === "entering"
               ? t("settingsVrDesktopEntering")
               : t("settingsVrDesktop")}
           </button>
         ) : null}
+        <button
+          type="button"
+          className="control-center-action tint-mint"
+          disabled={mmdVrPhase === "entering" || mmdVrPhase === "active"}
+          title={t("settingsMmdVrShowcase")}
+          onClick={() => {
+            const enter = requestMmdVrEnter({ t, addNotification });
+            setControlCenterOpen(false);
+            void enter;
+          }}
+        >
+          <Icon icon="solar:clapperboard-edit-bold-duotone" width={16} height={16} />
+          {mmdVrPhase === "entering"
+            ? t("settingsMmdVrEntering")
+            : t("settingsMmdVrShowcase")}
+        </button>
         <button
           type="button"
           className="control-center-action tint-rose"

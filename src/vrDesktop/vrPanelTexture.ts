@@ -1,33 +1,14 @@
-import * as THREE from "three";
+import {
+  createPanelTexture,
+  paintFpsBadge,
+  paintSecondaryButton,
+  roundRectPath,
+  type PanelPaintContext,
+} from "../shared/panelTexture";
 import { getVrAppTint, vrTheme } from "./vrTheme";
 
-export type PanelPaintContext = {
-  ctx: CanvasRenderingContext2D;
-  width: number;
-  height: number;
-  language: "zh" | "en";
-};
-
-export function createPanelTexture(
-  width: number,
-  height: number,
-  paint: (p: PanelPaintContext) => void,
-  language: "zh" | "en",
-): THREE.CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (ctx) paint({ ctx, width, height, language });
-  const map = new THREE.CanvasTexture(canvas);
-  map.colorSpace = THREE.SRGBColorSpace;
-  // UI planes: no mips — cheaper updates on clock/hover redraw.
-  map.generateMipmaps = false;
-  map.minFilter = THREE.LinearFilter;
-  map.magFilter = THREE.LinearFilter;
-  map.needsUpdate = true;
-  return map;
-}
+export type { PanelPaintContext };
+export { createPanelTexture, paintFpsBadge, paintSecondaryButton, roundRectPath };
 
 export function fillPanelBg(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.fillStyle = vrTheme.bg;
@@ -37,24 +18,6 @@ export function fillPanelBg(ctx: CanvasRenderingContext2D, w: number, h: number)
   g.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h * 0.4);
-}
-
-export function roundRectPath(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-) {
-  const radius = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius);
-  ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius);
-  ctx.arcTo(x, y, x + w, y, radius);
-  ctx.closePath();
 }
 
 function paintPill(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, font: string) {
@@ -151,13 +114,6 @@ export function paintHomePanel(
 export type LauncherHit =
   | { kind: "app"; id: string; label: string; rect: { x: number; y: number; w: number; h: number } }
   | { kind: "tab"; page: number; rect: { x: number; y: number; w: number; h: number } };
-
-/** @deprecated use LauncherHit */
-export type LauncherCell = {
-  id: string;
-  label: string;
-  rect: { x: number; y: number; w: number; h: number };
-};
 
 export type LauncherPage = {
   id: string;
@@ -319,51 +275,147 @@ function wrapTextLines(
   return lines;
 }
 
-export function paintExitButton(
-  p: Pick<PanelPaintContext, "ctx" | "width" | "height">,
-  label: string,
-) {
-  paintSecondaryButton(p, label);
-}
+export type VrBrowserChromeHit =
+  | {
+      kind: "nav";
+      action: "back" | "forward" | "home" | "close" | "reload" | "external";
+      rect: { x: number; y: number; w: number; h: number };
+    }
+  | { kind: "bookmark"; url: string; rect: { x: number; y: number; w: number; h: number } };
 
-/** Quiet secondary control (exit / reset layout). */
-export function paintSecondaryButton(
-  p: Pick<PanelPaintContext, "ctx" | "width" | "height">,
-  label: string,
-) {
-  const { ctx, width: w, height: h } = p;
-  const r = Math.min(20, h / 2);
-  roundRectPath(ctx, 1, 1, w - 2, h - 2, r);
-  ctx.fillStyle = vrTheme.exitFill;
+/**
+ * Browser chrome for XR ray hits.
+ * When `cutoutContent` is true (page open), only paint the top bar + bookmarks so the
+ * Html iframe is not covered by an opaque WebGL plane.
+ */
+export function paintVrBrowserChrome(
+  p: PanelPaintContext,
+  state: {
+    url: string;
+    canBack: boolean;
+    canForward: boolean;
+    bookmarks: { title: string; url: string }[];
+    status?: string | null;
+    /** Leave page area transparent for Html iframe. */
+    cutoutContent?: boolean;
+  },
+): VrBrowserChromeHit[] {
+  const { ctx, width, height, language } = p;
+  const hits: VrBrowserChromeHit[] = [];
+  const cutout = Boolean(state.cutoutContent);
+
+  ctx.clearRect(0, 0, width, height);
+  if (!cutout) {
+    fillPanelBg(ctx, width, height);
+  } else {
+    // Only chrome strip background
+    ctx.fillStyle = vrTheme.bg;
+    ctx.fillRect(0, 0, width, 150);
+  }
+
+  const barY = 16;
+  const barH = 52;
+  const btnW = 52;
+  const gap = 8;
+  let x = 16;
+
+  const nav: {
+    action: "back" | "forward" | "home" | "reload" | "external" | "close";
+    label: string;
+    enabled: boolean;
+  }[] = [
+    { action: "back", label: "←", enabled: state.canBack },
+    { action: "forward", label: "→", enabled: state.canForward },
+    { action: "home", label: language === "zh" ? "主页" : "Home", enabled: true },
+    { action: "reload", label: "↻", enabled: true },
+    { action: "external", label: language === "zh" ? "外开" : "Ext", enabled: true },
+    { action: "close", label: "×", enabled: true },
+  ];
+
+  for (const item of nav) {
+    const w = item.action === "home" || item.action === "external" ? 70 : btnW;
+    roundRectPath(ctx, x, barY, w, barH, 12);
+    ctx.fillStyle = item.enabled ? vrTheme.panel : vrTheme.bgDeep;
+    ctx.fill();
+    ctx.strokeStyle = vrTheme.border;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = item.enabled ? vrTheme.ink : vrTheme.subtle;
+    ctx.font = "600 20px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(item.label, x + w / 2, barY + barH / 2 + 1);
+    hits.push({ kind: "nav", action: item.action, rect: { x, y: barY, w, h: barH } });
+    x += w + gap;
+  }
+
+  // Address pill
+  const addrX = x;
+  const addrW = width - addrX - 20;
+  roundRectPath(ctx, addrX, barY, addrW, barH, 12);
+  ctx.fillStyle = vrTheme.bgDeep;
   ctx.fill();
-  ctx.strokeStyle = vrTheme.exitBorder;
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = vrTheme.border;
   ctx.stroke();
-  ctx.fillStyle = vrTheme.exitInk;
-  ctx.font = "600 32px system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(label, w / 2, h / 2 + 1);
+  ctx.fillStyle = vrTheme.muted;
+  ctx.font = "500 20px system-ui, sans-serif";
   ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  let addr = state.url;
+  const maxW = addrW - 24;
+  if (ctx.measureText(addr).width > maxW) {
+    while (addr.length > 4 && ctx.measureText(`${addr}…`).width > maxW) addr = addr.slice(0, -1);
+    addr = `${addr}…`;
+  }
+  ctx.fillText(addr, addrX + 12, barY + barH / 2 + 1);
   ctx.textBaseline = "alphabetic";
-}
 
-export function paintFpsBadge(
-  p: Pick<PanelPaintContext, "ctx" | "width" | "height">,
-  fps: number,
-) {
-  const { ctx, width: w, height: h } = p;
-  ctx.clearRect(0, 0, w, h);
-  roundRectPath(ctx, 0, 0, w, h, 12);
-  ctx.fillStyle = "rgba(12, 16, 24, 0.72)";
-  ctx.fill();
-  ctx.fillStyle = fps >= 72 ? "#7dcea0" : fps >= 50 ? "#e0b84a" : "#e07a7a";
-  ctx.font = "700 36px system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(`${fps}`, w / 2, h / 2 + 1);
+  // Bookmark row
+  const bmY = barY + barH + 18;
+  const bmH = 44;
+  let bmX = 20;
+  for (const bm of state.bookmarks.slice(0, 6)) {
+    ctx.font = "600 18px system-ui, sans-serif";
+    const tw = ctx.measureText(bm.title).width;
+    const w = Math.min(140, Math.max(72, tw + 28));
+    if (bmX + w > width - 20) break;
+    roundRectPath(ctx, bmX, bmY, w, bmH, 10);
+    ctx.fillStyle = vrTheme.panel;
+    ctx.fill();
+    ctx.strokeStyle = vrTheme.border;
+    ctx.stroke();
+    ctx.fillStyle = vrTheme.ink;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(bm.title, bmX + w / 2, bmY + bmH / 2 + 1);
+    hits.push({ kind: "bookmark", url: bm.url, rect: { x: bmX, y: bmY, w, h: bmH } });
+    bmX += w + 8;
+  }
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
+
+  // Thin status under bookmarks (never fills the page body when cutout).
+  if (state.status) {
+    const sy = bmY + bmH + 10;
+    ctx.fillStyle = vrTheme.muted;
+    ctx.font = "500 18px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(state.status, width / 2, sy + 14);
+    ctx.textAlign = "left";
+  }
+
+  // Home: draw empty content card. Page open: leave transparent for iframe.
+  if (!cutout) {
+    const contentY = bmY + bmH + 16;
+    const contentH = height - contentY - 20;
+    roundRectPath(ctx, 20, contentY, width - 40, contentH, 14);
+    ctx.fillStyle = vrTheme.bgDeep;
+    ctx.fill();
+    ctx.strokeStyle = vrTheme.border;
+    ctx.stroke();
+  }
+
+  return hits;
 }
 
 const STICKY_CARD_COLORS = ["#3d3420", "#2a3340", "#342a38", "#2a3830"] as const;

@@ -12,6 +12,7 @@ NekoVirtOS 内的浏览器 MMD 工作台：多模型预览、动作/表情/镜�
 - **WebGPU：实验预览** — 官方 `@yohawing/three-mmd-loader/webgpu` **TSL pipeline**（toon + sparse morph；`pipeline.render`）；无 postprocessing / 无 WebGL map 阴影；TSL self-shadow 默认关（cast-only）
 - **后处理：WebGL-only**
 - **VR 桌面**：**不**共用本模块 WebGPU 会话；见 [vr-desktop-roadmap.md](./vr-desktop-roadmap.md)
+- **MMD VR 展示器**：独立 WebGL XR 会话（行走观看 / 有限导入）；**不**迁入本 Studio UI；WebXR 核心在 `src/xr`（与桌面分会话实例）；见 [mmd-vr-showcase-roadmap.md](./mmd-vr-showcase-roadmap.md)
 - **依赖**：`@yohawing/three-mmd-loader@0.7.0`（mmd-anim WASM 0.3.1）；Bullet：`public/mmd/mmd_bullet.{js,wasm}`
 
 ### 0.7.0 注意

@@ -174,9 +174,11 @@ export const useOsUiStore = create<OsUiStore>((set) => ({
     }),
   sessionLocked: false,
   lockSession: () => {
-    // End experimental VR session if active (XR shell may cover lock UI).
+    // End experimental VR sessions if active (XR shell may cover lock UI).
     void import("./vrDesktop/vrSession").then((m) => m.endVrDesktopSession());
     void import("./vrDesktop/vrDesktopStore").then((m) => m.useVrDesktopStore.getState().closeOverlay());
+    void import("./mmdVrShowcase/mmdVrSession").then((m) => m.endMmdVrSession());
+    void import("./mmdVrShowcase/mmdVrStore").then((m) => m.useMmdVrStore.getState().closeOverlay());
     set({ sessionLocked: true, controlCenterOpen: false, notificationCenterOpen: false });
   },
   unlockSession: () => set({ sessionLocked: false }),

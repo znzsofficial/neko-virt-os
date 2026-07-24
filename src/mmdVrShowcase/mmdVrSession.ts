@@ -1,0 +1,40 @@
+import type { WebGLRenderer } from "three";
+import { createProductXrSession } from "../xr";
+import { getMmdVrRenderProfile, type MmdVrQualityInput } from "./mmdVrQuality";
+import type { MmdVrRenderQuality } from "./mmdVrStore";
+
+export type MmdVrAttachQuality = MmdVrRenderQuality | MmdVrQualityInput;
+
+/** Dedicated XR session for MMD showcase — never share with VR desktop. */
+const session = createProductXrSession<MmdVrAttachQuality>({
+  resolveFrameRate: (quality) => getMmdVrRenderProfile(quality).frameRate,
+});
+
+export const mmdVrXrStore = session.xrStore;
+
+export function peekPendingMmdVrSession() {
+  return session.peek();
+}
+
+export function clearPendingMmdVrSession() {
+  session.clear();
+}
+
+export function beginMmdVrSessionFromClick() {
+  return session.beginFromClick();
+}
+
+export function applyMmdVrFrameRate(quality: MmdVrAttachQuality) {
+  session.applyFrameRate(quality);
+}
+
+export function attachPendingMmdVrSessionToRenderer(
+  gl: WebGLRenderer,
+  quality?: MmdVrAttachQuality,
+): Promise<boolean> {
+  return session.attachToRenderer(gl, quality);
+}
+
+export function endMmdVrSession(): Promise<void> {
+  return session.end();
+}

@@ -8,10 +8,6 @@ import { useDesktopStore } from "../windowStore";
 import type { AppId, NotificationCategory } from "../types";
 import type { TranslationKey } from "../languageStore";
 
-function phrase(prefix: string, value: string | number, suffix: string) {
-  return `${prefix}${value}${suffix}`;
-}
-
 const CATEGORIES: NotificationCategory[] = ["system", "files", "apps", "media"];
 const categoryKeys: Record<NotificationCategory, TranslationKey> = {
   system: "notificationCategorySystem",
@@ -49,7 +45,7 @@ export function NotificationOverlay() {
       <div className="notification-overlay" aria-live="assertive">
         {notifications.length ? (
           <div className="notification-toolbar">
-            <span>{phrase(t("notificationCountPrefix"), notifications.length, t("notificationCountSuffix"))}</span>
+            <span>{`${t("notificationCountPrefix")}${notifications.length}${t("notificationCountSuffix")}`}</span>
             <button type="button" className="notification-clear" onClick={clearNotifications}>
               {t("clearNotifications")}
             </button>

@@ -2,12 +2,9 @@ import { Icon } from "@iconify-icon/react";
 import { formatFileTime } from "../fs";
 import { appConfirm } from "../dialogStore";
 import { useFsStore } from "../fs";
-import { useLanguageStore, type TranslationKey } from "../languageStore";
+import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
-
-function phrase(t: (key: TranslationKey) => string, prefix: TranslationKey, value: string | number, suffix: TranslationKey) {
-  return `${t(prefix)}${value}${t(suffix)}`;
-}
+import { phrase } from "../shell/phrase";
 
 export function TrashApp() {
   const files = useFsStore((state) => state.files);

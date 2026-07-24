@@ -4,6 +4,7 @@ import {
   normalizeDeveloperPrefs,
   type DeveloperPrefs,
 } from "./developerPrefs";
+import { downloadBlob } from "./downloadStore";
 import type { Language } from "./languageStore";
 import {
   SYSTEM_PREFS_KEY,
@@ -101,10 +102,11 @@ export function applySettingsBackup(backup: SettingsBackup) {
 export function downloadSettingsBackup() {
   const payload = collectSettingsBackup();
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `neko-virt-os-settings-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadBlob({
+    blob,
+    name: `neko-virt-os-settings-${new Date().toISOString().slice(0, 10)}.json`,
+    source: "Settings",
+    register: false,
+    revokeAfterMs: 1_000,
+  });
 }

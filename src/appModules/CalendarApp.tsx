@@ -1,46 +1,33 @@
 import { clsx } from "clsx";
 import { useEffect, useMemo, useState } from "react";
 import { useLanguageStore } from "../languageStore";
+import {
+  buildMonthCells,
+  dateKey,
+  daysInMonth,
+  WEEKDAY_KEYS,
+} from "../shared/calendar/monthGrid";
+import {
+  readCalendarEvents,
+  writeCalendarEvents,
+  type LocalCalendarEvent,
+} from "../shared/calendar/storage";
 
-const weekdayKeys = ["weekdaySun", "weekdayMon", "weekdayTue", "weekdayWed", "weekdayThu", "weekdayFri", "weekdaySat"] as const;
-const EVENTS_KEY = "neko-virt-os.calendar-events.v1";
-
-type CalendarEvent = {
-  id: string;
-  date: string;
-  title: string;
-  time?: string;
-};
-
-function dateKey(year: number, month: number, day: number) {
-  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function readEvents(): CalendarEvent[] {
-  try {
-    const raw = localStorage.getItem(EVENTS_KEY);
-    return raw ? JSON.parse(raw) as CalendarEvent[] : [];
-  } catch {
-    return [];
-  }
-}
+type CalendarEvent = LocalCalendarEvent;
 
 export function CalendarApp() {
   const t = useLanguageStore((state) => state.t);
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
-  const [events, setEvents] = useState<CalendarEvent[]>(readEvents);
+  const [events, setEvents] = useState<CalendarEvent[]>(readCalendarEvents);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftTime, setDraftTime] = useState("");
   const today = new Date();
-  const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-  const startOffset = monthStart.getDay();
-  const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
-  const cells = Array.from({ length: 42 }, (_, index) => {
-    const day = index - startOffset + 1;
-    return day >= 1 && day <= daysInMonth ? day : null;
-  });
-  const selectedKey = dateKey(cursor.getFullYear(), cursor.getMonth(), Math.min(selectedDay, daysInMonth));
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const maxDay = daysInMonth(year, month);
+  const cells = useMemo(() => buildMonthCells(year, month), [year, month]);
+  const selectedKey = dateKey(year, month, Math.min(selectedDay, maxDay));
   const dayEvents = useMemo(
     () => events.filter((event) => event.date === selectedKey).sort((a, b) => (a.time || "").localeCompare(b.time || "")),
     [events, selectedKey],
@@ -48,14 +35,14 @@ export function CalendarApp() {
   const eventDays = useMemo(() => new Set(events.map((event) => event.date)), [events]);
 
   useEffect(() => {
-    localStorage.setItem(EVENTS_KEY, JSON.stringify(events));
+    writeCalendarEvents(events);
   }, [events]);
 
   function moveMonth(delta: number) {
     setCursor((current) => {
       const next = new Date(current.getFullYear(), current.getMonth() + delta, 1);
-      const maxDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
-      setSelectedDay((day) => Math.min(day, maxDay));
+      const nextMax = daysInMonth(next.getFullYear(), next.getMonth());
+      setSelectedDay((day) => Math.min(day, nextMax));
       return next;
     });
   }
@@ -97,7 +84,7 @@ export function CalendarApp() {
       </header>
       <div className="calendar-body">
         <div className="calendar-grid">
-          {weekdayKeys.map((dayKey) => <strong key={dayKey}>{t(dayKey)}</strong>)}
+          {WEEKDAY_KEYS.map((dayKey) => <strong key={dayKey}>{t(dayKey)}</strong>)}
           {cells.map((day, index) => {
             if (!day) return <span key={`empty-${index}`} />;
             const key = dateKey(cursor.getFullYear(), cursor.getMonth(), day);

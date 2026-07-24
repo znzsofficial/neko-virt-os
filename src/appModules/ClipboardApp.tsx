@@ -10,7 +10,17 @@ const CLIPBOARD_HISTORY_STORAGE_KEY = "neko-virt-os.clipboard-history.v1";
 function readClipboardHistory(): ClipboardEntry[] {
   try {
     const raw = localStorage.getItem(CLIPBOARD_HISTORY_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+      .map((entry) => ({
+        id: String(entry.id ?? ""),
+        text: String(entry.text ?? ""),
+        createdAt: typeof entry.createdAt === "number" ? entry.createdAt : Date.now(),
+      }))
+      .filter((entry) => entry.id && entry.text);
   } catch {
     return [];
   }
@@ -23,7 +33,11 @@ export function ClipboardApp() {
   const addNotification = useNotificationStore((state) => state.addNotification);
 
   useEffect(() => {
-    localStorage.setItem(CLIPBOARD_HISTORY_STORAGE_KEY, JSON.stringify(history));
+    try {
+      localStorage.setItem(CLIPBOARD_HISTORY_STORAGE_KEY, JSON.stringify(history));
+    } catch {
+      // ignore quota / private mode
+    }
   }, [history]);
 
   async function pasteFromClipboard() {

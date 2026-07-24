@@ -12,10 +12,12 @@ import {
   useFsStore,
   type FsFile,
 } from "../fs";
-import { useLanguageStore, type TranslationKey } from "../languageStore";
+import { downloadBlob } from "../downloadStore";
+import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
 import type { FileSortMode } from "../types";
 import { registerFilesBridgeHandlers } from "../shell/filesBridge";
+import { phrase } from "../shell/phrase";
 import { useDesktopStore } from "../windowStore";
 
 const DETAILS_WIDTH_KEY = "neko-virt-os.files-details-width.v1";
@@ -39,10 +41,6 @@ function writeDetailsWidth(width: number) {
   } catch {
     // ignore
   }
-}
-
-function phrase(t: (key: TranslationKey) => string, prefix: TranslationKey, value: string | number, suffix: TranslationKey) {
-  return `${t(prefix)}${value}${t(suffix)}`;
 }
 
 function replaceCount(template: string, n: number) {
@@ -565,12 +563,13 @@ export function FilesApp() {
   function downloadSelectedText() {
     if (!selectedFile || selectedFile.kind !== "text") return;
     const blob = new Blob([selectedFile.content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = selectedFile.name || "download.txt";
-    anchor.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    downloadBlob({
+      blob,
+      name: selectedFile.name || "download.txt",
+      source: t("appFiles"),
+      register: false,
+      revokeAfterMs: 30_000,
+    });
     addNotification({ title: t("filesDownload"), message: t("filesDownloadDone"), type: "success", category: "files", appId: "files" });
   }
 

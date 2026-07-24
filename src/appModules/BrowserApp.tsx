@@ -3,161 +3,119 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { appPrompt } from "../dialogStore";
 import { consumeBrowserOpenUrl } from "../fs";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
+import {
+  BROWSER_HOME_URL,
+  DEFAULT_BROWSER_BOOKMARKS,
+  LEGACY_BOOKMARK_TITLE_ALIASES,
+  LEGACY_BOOKMARK_TITLE_BY_URL,
+  createBrowserTabRecord,
+  normalizeBrowserUrl,
+  pushBrowserRecent,
+  readBrowserBookmarksRaw,
+  readBrowserRecents,
+  readBrowserSessionRecords,
+  readClosedTabRecords,
+  writeBrowserBookmarks,
+  writeBrowserRecents,
+  writeBrowserSessionRecords,
+  writeClosedTabRecords,
+  type BrowserBookmarkEntry,
+  type BrowserRecentEntry,
+  type BrowserTabRecord,
+} from "../shared";
 
-const defaultBookmarkSeed = [
-  ["browserBookmarkNekoWiki", "https://wiki.nekolaska.vip", "solar:book-2-bold-duotone"],
-  ["browserBookmarkNekoGames", "https://game.nekolaska.vip", "solar:gamepad-bold-duotone"],
-  ["browserBookmarkSearch", "https://duckduckgo.com", "solar:magnifer-bold-duotone"],
-  ["browserBookmarkMdn", "https://developer.mozilla.org", "solar:code-bold-duotone"],
-  ["browserBookmarkGithub", "https://github.com", "solar:programming-bold-duotone"],
-  ["browserBookmarkWikipedia", "https://wikipedia.org", "solar:book-bookmark-bold-duotone"],
-] as const;
+const HOME_URL = BROWSER_HOME_URL;
 
-const legacyBookmarkTitleMap = new Map<string, TranslationKey>([
-  ["https://wiki.nekolaska.vip", "browserBookmarkNekoWiki"],
-  ["https://game.nekolaska.vip", "browserBookmarkNekoGames"],
-  ["https://duckduckgo.com", "browserBookmarkSearch"],
-  ["https://developer.mozilla.org", "browserBookmarkMdn"],
-  ["https://github.com", "browserBookmarkGithub"],
-  ["https://wikipedia.org", "browserBookmarkWikipedia"],
-]);
-
-const HOME_URL = "neko://home";
-const BROWSER_SESSION_STORAGE_KEY = "neko-virt-os.browser-session.v1";
-const BROWSER_RECENTS_STORAGE_KEY = "neko-virt-os.browser-recents.v1";
-const BROWSER_BOOKMARKS_STORAGE_KEY = "neko-virt-os.browser-bookmarks.v1";
-const BROWSER_CLOSED_TABS_STORAGE_KEY = "neko-virt-os.browser-closed-tabs.v1";
-
-type BrowserTab = {
-  id: string;
-  history: string[];
-  historyIndex: number;
-  address: string;
+type BrowserTab = BrowserTabRecord & {
   iframeLoaded: boolean;
   iframeSlow: boolean;
 };
 
-type BrowserRecentEntry = {
-  title: string;
-  url: string;
-};
-
-type BrowserBookmarkEntry = {
-  title: string;
-  url: string;
-  icon?: string;
-};
-
 function createTab(initialUrl = HOME_URL): BrowserTab {
+  const base = createBrowserTabRecord(initialUrl);
   return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    history: [initialUrl],
-    historyIndex: 0,
-    address: initialUrl,
+    ...base,
     iframeLoaded: initialUrl === HOME_URL,
     iframeSlow: false,
   };
 }
 
-function getDefaultBookmarks() {
+function getDefaultBookmarks(): BrowserBookmarkEntry[] {
   const t = useLanguageStore.getState().t;
-  return defaultBookmarkSeed.map(([titleKey, url, icon]) => ({ title: t(titleKey), url, icon }));
+  return DEFAULT_BROWSER_BOOKMARKS.map((b) => ({
+    title: t(b.titleKey as TranslationKey),
+    url: b.url,
+    icon: b.icon,
+  }));
 }
 
-function migrateLegacyBookmarks(entries: BrowserBookmarkEntry[]) {
+function migrateLegacyBookmarks(entries: BrowserBookmarkEntry[]): BrowserBookmarkEntry[] {
   const t = useLanguageStore.getState().t;
   return entries.map((entry) => {
-    const titleKey = legacyBookmarkTitleMap.get(entry.url);
+    const titleKey = LEGACY_BOOKMARK_TITLE_BY_URL.get(entry.url);
     if (!titleKey) return entry;
+    const key = titleKey as TranslationKey;
     const normalizedTitle = entry.title.trim().toLowerCase();
     const legacyTitles = new Set([
-      "neko wiki",
-      "neko games",
-      "search",
-      "mdn",
-      "github",
-      "wikipedia",
-      t(titleKey).trim().toLowerCase(),
+      ...LEGACY_BOOKMARK_TITLE_ALIASES,
+      t(key).trim().toLowerCase(),
     ]);
     if (!legacyTitles.has(normalizedTitle)) return entry;
-    return { ...entry, title: t(titleKey) };
+    return { ...entry, title: t(key) };
   });
 }
 
-function normalizeAddress(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed || trimmed === HOME_URL) return HOME_URL;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  if (/^[\w.-]+\.[a-z]{2,}(\/.*)?$/i.test(trimmed)) return `https://${trimmed}`;
-  return `https://duckduckgo.com/?q=${encodeURIComponent(trimmed)}`;
-}
-
-function readBrowserSession() {
-  try {
-    const raw = localStorage.getItem(BROWSER_SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    const value = JSON.parse(raw) as { tabs: BrowserTab[]; activeTabId: string };
-    if (!Array.isArray(value.tabs) || !value.tabs.length) return null;
-    return {
-      tabs: value.tabs.map((tab) => ({
-        ...tab,
-        iframeLoaded: false,
-        iframeSlow: false,
-        history: Array.isArray(tab.history) && tab.history.length ? tab.history : [HOME_URL],
-        historyIndex: typeof tab.historyIndex === "number" ? Math.max(0, Math.min(tab.historyIndex, tab.history.length - 1)) : 0,
-        address: typeof tab.address === "string" ? tab.address : tab.history[tab.historyIndex] ?? HOME_URL,
-      })),
-      activeTabId: value.activeTabId,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function readBrowserRecents(): BrowserRecentEntry[] {
-  try {
-    const raw = localStorage.getItem(BROWSER_RECENTS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+function readBrowserSession(): { tabs: BrowserTab[]; activeTabId: string } | null {
+  const session = readBrowserSessionRecords();
+  if (!session) return null;
+  return {
+    tabs: session.tabs.map((tab) => ({
+      ...tab,
+      iframeLoaded: false,
+      iframeSlow: false,
+    })),
+    activeTabId: session.activeTabId,
+  };
 }
 
 function readBrowserBookmarks(): BrowserBookmarkEntry[] {
-  try {
-    const raw = localStorage.getItem(BROWSER_BOOKMARKS_STORAGE_KEY);
-    return raw ? migrateLegacyBookmarks(JSON.parse(raw)) : getDefaultBookmarks();
-  } catch {
-    return getDefaultBookmarks();
-  }
+  const raw = readBrowserBookmarksRaw();
+  if (!raw) return getDefaultBookmarks();
+  return migrateLegacyBookmarks(raw);
 }
 
 function readClosedTabs(): BrowserTab[] {
-  try {
-    const raw = localStorage.getItem(BROWSER_CLOSED_TABS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
+  return readClosedTabRecords().map((tab) => ({
+    ...tab,
+    iframeLoaded: false,
+    iframeSlow: false,
+  }));
+}
+
+function loadInitialBrowserState(): { tabs: BrowserTab[]; activeTabId: string } {
+  const session = readBrowserSession();
+  if (session?.tabs.length) {
+    const activeTabId = session.tabs.some((tab) => tab.id === session.activeTabId)
+      ? session.activeTabId
+      : session.tabs[0].id;
+    return { tabs: session.tabs, activeTabId };
   }
+  const fallback = createTab();
+  return { tabs: [fallback], activeTabId: fallback.id };
 }
 
 export function BrowserApp() {
   const t = useLanguageStore((state) => state.t);
   const addressInputRef = useRef<HTMLInputElement | null>(null);
-  const [tabs, setTabs] = useState<BrowserTab[]>(() => {
-    const session = readBrowserSession();
-    return session?.tabs ?? [createTab()];
-  });
-  const [activeTabId, setActiveTabId] = useState<string>(() => {
-    const session = readBrowserSession();
-    return session?.activeTabId ?? session?.tabs[0]?.id ?? createTab().id;
-  });
+  const [initialSession] = useState(loadInitialBrowserState);
+  const [tabs, setTabs] = useState(initialSession.tabs);
+  const [activeTabId, setActiveTabId] = useState(initialSession.activeTabId);
   const [recentEntries, setRecentEntries] = useState<BrowserRecentEntry[]>(readBrowserRecents);
   const [bookmarks, setBookmarks] = useState<BrowserBookmarkEntry[]>(readBrowserBookmarks);
   const [closedTabs, setClosedTabs] = useState<BrowserTab[]>(readClosedTabs);
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
 
-  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
+  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? createTab();
   const currentUrl = activeTab.history[activeTab.historyIndex] ?? HOME_URL;
   const isHome = currentUrl === HOME_URL;
   const canGoBack = activeTab.historyIndex > 0;
@@ -165,19 +123,16 @@ export function BrowserApp() {
 
   useEffect(() => {
     if (!tabs.length) return;
-    const session = JSON.stringify({
-      tabs: tabs.map(({ iframeLoaded, iframeSlow, ...tab }) => ({ ...tab, iframeLoaded: false, iframeSlow: false })),
-      activeTabId,
-    });
-    localStorage.setItem(BROWSER_SESSION_STORAGE_KEY, session);
+    const records: BrowserTabRecord[] = tabs.map(({ iframeLoaded: _a, iframeSlow: _b, ...tab }) => tab);
+    writeBrowserSessionRecords(records, activeTabId);
   }, [activeTabId, tabs]);
 
   useEffect(() => {
-    localStorage.setItem(BROWSER_BOOKMARKS_STORAGE_KEY, JSON.stringify(bookmarks));
+    writeBrowserBookmarks(bookmarks);
   }, [bookmarks]);
 
   useEffect(() => {
-    localStorage.setItem(BROWSER_CLOSED_TABS_STORAGE_KEY, JSON.stringify(closedTabs.slice(0, 8)));
+    writeClosedTabRecords(closedTabs.map(({ iframeLoaded: _a, iframeSlow: _b, ...tab }) => tab));
   }, [closedTabs]);
 
   useEffect(() => {
@@ -239,20 +194,16 @@ export function BrowserApp() {
   }
 
   function navigate(value: string, mode: "current" | "new-tab" = "current") {
-    const nextUrl = normalizeAddress(value);
+    const nextUrl = normalizeBrowserUrl(value, HOME_URL);
     if (nextUrl !== HOME_URL) {
-      setRecentEntries((current) => {
-        const title = (() => {
-          try {
-            return new URL(nextUrl).hostname.replace(/^www\./, "");
-          } catch {
-            return nextUrl;
-          }
-        })();
-        const nextEntries = [{ title, url: nextUrl }, ...current.filter((entry) => entry.url !== nextUrl)].slice(0, 8);
-        localStorage.setItem(BROWSER_RECENTS_STORAGE_KEY, JSON.stringify(nextEntries));
-        return nextEntries;
-      });
+      const title = (() => {
+        try {
+          return new URL(nextUrl).hostname.replace(/^www\./, "");
+        } catch {
+          return nextUrl;
+        }
+      })();
+      setRecentEntries(pushBrowserRecent(nextUrl, title));
     }
     if (mode === "new-tab") {
       const nextTab = createTab(nextUrl);
@@ -276,7 +227,7 @@ export function BrowserApp() {
   }
 
   function openTab(initialUrl = HOME_URL) {
-    const nextTab = createTab(normalizeAddress(initialUrl));
+    const nextTab = createTab(normalizeBrowserUrl(initialUrl, HOME_URL));
     setTabs((current) => [...current, nextTab]);
     setActiveTabId(nextTab.id);
   }
@@ -449,7 +400,7 @@ export function BrowserApp() {
               <h3>{t("browserRecent")}</h3>
               {recentEntries.length ? <button type="button" className="button-ghost" onClick={() => {
                 setRecentEntries([]);
-                localStorage.setItem(BROWSER_RECENTS_STORAGE_KEY, JSON.stringify([]));
+                writeBrowserRecents([]);
               }}>{t("browserClearRecent")}</button> : null}
             </div>
             {recentEntries.length ? (
