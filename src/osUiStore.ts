@@ -4,13 +4,13 @@ import {
   readDeveloperPrefs,
   updateDeveloperPrefs,
   type DeveloperPrefs,
-} from "./developerPrefs";
+} from "./system/developerPrefs";
 import {
   applySystemPrefs,
   readSystemPrefs,
   updateSystemPrefs,
   type SystemPrefs,
-} from "./systemPrefs";
+} from "./system/systemPrefs";
 
 export type NotificationCategory = "system" | "files" | "apps" | "media";
 

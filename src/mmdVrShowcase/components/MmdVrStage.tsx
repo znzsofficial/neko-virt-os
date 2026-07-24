@@ -28,6 +28,8 @@ const LIGHT_PRESETS: Record<
     sunPos: [number, number, number];
     fogFar: number;
     envIntensity: number;
+    skyZenith: string;
+    skyHorizon: string;
   }
 > = {
   stage: {
@@ -37,6 +39,8 @@ const LIGHT_PRESETS: Record<
     sunPos: [3.2, 6.5, 2.4],
     fogFar: 22,
     envIntensity: 0.35,
+    skyZenith: "#1a2840",
+    skyHorizon: "#0e1520",
   },
   soft: {
     ambient: 0.75,
@@ -45,6 +49,8 @@ const LIGHT_PRESETS: Record<
     sunPos: [1.5, 5.5, 3.5],
     fogFar: 26,
     envIntensity: 0.5,
+    skyZenith: "#2a3a52",
+    skyHorizon: "#141c28",
   },
   contrast: {
     ambient: 0.28,
@@ -53,13 +59,69 @@ const LIGHT_PRESETS: Record<
     sunPos: [4.5, 7, 1.2],
     fogFar: 18,
     envIntensity: 0.2,
+    skyZenith: "#0a1018",
+    skyHorizon: "#05080c",
   },
 };
 
-function StageFloor({ segments, shadows }: { segments: number; shadows: boolean }) {
+/** Inward-facing gradient dome (cheap sky, no HDR). */
+function StageSky({ zenith, horizon }: { zenith: string; horizon: string }) {
+  const texture = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 4;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      const g = ctx.createLinearGradient(0, 0, 0, 64);
+      g.addColorStop(0, zenith);
+      g.addColorStop(0.55, horizon);
+      g.addColorStop(1, STAGE_BG);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 4, 64);
+    }
+    const map = new THREE.CanvasTexture(canvas);
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.needsUpdate = true;
+    return map;
+  }, [zenith, horizon]);
+
+  useEffect(
+    () => () => {
+      texture.dispose();
+    },
+    [texture],
+  );
+
+  return (
+    <mesh scale={[-1, 1, 1]} renderOrder={-10}>
+      <sphereGeometry args={[28, 24, 16]} />
+      <meshBasicMaterial map={texture} side={THREE.BackSide} depthWrite={false} fog={false} />
+    </mesh>
+  );
+}
+
+function StageFloor({
+  segments,
+  shadows,
+  placeMode,
+}: {
+  segments: number;
+  shadows: boolean;
+  placeMode: boolean;
+}) {
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow={shadows}>
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, 0, 0]}
+        receiveShadow={shadows}
+        onPointerDown={(e) => {
+          if (!placeMode) return;
+          e.stopPropagation();
+          const p = e.point;
+          useMmdVrStore.getState().requestGroundPlace(p.x, p.z);
+        }}
+      >
         <circleGeometry args={[8, segments]} />
         {shadows ? (
           <meshStandardMaterial color={FLOOR} roughness={0.92} metalness={0.05} />
@@ -71,6 +133,12 @@ function StageFloor({ segments, shadows }: { segments: number; shadows: boolean 
         <ringGeometry args={[3.2, 3.32, Math.max(16, Math.floor(segments / 2))]} />
         <meshBasicMaterial color={FLOOR_RING} transparent opacity={0.4} side={THREE.FrontSide} />
       </mesh>
+      {placeMode ? (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, 0]} raycast={() => null}>
+          <ringGeometry args={[7.6, 7.95, 48]} />
+          <meshBasicMaterial color="#6bb8ea" transparent opacity={0.35} side={THREE.DoubleSide} />
+        </mesh>
+      ) : null}
     </group>
   );
 }
@@ -102,7 +170,12 @@ export function MmdVrStageContent() {
   const stopPlayingQueuedRef = useRef(false);
   const lastSeekEpochRef = useRef(0);
   const lightingKeyRef = useRef("");
-  const labelsRef = useRef({ loading: "Loading…", failed: "Load failed" });
+  const labelsRef = useRef({
+    loading: "Loading…",
+    failed: "Load failed",
+    empty: "No model",
+  });
+  const placeMode = useMmdVrStore((s) => s.placeMode);
 
   // Keep labels current without re-running the load effect on language change.
   useEffect(() => {
@@ -110,6 +183,7 @@ export function MmdVrStageContent() {
     labelsRef.current = {
       loading: t("settingsMmdVrLoading"),
       failed: t("settingsMmdVrLoadFailed"),
+      empty: t("settingsMmdVrEmptyNoAssets"),
     };
   }, [language]);
 
@@ -191,7 +265,7 @@ export function MmdVrStageContent() {
       .join("|");
 
     if (!slots.length) {
-      setStatusLine(null);
+      setStatusLine(labelsRef.current.empty);
       setModels([]);
       setDuration(0);
       resetMmdVrClock();
@@ -248,13 +322,33 @@ export function MmdVrStageContent() {
   useFrame((_, delta) => {
     applyLighting();
 
-    const toggles = useMmdVrStore.getState().takeVisibilityToggles();
+    const store = useMmdVrStore.getState();
+    const toggles = store.takeVisibilityToggles();
     if (toggles.length) {
       for (const id of toggles) {
         const entry = runtime.listModels().find((m) => m.id === id);
         if (entry) runtime.setModelVisible(id, !entry.visible);
       }
       syncModelList();
+    }
+
+    const place = store.takeGroundPlace();
+    if (place) {
+      const models = runtime.listModels();
+      const targetId =
+        (store.placeModelId && models.some((m) => m.id === store.placeModelId)
+          ? store.placeModelId
+          : models.find((m) => m.visible)?.id) ?? models[0]?.id;
+      if (targetId) {
+        runtime.setModelTransform(targetId, {
+          positionX: place.x,
+          positionY: 0,
+          positionZ: place.z,
+        });
+        if (store.placeModelId !== targetId) {
+          store.setPlaceModelId(targetId);
+        }
+      }
     }
 
     const rt = runtimeRef.current;
@@ -293,6 +387,7 @@ export function MmdVrStageContent() {
     <>
       <color attach="background" args={[STAGE_BG]} />
       <fog attach="fog" args={[STAGE_BG, 10, lightCfg.fogFar]} />
+      <StageSky zenith={lightCfg.skyZenith} horizon={lightCfg.skyHorizon} />
       <ambientLight intensity={lightCfg.ambient} />
       <directionalLight
         ref={sunRef}
@@ -309,7 +404,11 @@ export function MmdVrStageContent() {
         shadow-camera-bottom={-6}
       />
       <hemisphereLight args={["#b8c8e0", "#1a2230", lightCfg.hemi]} />
-      <StageFloor segments={profile.floorSegments} shadows={profile.shadows} />
+      <StageFloor
+        segments={profile.floorSegments}
+        shadows={profile.shadows}
+        placeMode={placeMode}
+      />
       {profile.showGrid ? (
         <gridHelper args={[12, 12, "#2a3548", "#1e2838"]} position={[0, 0.01, 0]} />
       ) : null}

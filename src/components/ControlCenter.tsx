@@ -3,7 +3,7 @@ import { clsx } from "clsx";
 import { useEffect, useState } from "react";
 import { useLanguageStore } from "../languageStore";
 import { useOsUiStore, type WorkspaceId } from "../osUiStore";
-import { readThemeSettings, updateThemeSettings } from "../theme";
+import { readThemeSettings, updateThemeSettings } from "../system/theme";
 import type { ThemeSettings } from "../types";
 import { useDesktopStore } from "../windowStore";
 import { requestMmdVrEnter } from "../mmdVrShowcase/requestMmdVrEnter";

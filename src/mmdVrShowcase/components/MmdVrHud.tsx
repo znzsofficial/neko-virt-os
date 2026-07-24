@@ -204,24 +204,46 @@ function ProgressBar() {
   );
 }
 
-function ModelList({ hideLabel, showLabel }: { hideLabel: string; showLabel: string }) {
+function ModelList({
+  hideLabel,
+  showLabel,
+  selectPlaceLabel,
+}: {
+  hideLabel: string;
+  showLabel: string;
+  selectPlaceLabel: string;
+}) {
   const models = useMmdVrStore((s) => s.models);
+  const placeMode = useMmdVrStore((s) => s.placeMode);
+  const placeModelId = useMmdVrStore((s) => s.placeModelId);
   const enqueueVisibilityToggle = useMmdVrStore((s) => s.enqueueVisibilityToggle);
+  const setPlaceModelId = useMmdVrStore((s) => s.setPlaceModelId);
 
   if (!models.length) return null;
 
   return (
-    <group position={[0.72, 0.05, 0]}>
+    <group position={[0.78, 0.05, 0]}>
       {models.slice(0, 3).map((m, i) => {
         const short = shortName(m.name);
-        const label = m.visible ? `${hideLabel} ${short}` : `${showLabel} ${short}`;
+        const isPlaceTarget = placeMode && placeModelId === m.id;
+        const label = isPlaceTarget
+          ? `*${selectPlaceLabel} ${short}`
+          : m.visible
+            ? `${hideLabel} ${short}`
+            : `${showLabel} ${short}`;
         return (
           <HudButton
             key={m.id}
             position={[0, 0.14 - i * 0.13, 0]}
             label={label}
-            size={[0.42, 0.11]}
-            onPress={() => enqueueVisibilityToggle(m.id)}
+            size={[0.46, 0.11]}
+            onPress={() => {
+              if (placeMode) {
+                setPlaceModelId(m.id);
+                return;
+              }
+              enqueueVisibilityToggle(m.id);
+            }}
           />
         );
       })}
@@ -305,6 +327,10 @@ export function MmdVrControlBar({
   emptyHint,
   hideLabel,
   showLabel,
+  selectPlaceLabel,
+  placeOnLabel,
+  placeOffLabel,
+  placeHint,
   lightStageLabel,
   lightSoftLabel,
   lightContrastLabel,
@@ -320,6 +346,10 @@ export function MmdVrControlBar({
   emptyHint: string;
   hideLabel: string;
   showLabel: string;
+  selectPlaceLabel: string;
+  placeOnLabel: string;
+  placeOffLabel: string;
+  placeHint: string;
   lightStageLabel: string;
   lightSoftLabel: string;
   lightContrastLabel: string;
@@ -330,13 +360,17 @@ export function MmdVrControlBar({
   const loop = useMmdVrStore((s) => s.loop);
   const modelCount = useMmdVrStore((s) => s.modelCount);
   const statusLine = useMmdVrStore((s) => s.statusLine);
+  const placeMode = useMmdVrStore((s) => s.placeMode);
   const lightPreset = useMmdVrStore((s) => s.prefs.lightPreset);
   const setPlaying = useMmdVrStore((s) => s.setPlaying);
   const setLoop = useMmdVrStore((s) => s.setLoop);
+  const setPlaceMode = useMmdVrStore((s) => s.setPlaceMode);
   const resetView = useMmdVrStore((s) => s.resetView);
   const cycleLightPreset = useMmdVrStore((s) => s.cycleLightPreset);
 
-  const status = statusLine ?? (modelCount === 0 ? emptyHint : null);
+  const status =
+    statusLine ??
+    (modelCount === 0 ? emptyHint : placeMode ? placeHint : null);
   const lightLabel =
     lightPreset === "soft"
       ? lightSoftLabel
@@ -349,27 +383,38 @@ export function MmdVrControlBar({
       {status ? <StatusPlane text={status} /> : null}
       <ProgressBar />
       <HudButton
-        position={[-0.58, -0.02, 0]}
+        position={[-0.72, -0.02, 0]}
         label={playing ? pauseLabel : playLabel}
         disabled={busy || modelCount === 0}
         onPress={() => setPlaying(!useMmdVrStore.getState().playing)}
       />
       <HudButton
-        position={[-0.18, -0.02, 0]}
+        position={[-0.34, -0.02, 0]}
         label={loop ? loopOnLabel : loopOffLabel}
         disabled={busy}
         onPress={() => setLoop(!useMmdVrStore.getState().loop)}
       />
       <HudButton
-        position={[0.22, -0.02, 0]}
+        position={[0.04, -0.02, 0]}
+        label={placeMode ? placeOnLabel : placeOffLabel}
+        disabled={busy || modelCount === 0}
+        size={[0.38, 0.11]}
+        onPress={() => setPlaceMode(!useMmdVrStore.getState().placeMode)}
+      />
+      <HudButton
+        position={[0.42, -0.02, 0]}
         label={lightLabel}
         disabled={busy}
-        size={[0.42, 0.11]}
+        size={[0.4, 0.11]}
         onPress={() => cycleLightPreset()}
       />
-      <HudButton position={[0.62, -0.02, 0]} label={resetLabel} disabled={busy} onPress={() => resetView()} />
-      <HudButton position={[0.98, -0.02, 0]} label={exitLabel} disabled={busy} onPress={onExit} />
-      <ModelList hideLabel={hideLabel} showLabel={showLabel} />
+      <HudButton position={[0.78, -0.02, 0]} label={resetLabel} disabled={busy} onPress={() => resetView()} />
+      <HudButton position={[1.12, -0.02, 0]} label={exitLabel} disabled={busy} onPress={onExit} />
+      <ModelList
+        hideLabel={hideLabel}
+        showLabel={showLabel}
+        selectPlaceLabel={selectPlaceLabel}
+      />
       <FpsBadge />
     </group>
   );

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
 import { useOsUiStore } from "../osUiStore";
-import { formatClockTime } from "../systemPrefs";
+import { formatClockTime } from "../system/systemPrefs";
 
 type TimerMode = "clock" | "stopwatch" | "countdown";
 

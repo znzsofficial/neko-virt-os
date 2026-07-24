@@ -1,8 +1,8 @@
 import { Icon } from "@iconify-icon/react";
 import { useEffect, useState } from "react";
 import { useLanguageStore } from "../languageStore";
-import { APP_VERSION, OPEN_SOURCE_PACKAGES } from "../openSourceLicenses";
-import { type DeviceSnapshot, getDeviceRows, readHighEntropyDeviceInfo, type StorageSnapshot } from "../systemInfo";
+import { APP_VERSION, OPEN_SOURCE_PACKAGES } from "../system/openSourceLicenses";
+import { type DeviceSnapshot, getDeviceRows, readHighEntropyDeviceInfo, type StorageSnapshot } from "../system/systemInfo";
 
 export function AboutApp() {
   const [storage, setStorage] = useState<StorageSnapshot | null>(null);

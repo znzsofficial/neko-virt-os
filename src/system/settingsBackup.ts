@@ -5,7 +5,7 @@ import {
   type DeveloperPrefs,
 } from "./developerPrefs";
 import { downloadBlob } from "./downloadStore";
-import type { Language } from "./languageStore";
+import type { Language } from "../languageStore";
 import {
   SYSTEM_PREFS_KEY,
   applySystemPrefs,
@@ -13,7 +13,7 @@ import {
   type SystemPrefs,
 } from "./systemPrefs";
 import { THEME_STORAGE_KEY, applyThemeSettings, normalizeThemeSettings } from "./theme";
-import type { ThemeSettings } from "./types";
+import type { ThemeSettings } from "../types";
 
 export const SETTINGS_BACKUP_VERSION = 1 as const;
 

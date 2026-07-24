@@ -10,9 +10,9 @@ import {
   formatEffectiveType,
   subscribeNetworkChange,
   type NetworkSnapshot,
-} from "../networkInfo";
+} from "../system/networkInfo";
 import { useNotificationStore } from "../notificationStore";
-import { APP_VERSION, OPEN_SOURCE_PACKAGES } from "../openSourceLicenses";
+import { APP_VERSION, OPEN_SOURCE_PACKAGES } from "../system/openSourceLicenses";
 import {
   useOsUiStore,
   type BannerDuration,
@@ -22,7 +22,7 @@ import {
   applySettingsBackup,
   downloadSettingsBackup,
   parseSettingsBackup,
-} from "../settingsBackup";
+} from "../system/settingsBackup";
 import {
   ACCENT_CHROMA,
   ACCENT_COLORS,
@@ -32,7 +32,7 @@ import {
   resolveThemeMode,
   updateThemeSettings,
   WALLPAPERS,
-} from "../theme";
+} from "../system/theme";
 import type { ThemeSettings } from "../types";
 import {
   getDeviceRows,
@@ -40,8 +40,8 @@ import {
   readHighEntropyDeviceInfo,
   type DeviceSnapshot,
   type StorageSnapshot,
-} from "../systemInfo";
-import type { AutoLockMinutes } from "../systemPrefs";
+} from "../system/systemInfo";
+import type { AutoLockMinutes } from "../system/systemPrefs";
 import { requestMmdVrEnter } from "../mmdVrShowcase/requestMmdVrEnter";
 import {
   formatMmdVrProfileSummary,

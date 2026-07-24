@@ -70,6 +70,14 @@ type MmdVrStore = {
   pendingVisibilityToggles: string[];
   enqueueVisibilityToggle: (id: string) => void;
   takeVisibilityToggles: () => string[];
+  /** Ray-point ground place (M13). */
+  placeMode: boolean;
+  setPlaceMode: (on: boolean) => void;
+  placeModelId: string | null;
+  setPlaceModelId: (id: string | null) => void;
+  pendingGroundPlace: { x: number; z: number } | null;
+  requestGroundPlace: (x: number, z: number) => void;
+  takeGroundPlace: () => { x: number; z: number } | null;
   duration: number;
   setDuration: (n: number) => void;
   seekEpoch: number;
@@ -129,6 +137,9 @@ function sessionReset() {
     modelCount: 0,
     models: [] as MmdVrModelEntry[],
     pendingVisibilityToggles: [] as string[],
+    placeMode: false,
+    placeModelId: null as string | null,
+    pendingGroundPlace: null as { x: number; z: number } | null,
     duration: 0,
     seekEpoch: 0,
     seekSeconds: 0,
@@ -197,7 +208,15 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
   setStatusLine: (statusLine) => set({ statusLine }),
   modelCount: 0,
   models: [],
-  setModels: (models) => set({ models, modelCount: models.length }),
+  setModels: (models) =>
+    set((s) => ({
+      models,
+      modelCount: models.length,
+      placeModelId:
+        s.placeModelId && models.some((m) => m.id === s.placeModelId)
+          ? s.placeModelId
+          : models[0]?.id ?? null,
+    })),
   pendingVisibilityToggles: [],
   enqueueVisibilityToggle: (id) =>
     set((s) => ({
@@ -208,6 +227,30 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
     if (!list.length) return [];
     set({ pendingVisibilityToggles: [] });
     return list;
+  },
+  placeMode: false,
+  setPlaceMode: (placeMode) => {
+    const models = get().models;
+    const nextId =
+      get().placeModelId && models.some((m) => m.id === get().placeModelId)
+        ? get().placeModelId
+        : models[0]?.id ?? null;
+    set({ placeMode, placeModelId: placeMode ? nextId : get().placeModelId });
+  },
+  placeModelId: null,
+  setPlaceModelId: (placeModelId) => set({ placeModelId }),
+  pendingGroundPlace: null,
+  requestGroundPlace: (x, z) => {
+    if (!get().placeMode) return;
+    const clampedX = Math.min(5.5, Math.max(-5.5, x));
+    const clampedZ = Math.min(5.5, Math.max(-5.5, z));
+    set({ pendingGroundPlace: { x: clampedX, z: clampedZ } });
+  },
+  takeGroundPlace: () => {
+    const p = get().pendingGroundPlace;
+    if (!p) return null;
+    set({ pendingGroundPlace: null });
+    return p;
   },
   duration: 0,
   setDuration: (duration) => set({ duration }),

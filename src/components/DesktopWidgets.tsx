@@ -1,10 +1,10 @@
 import { Icon } from "@iconify-icon/react";
 import { useEffect, useState } from "react";
-import { getPendingTasks, getUpcomingEvents } from "../localData";
+import { getPendingTasks, getUpcomingEvents } from "../system/localData";
 import { useLanguageStore } from "../languageStore";
 import { useOsUiStore } from "../osUiStore";
-import { formatBytes } from "../systemInfo";
-import { formatClockTime } from "../systemPrefs";
+import { formatBytes } from "../system/systemInfo";
+import { formatClockTime } from "../system/systemPrefs";
 import { useDesktopStore } from "../windowStore";
 import { useFsStore } from "../fs";
 

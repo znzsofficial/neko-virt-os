@@ -5,7 +5,7 @@ import type { MmdVrAssetSlot } from "./mmdVrAssets";
 import { beginMmdVrAssetSession, endMmdVrAssetSession, setMmdVrPendingAssets } from "./mmdVrAssets";
 import { useMmdVrStore } from "./mmdVrStore";
 import { beginMmdVrSessionFromClick } from "./mmdVrSession";
-import { preloadMmdVrScene } from "./MmdVrOverlay";
+import { preloadMmdVrScene } from "./preloadMmdVrScene";
 
 type Notify = (payload: {
   title: string;

@@ -28,7 +28,7 @@ vi.mock("./mmdVrSession", async () => {
   };
 });
 
-vi.mock("./MmdVrOverlay", () => ({
+vi.mock("./preloadMmdVrScene", () => ({
   preloadMmdVrScene: vi.fn(() => Promise.resolve()),
 }));
 

@@ -1,5 +1,5 @@
 import { formatBytes } from "./formatUtils";
-import type { TranslationKey } from "./languageStore";
+import type { TranslationKey } from "../languageStore";
 
 export { formatBytes };
 

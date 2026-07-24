@@ -7,7 +7,7 @@ import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
 import { useOsUiStore } from "../osUiStore";
 import { buildMonthCells, WEEKDAY_KEYS } from "../shared/calendar/monthGrid";
-import { formatClockTime } from "../systemPrefs";
+import { formatClockTime } from "../system/systemPrefs";
 import { useDesktopStore } from "../windowStore";
 
 export function Taskbar() {

@@ -7,18 +7,18 @@ export {
   readTasks as readLocalTasks,
   type LocalTaskItem,
   type TaskPriority,
-} from "./shared/tasks/storage";
+} from "../shared/tasks/storage";
 
 export {
   getUpcomingEvents,
   readCalendarEvents as readLocalCalendarEvents,
   type LocalCalendarEvent,
-} from "./shared/calendar/storage";
+} from "../shared/calendar/storage";
 
 import {
   readBrowserBookmarksRaw,
   type BrowserBookmarkEntry,
-} from "./shared/browser/storage";
+} from "../shared/browser/storage";
 
 export type LocalBookmark = {
   title: string;

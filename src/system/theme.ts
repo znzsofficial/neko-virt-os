@@ -1,5 +1,5 @@
-import type { TranslationKey } from "./languageStore";
-import type { ThemeSettings } from "./types";
+import type { TranslationKey } from "../languageStore";
+import type { ThemeSettings } from "../types";
 
 export const THEME_STORAGE_KEY = "neko-virt-os.theme-settings.v1";
 

@@ -71,8 +71,8 @@ VR 功能路线（独立工作台、不桥接 2D 启动）：`docs/vr-desktop-ro
 ## 相关代码
 
 - `src/appModules/SettingsApp.tsx`  
-- `src/systemPrefs.ts` / `src/developerPrefs.ts` / `src/osUiStore.ts`  
+- `src/system/*`（systemPrefs / developerPrefs / theme / settingsBackup / network…）  
+- `src/osUiStore.ts`  
 - `src/xr/*`（WebXR 进入 / 探测共用）  
 - `src/vrDesktop/*` · `src/mmdVrShowcase/*`（VR 桌面 / MMD 展示设置与入口）  
-- `src/settingsBackup.ts`  
  

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apps } from "../apps";
 import { appTitleKeys } from "../appText";
-import { downloadBlob } from "../downloadStore";
+import { downloadBlob } from "../system/downloadStore";
 import {
   formatFileSize,
   formatFileTime,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useLanguageStore } from "../../languageStore";
 import { useOsUiStore } from "../../osUiStore";
-import { formatClockTime } from "../../systemPrefs";
+import { formatClockTime } from "../../system/systemPrefs";
 import { useDesktopStore } from "../../windowStore";
 import { VR_PANEL_SIZE } from "../vrLayout";
 import { paintHomePanel, type PanelPaintContext } from "../vrPanelTexture";

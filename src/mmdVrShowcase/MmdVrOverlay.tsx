@@ -13,7 +13,3 @@ export function MmdVrOverlay() {
     </Suspense>
   );
 }
-
-export function preloadMmdVrScene() {
-  return import("./MmdVrScene");
-}

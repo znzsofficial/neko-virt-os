@@ -1,7 +1,7 @@
 import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
 import { useRef } from "react";
-import { formatBytes } from "../formatUtils";
+import { formatBytes } from "../system/formatUtils";
 import { useLanguageStore } from "../languageStore";
 import { useLocalMediaPlaylist } from "./useLocalMediaPlaylist";
 

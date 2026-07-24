@@ -1,6 +1,6 @@
 import { clsx } from "clsx";
 import { useEffect, useRef, useState } from "react";
-import { downloadBlob } from "../downloadStore";
+import { downloadBlob } from "../system/downloadStore";
 import { useLanguageStore } from "../languageStore";
 
 type ApiTestMethod = "GET" | "POST";

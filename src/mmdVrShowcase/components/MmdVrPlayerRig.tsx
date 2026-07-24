@@ -18,6 +18,10 @@ export function MmdVrPlayerRig({
   emptyHint,
   hideLabel,
   showLabel,
+  selectPlaceLabel,
+  placeOnLabel,
+  placeOffLabel,
+  placeHint,
   lightStageLabel,
   lightSoftLabel,
   lightContrastLabel,
@@ -33,6 +37,10 @@ export function MmdVrPlayerRig({
   emptyHint: string;
   hideLabel: string;
   showLabel: string;
+  selectPlaceLabel: string;
+  placeOnLabel: string;
+  placeOffLabel: string;
+  placeHint: string;
   lightStageLabel: string;
   lightSoftLabel: string;
   lightContrastLabel: string;
@@ -69,6 +77,10 @@ export function MmdVrPlayerRig({
         emptyHint={emptyHint}
         hideLabel={hideLabel}
         showLabel={showLabel}
+        selectPlaceLabel={selectPlaceLabel}
+        placeOnLabel={placeOnLabel}
+        placeOffLabel={placeOffLabel}
+        placeHint={placeHint}
         lightStageLabel={lightStageLabel}
         lightSoftLabel={lightSoftLabel}
         lightContrastLabel={lightContrastLabel}

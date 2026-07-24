@@ -2,7 +2,7 @@ import { Icon } from "@iconify-icon/react";
 import { useEffect, useState } from "react";
 import { useLanguageStore } from "../languageStore";
 import { useOsUiStore } from "../osUiStore";
-import { formatClockTime } from "../systemPrefs";
+import { formatClockTime } from "../system/systemPrefs";
 
 export function LockScreen() {
   const t = useLanguageStore((state) => state.t);

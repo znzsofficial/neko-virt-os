@@ -79,9 +79,13 @@ export function MmdVrScene() {
             loopOffLabel={t("settingsMmdVrLoopOff")}
             resetLabel={t("settingsMmdVrResetView")}
             exitLabel={t("settingsVrDesktopExit")}
-            emptyHint={t("settingsMmdVrEmpty")}
+            emptyHint={t("settingsMmdVrEmptyNoAssets")}
             hideLabel={t("settingsMmdVrHideModel")}
             showLabel={t("settingsMmdVrShowModel")}
+            selectPlaceLabel={t("settingsMmdVrSelectPlace")}
+            placeOnLabel={t("settingsMmdVrPlaceOn")}
+            placeOffLabel={t("settingsMmdVrPlaceOff")}
+            placeHint={t("settingsMmdVrPlaceHint")}
             lightStageLabel={t("settingsMmdVrLightStage")}
             lightSoftLabel={t("settingsMmdVrLightSoft")}
             lightContrastLabel={t("settingsMmdVrLightContrast")}

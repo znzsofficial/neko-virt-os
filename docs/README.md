@@ -18,7 +18,10 @@
 | 2D 桌面壳 | DOM + CSS tokens | — |
 | **shared** | storage / URL / 书签等业务逻辑 | 2D 与 VR 共用，无 UI |
 | **src/xr** | 进入 / pending attach / 探测 / quality 轴 / session 工厂 | 桌面与 MMD **分会话实例** |
-| **shared** 扩展 | panel 贴图 · localPrefs · **tasks/calendar** · browser/sticky | 无 React；壳层读 `localData` 薄封装 |
+| **shared** 扩展 | panel 贴图 · localPrefs · **tasks/calendar** · browser/sticky | 无 React |
+| **src/system** | prefs / theme / network / downloads / backup / localData 门面 | 壳层系统工具，非产品 UI |
+| **src/i18n** | `zh.ts` / `en.ts` 文案字典 | `languageStore` 仅 store + `t()` |
+| **src/styles/** | 按域拆分 CSS（base/shell/apps/…） | 入口 `styles.css` 仅 `@import` |
 | MMD Studio | **WebGL** | WebGPU + 官方 `/webgpu` TSL |
 | **MMD VR 展示器** | **WebGL + WebXR**（独立会话） | **当前 VR 重心**；轻量视觉白名单 |
 | VR 桌面 | WebGL + WebXR（基线已交付） | **搁置**；仅维护；不与展示器同会话 |

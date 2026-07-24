@@ -16,7 +16,7 @@ import { ContextMenu } from "./shell/ContextMenu";
 import { Desktop } from "./shell/Desktop";
 import { SystemWindow } from "./shell/SystemWindow";
 import { useIdleLock } from "./hooks/useIdleLock";
-import { applyThemeSettings, readThemeSettings, THEME_STORAGE_KEY } from "./theme";
+import { applyThemeSettings, readThemeSettings, THEME_STORAGE_KEY } from "./system/theme";
 import type { ContextMenuState } from "./types";
 import { useDesktopStore } from "./windowStore";
 import { MmdVrOverlay } from "./mmdVrShowcase/MmdVrOverlay";

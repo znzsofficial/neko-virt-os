@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
-import { useDownloadStore } from "../../downloadStore";
+import { useDownloadStore } from "../../system/downloadStore";
 import { useLanguageStore } from "../../languageStore";
 import { useNotificationStore } from "../../notificationStore";
 import type { MmdSceneApi } from "./MmdCanvas";

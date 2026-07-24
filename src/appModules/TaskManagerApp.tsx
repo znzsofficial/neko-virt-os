@@ -6,7 +6,7 @@ import { apps } from "../apps";
 import { useFsStore } from "../fs";
 import { useLanguageStore } from "../languageStore";
 import { requestCloseWindow } from "../shell/windowLifecycle";
-import { type BrowserPerformance, type DeviceSnapshot, formatBytes, getDeviceRows, readHighEntropyDeviceInfo, type StorageSnapshot } from "../systemInfo";
+import { type BrowserPerformance, type DeviceSnapshot, formatBytes, getDeviceRows, readHighEntropyDeviceInfo, type StorageSnapshot } from "../system/systemInfo";
 import { useDesktopStore } from "../windowStore";
 
 export function TaskManagerApp() {

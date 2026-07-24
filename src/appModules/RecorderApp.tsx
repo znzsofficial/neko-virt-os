@@ -1,7 +1,7 @@
 import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
 import { useEffect, useRef, useState } from "react";
-import { downloadBlob } from "../downloadStore";
+import { downloadBlob } from "../system/downloadStore";
 import { useLanguageStore } from "../languageStore";
 
 export function RecorderApp() {

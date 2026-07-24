@@ -4,31 +4,11 @@ import * as THREE from "three";
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import { disposePmremEnvMap, getPmremEnvMap } from "./mmdEnvMap";
+import { publishPmremEnvMap } from "./mmdPmremEnvMap";
 import { detectSkyFormat, type MmdSkyFormat } from "./mmdSkyFormats";
 import { useMmdStudioStore } from "./mmdStudioStore";
 
 const SOLID_BG = new THREE.Color("#0e1118");
-
-/** Latest PMREM CubeUV for toon IBL (read by MmdCanvas lighting sync). */
-let activePmremEnvMap: THREE.Texture | null = null;
-const pmremListeners = new Set<(map: THREE.Texture | null) => void>();
-
-export function getActivePmremEnvMap() {
-  return activePmremEnvMap;
-}
-
-export function subscribePmremEnvMap(listener: (map: THREE.Texture | null) => void) {
-  pmremListeners.add(listener);
-  listener(activePmremEnvMap);
-  return () => {
-    pmremListeners.delete(listener);
-  };
-}
-
-function publishPmrem(map: THREE.Texture | null) {
-  activePmremEnvMap = map;
-  for (const listener of pmremListeners) listener(map);
-}
 
 function formatFromUrl(url: string, nameHint: string | null): MmdSkyFormat {
   // blob: URLs have no extension — use stored file name.
@@ -88,7 +68,7 @@ export function MmdSky() {
         (scene as THREE.Scene & { environmentIntensity?: number }).environmentIntensity = 1;
       }
       disposePmremEnvMap(renderer);
-      publishPmrem(null);
+      publishPmremEnvMap(null);
     }
 
     function applyTexture(texture: THREE.Texture, format: MmdSkyFormat) {
@@ -109,10 +89,10 @@ export function MmdSky() {
       }
       if (skyAsEnvironment) {
         const pmrem = getPmremEnvMap(renderer, texture);
-        publishPmrem(pmrem);
+        publishPmremEnvMap(pmrem);
       } else {
         disposePmremEnvMap(renderer);
-        publishPmrem(null);
+        publishPmremEnvMap(null);
       }
     }
 
@@ -151,7 +131,7 @@ export function MmdSky() {
       cancelled = true;
       clearSkyTexture();
       disposePmremEnvMap(renderer);
-      publishPmrem(null);
+      publishPmremEnvMap(null);
       scene.background = previousBackground instanceof THREE.Color ? previousBackground : SOLID_BG;
       scene.environment = previousEnvironment instanceof THREE.Texture ? null : previousEnvironment;
     };

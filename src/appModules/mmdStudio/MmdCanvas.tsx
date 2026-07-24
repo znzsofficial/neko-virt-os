@@ -17,7 +17,8 @@ import {
 } from "./mmdRuntime";
 import { hydrateMmdModels, projectAssetsToHydrateInput } from "./mmdSceneHydrate";
 import { MmdPostFx } from "./MmdPostFx";
-import { getActivePmremEnvMap, MmdSky, subscribePmremEnvMap } from "./MmdSky";
+import { MmdSky } from "./MmdSky";
+import { getActivePmremEnvMap, subscribePmremEnvMap } from "./mmdPmremEnvMap";
 import { useMmdStudioStore, type MmdPostFxPreset, type MmdRendererBackend, type MmdSceneModel } from "./mmdStudioStore";
 import { sunPositionFromAngles } from "./mmdProjectDb";
 import { createStudioMmdTslPipeline, type MmdTslPipeline } from "./mmdTslPipeline";

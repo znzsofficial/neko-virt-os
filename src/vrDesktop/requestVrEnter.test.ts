@@ -29,7 +29,7 @@ vi.mock("./vrSession", async () => {
   };
 });
 
-vi.mock("./VrDesktopOverlay", () => ({
+vi.mock("./preloadVrDesktopScene", () => ({
   preloadVrDesktopScene: vi.fn(() => Promise.resolve()),
 }));
 

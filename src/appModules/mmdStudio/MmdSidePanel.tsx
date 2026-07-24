@@ -2,11 +2,10 @@ import { useRef, useState, type MutableRefObject, type RefObject } from "react";
 import { useLanguageStore } from "../../languageStore";
 import type { MmdSceneApi } from "./MmdCanvas";
 import type { MmdProjectRecord } from "./mmdProjectDb";
+import { classifyMorph, morphGroupLabel } from "./mmdMorphUtils";
 import {
   AssetRow,
-  classifyMorph,
   MaterialOverrideEditor,
-  morphGroupLabel,
   MmdSelect,
   NestedPanel,
   NumberField,

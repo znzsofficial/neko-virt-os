@@ -12,7 +12,7 @@ import {
   useFsStore,
   type FsFile,
 } from "../fs";
-import { downloadBlob } from "../downloadStore";
+import { downloadBlob } from "../system/downloadStore";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
 import type { FileSortMode } from "../types";

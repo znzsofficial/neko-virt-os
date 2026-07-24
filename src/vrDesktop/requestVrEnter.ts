@@ -1,7 +1,7 @@
 import type { TranslationKey } from "../languageStore";
 import { useMmdVrStore } from "../mmdVrShowcase/mmdVrStore";
 import { requestImmersiveEnter } from "../xr";
-import { preloadVrDesktopScene } from "./VrDesktopOverlay";
+import { preloadVrDesktopScene } from "./preloadVrDesktopScene";
 import { beginVrSessionFromClick } from "./vrSession";
 import { refreshVrCapability, useVrDesktopStore } from "./vrDesktopStore";
 

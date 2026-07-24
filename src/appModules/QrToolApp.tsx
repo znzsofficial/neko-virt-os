@@ -1,6 +1,6 @@
 import { Icon } from "@iconify-icon/react";
 import { useEffect, useRef, useState, type ComponentType } from "react";
-import { downloadBlob } from "../downloadStore";
+import { downloadBlob } from "../system/downloadStore";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
 

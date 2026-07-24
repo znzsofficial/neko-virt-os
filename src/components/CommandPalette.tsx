@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { apps } from "../apps";
 import { appDescriptionKeys, appTitleKeys, getAppIcon } from "../appText";
 import { getFileOpenApp, queueBrowserOpenUrl, useFsStore } from "../fs";
-import { readLocalBookmarks, readLocalCalendarEvents, readLocalTasks } from "../localData";
+import { readLocalBookmarks, readLocalCalendarEvents, readLocalTasks } from "../system/localData";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
 import { openFilesFolder } from "../shell/filesBridge";
 import { useDesktopStore } from "../windowStore";

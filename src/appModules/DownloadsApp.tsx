@@ -1,6 +1,6 @@
 import { Icon } from "@iconify-icon/react";
-import { formatBytes } from "../formatUtils";
-import { useDownloadStore } from "../downloadStore";
+import { formatBytes } from "../system/formatUtils";
+import { useDownloadStore } from "../system/downloadStore";
 import { useLanguageStore } from "../languageStore";
 
 export function DownloadsApp() {
