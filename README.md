@@ -26,28 +26,36 @@ NekoVirtOS is a browser-native virtual desktop built with React, Vite, Zustand, 
 
 ## Development
 
+This project uses **pnpm** (`packageManager` in `package.json`). Do not mix with npm/yarn lockfiles.
+
 Install dependencies:
 
 ```sh
-npm install
+pnpm install
 ```
 
 Start the local dev server:
 
 ```sh
-npm run dev
+pnpm dev
 ```
 
 Build for production:
 
 ```sh
-npm run build
+pnpm build
+```
+
+Run tests:
+
+```sh
+pnpm test
 ```
 
 Preview the production build locally:
 
 ```sh
-npm run preview
+pnpm preview
 ```
 
 ## Deployment
@@ -55,8 +63,14 @@ npm run preview
 The project builds to `dist` and can be deployed to Cloudflare Pages:
 
 ```sh
-npm run build
-wrangler pages deploy ./dist --project-name=neko-virt-os --branch=main
+pnpm deploy
+```
+
+Or manually:
+
+```sh
+pnpm build
+pnpm exec wrangler pages deploy ./dist --project-name=neko-virt-os --branch=main
 ```
 
 Current Pages project:

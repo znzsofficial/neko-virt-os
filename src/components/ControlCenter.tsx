@@ -6,6 +6,9 @@ import { useOsUiStore, type WorkspaceId } from "../osUiStore";
 import { readThemeSettings, updateThemeSettings } from "../theme";
 import type { ThemeSettings } from "../types";
 import { useDesktopStore } from "../windowStore";
+import { requestVrDesktopEnter } from "../vrDesktop/requestVrEnter";
+import { refreshVrCapability, useVrDesktopStore } from "../vrDesktop/vrDesktopStore";
+import { useNotificationStore } from "../notificationStore";
 
 const WORKSPACES: WorkspaceId[] = [0, 1, 2];
 
@@ -20,6 +23,9 @@ export function ControlCenter() {
   const lockSession = useOsUiStore((state) => state.lockSession);
   const setNotificationCenterOpen = useOsUiStore((state) => state.setNotificationCenterOpen);
   const openApp = useDesktopStore((state) => state.openApp);
+  const vrEnabled = useVrDesktopStore((state) => state.prefs.enabled);
+  const vrPhase = useVrDesktopStore((state) => state.phase);
+  const addNotification = useNotificationStore((state) => state.addNotification);
   const focusWindow = useDesktopStore((state) => state.focusWindow);
   const restoreWindow = useDesktopStore((state) => state.restoreWindow);
   const windows = useDesktopStore((state) => state.windows);
@@ -29,6 +35,12 @@ export function ControlCenter() {
   useEffect(() => {
     if (open) setTheme(readThemeSettings());
   }, [open]);
+
+  // Refresh when panel opens (secure context / xr may change after navigation).
+  useEffect(() => {
+    if (!open || !vrEnabled) return;
+    void refreshVrCapability();
+  }, [open, vrEnabled]);
 
   if (!open) return null;
 
@@ -143,6 +155,25 @@ export function ControlCenter() {
           <Icon icon="solar:settings-bold-duotone" width={16} height={16} />
           {t("appSettings")}
         </button>
+        {vrEnabled ? (
+          <button
+            type="button"
+            className="control-center-action tint-sky"
+            disabled={vrPhase === "entering" || vrPhase === "active"}
+            title={t("settingsVrDesktop")}
+            onClick={() => {
+              // requestSession must start on this stack (Quest user activation).
+              const enter = requestVrDesktopEnter({ t, addNotification });
+              setControlCenterOpen(false);
+              void enter;
+            }}
+          >
+            <Icon icon="solar:virtual-reality-bold-duotone" width={16} height={16} />
+            {vrPhase === "entering"
+              ? t("settingsVrDesktopEntering")
+              : t("settingsVrDesktop")}
+          </button>
+        ) : null}
         <button
           type="button"
           className="control-center-action tint-rose"

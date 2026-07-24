@@ -1,12 +1,12 @@
 # Settings — 扩充计划
 
-最后更新：2026-07-18
+最后更新：2026-07-24
 
 ## 文案原则（macOS 式）
 
-- 分区标题 + 控件标签即可，**不写说明段 / hint / 状态散文**
-- 危险操作靠 **确认对话框**，不靠页面上的警告段落
-- 网络 / 存储等「探测结果」只出现在对应分区，**关于页不重复**
+- 分区标题 + 控件标签即可，**不写说明段 / hint / 状态散文**（VR 等实验项仅 badge + 开关，无操作说明）  
+- 危险操作靠 **确认对话框**，不靠页面上的警告段落  
+- 网络 / 存储等「探测结果」只出现在对应分区，**关于页不重复**  
 
 ## 当前分区
 
@@ -17,8 +17,8 @@
 | 通知 | 已有 | 免打扰、时段、横幅时长、按类别开关 |
 | 网络 | 已有 | 尽力探测（公网 IP、RTT、LAN/mDNS、浏览器估计） |
 | 数据 | 已有 | 存储用量；导出/导入设置；清缓存 / 重置文件 / 清站点数据（均二次确认） |
-| 开发者 | 已有 | 动画质量、FPS、调试边框 |
-| 关于 | 已有 | 版本与设备信息（无网络 / 存储行）；开源包列表 |
+| 开发者 | 已有 | 动画质量、FPS、调试边框；**VR 桌面（实验）** |
+| 关于 | 已有 | 版本与设备信息；开源包列表 |
 
 ## P0 状态
 
@@ -26,9 +26,9 @@
 |----|------|
 | 通知按类别 | 已完成 |
 | 横幅时长 | 已完成（短 2s / 标准 3.5s / 长 6s） |
-| 闲置自动锁屏 | 已完成（从不 / 5 / 15 / 30 分） |
+| 闲置自动锁屏 | 已完成（从不 / 5 / 15 / 30 分）；**VR overlay 打开时不计 idle** |
 | 设置导入 / 导出 | 已完成（JSON v1） |
-| 12h / 24h 时间 | 已完成（任务栏 / 锁屏 / 小组件） |
+| 12h / 24h 时间 | 已完成（任务栏 / 锁屏 / 小组件 / **VR 主屏**） |
 
 ## P1 桌面与任务栏
 
@@ -39,6 +39,19 @@
 | 桌面小组件 | 已完成（对接 `widgetsCollapsed`） |
 | 桌面图标排列 | 已完成（网格 / 自由） |
 
+## 实验：VR 桌面
+
+| 项 | 状态 | 备注 |
+|----|------|------|
+| 开发者开关 | 已完成 | `vrDesktopStore` / `neko-virt-os.vr-desktop.v1` |
+| `immersive-vr` 探测 | 已完成 | 不支持禁用进入 |
+| 进入 VR（设置） | 已完成 | **用户 click 链** `enterVrDesktopSession` |
+| 进入 VR（控制中心） | 已完成 | 需开关 + supported |
+| 失败通知 | 已完成 | `settingsVrDesktopFailed` |
+| 锁定结束 VR | 已完成 | `lockSession` 调 end + closeOverlay |
+
+功能路线：`docs/vr-desktop-roadmap.md`。
+
 ## 次优先（P1 剩余）
 
 ### 窗口与工作区
@@ -48,43 +61,16 @@
 | 工作区数量 | 2 / 3 / 4 | 现固定 3 |
 | 新窗口位置 | 居中 / 记忆 | 写 window layout |
 
-### 辅助功能
+### 其它
 
-| 项 | 状态 |
+| 项 | 备注 |
 |----|------|
-| 减弱动态 | 已完成（`reduceMotion` → `data-motion=power`） |
-| 更大点击目标 | 已完成 |
-| 高对比边框 | 已完成 |
+| （VR 进场引导 dialog） | **不做** — 会打断 WebXR 手势 |
+| 设置备份是否含 VR prefs | 可选纳入 JSON v2 |
 
-### 隐私 / 存储
+## 相关代码
 
-| 项 | 控件 | 备注 |
-|----|------|------|
-| 剪贴板历史上限 | 数字 | Clipboard 应用 |
-| 权限只读 | 列表 | Permission API |
-| 回收站自动清空 | 从不 / 30 天 | deletedAt |
-| 用量告警阈值 | 百分比 | toast 一次 |
-
-## 可延后（P2）
-
-- 任务栏位置（底 / 左）
-- 启动器：分类 / 最近 / 仅固定
-- 声音提示
-- 周起始日
-- MMD 默认渲染档
-
-## 实现约定
-
-- **持久化**：分 key（`theme` / `notification-prefs` / `developer-prefs` / `system-prefs` 等）
-- **备份**：`settingsBackup.ts` version `1`，导入后整页 reload 以同步 store
-- **危险操作**：`appConfirm` + `danger: true`
-- **文案**：中英同步；设置 UI 不写长说明
-
-## 相关文件
-
-- `src/appModules/SettingsApp.tsx`
-- `src/osUiStore.ts` / `src/notificationStore.ts`
-- `src/systemPrefs.ts` / `src/hooks/useIdleLock.ts`
-- `src/settingsBackup.ts`
-- `src/developerPrefs.ts` / `src/theme.ts`
-- `src/languageStore.ts`
+- `src/appModules/SettingsApp.tsx`  
+- `src/systemPrefs.ts` / `src/developerPrefs.ts` / `src/osUiStore.ts`  
+- `src/vrDesktop/*`  
+- `src/settingsBackup.ts`  

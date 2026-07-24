@@ -1,20 +1,7 @@
 import type { WindowState } from "./types";
 
+/** Fresh desktop: Notes only. */
 export const initialWindows: WindowState[] = [
-  {
-    id: "win-files",
-    appId: "files",
-    title: "文件",
-    icon: "solar:folder-with-files-bold-duotone",
-    x: 48,
-    y: 56,
-    width: 1100,
-    height: 680,
-    z: 3,
-    minimized: false,
-    maximized: false,
-    workspaceId: 0,
-  },
   {
     id: "win-notes",
     appId: "notes",
@@ -24,20 +11,6 @@ export const initialWindows: WindowState[] = [
     y: 120,
     width: 545,
     height: 410,
-    z: 2,
-    minimized: false,
-    maximized: false,
-    workspaceId: 0,
-  },
-  {
-    id: "win-terminal",
-    appId: "terminal",
-    title: "终端",
-    icon: "solar:code-square-bold-duotone",
-    x: 180,
-    y: 420,
-    width: 900,
-    height: 560,
     z: 1,
     minimized: false,
     maximized: false,

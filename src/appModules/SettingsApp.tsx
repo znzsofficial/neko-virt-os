@@ -41,6 +41,12 @@ import {
   type StorageSnapshot,
 } from "../systemInfo";
 import type { AutoLockMinutes } from "../systemPrefs";
+import { requestVrDesktopEnter } from "../vrDesktop/requestVrEnter";
+import {
+  formatVrCapabilityHint,
+  refreshVrCapability,
+  useVrDesktopStore,
+} from "../vrDesktop/vrDesktopStore";
 import { useDesktopStore } from "../windowStore";
 
 type SettingsSection = "general" | "appearance" | "notifications" | "network" | "data" | "developer" | "about";
@@ -78,6 +84,12 @@ export function SettingsApp() {
   const setWidgetsCollapsed = useOsUiStore((state) => state.setWidgetsCollapsed);
   const desktopLayoutMode = useDesktopStore((state) => state.desktopLayoutMode);
   const setDesktopLayoutMode = useDesktopStore((state) => state.setDesktopLayoutMode);
+  const vrPrefs = useVrDesktopStore((state) => state.prefs);
+  const setVrPrefs = useVrDesktopStore((state) => state.setPrefs);
+  const vrCapability = useVrDesktopStore((state) => state.capability);
+  const vrSessionSupported = useVrDesktopStore((state) => state.sessionSupported);
+  const vrPhase = useVrDesktopStore((state) => state.phase);
+  const vrLastError = useVrDesktopStore((state) => state.lastError);
   const importInputRef = useRef<HTMLInputElement>(null);
   const dndEnabled = notificationPrefs.dndEnabled;
   const dndStart = notificationPrefs.dndStart;
@@ -87,6 +99,11 @@ export function SettingsApp() {
     navigator.storage?.estimate().then(setStorage).catch(() => setStorage(null));
     void readHighEntropyDeviceInfo().then(setDeviceInfo);
   }, []);
+
+  useEffect(() => {
+    if (!vrPrefs.enabled) return;
+    void refreshVrCapability();
+  }, [vrPrefs.enabled]);
 
   useEffect(() => {
     // Keep document tokens in sync when local settings state changes (mode/density/wallpaper/accent).
@@ -828,6 +845,111 @@ export function SettingsApp() {
                   <i />
                 </button>
               </div>
+            </section>
+
+            <section className="settings-card">
+              <header className="settings-card-head">
+                <strong>{t("settingsVrDesktop")}</strong>
+                <span className="settings-badge-muted">{t("settingsVrDesktopExperimental")}</span>
+              </header>
+              <div className="settings-row-line">
+                <strong>{t("settingsVrDesktopEnable")}</strong>
+                <button
+                  type="button"
+                  className={clsx("settings-switch", vrPrefs.enabled && "is-on")}
+                  aria-pressed={vrPrefs.enabled}
+                  onClick={() => {
+                    setVrPrefs({ enabled: !vrPrefs.enabled });
+                  }}
+                >
+                  <i />
+                </button>
+              </div>
+              {vrPrefs.enabled ? (
+                <>
+                  <div className="settings-row-line">
+                    <strong>
+                      {vrPhase === "entering"
+                        ? t("settingsVrDesktopEntering")
+                        : vrPhase === "error"
+                          ? t("settingsVrDesktopFailed")
+                          : vrCapability === "unavailable"
+                            ? t("settingsVrDesktopNeedHttps")
+                            : t("settingsVrDesktopEnter")}
+                    </strong>
+                    <button
+                      type="button"
+                      className="settings-btn-pill"
+                      disabled={vrPhase === "entering" || vrPhase === "active"}
+                      onClick={() => {
+                        // Sync call path — no await before requestSession (Quest).
+                        void requestVrDesktopEnter({ t, addNotification });
+                      }}
+                    >
+                      {t("settingsVrDesktopEnter")}
+                    </button>
+                  </div>
+                  <div className="settings-row-line">
+                    <strong>{t("settingsVrDesktopQuality")}</strong>
+                  </div>
+                  <div className="settings-choice-grid cols-3">
+                    {([
+                      { id: "high" as const, label: t("settingsVrDesktopQualityHigh") },
+                      { id: "balanced" as const, label: t("settingsVrDesktopQualityBalanced") },
+                      { id: "low" as const, label: t("settingsVrDesktopQualityLow") },
+                    ]).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={clsx(
+                          "settings-choice-card",
+                          vrPrefs.renderQuality === item.id && "is-active",
+                        )}
+                        onClick={() => setVrPrefs({ renderQuality: item.id })}
+                      >
+                        <strong>{item.label}</strong>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="settings-row-line">
+                    <strong>{t("settingsVrDesktopSoftEdges")}</strong>
+                    <button
+                      type="button"
+                      className={clsx("settings-switch", vrPrefs.softEdges && "is-on")}
+                      aria-pressed={vrPrefs.softEdges}
+                      disabled={vrPrefs.renderQuality === "low"}
+                      onClick={() => setVrPrefs({ softEdges: !vrPrefs.softEdges })}
+                    >
+                      <i />
+                    </button>
+                  </div>
+                  <div className="settings-row-line">
+                    <strong>{t("settingsVrDesktopShowFps")}</strong>
+                    <button
+                      type="button"
+                      className={clsx("settings-switch", vrPrefs.showFps && "is-on")}
+                      aria-pressed={vrPrefs.showFps}
+                      onClick={() => setVrPrefs({ showFps: !vrPrefs.showFps })}
+                    >
+                      <i />
+                    </button>
+                  </div>
+                  <div className="settings-row-line">
+                    <strong>{t("settingsVrDesktopResetLayout")}</strong>
+                    <button
+                      type="button"
+                      className="settings-btn-pill"
+                      onClick={() => useVrDesktopStore.getState().resetLayout()}
+                    >
+                      {t("settingsVrDesktopResetLayout")}
+                    </button>
+                  </div>
+                  <p className="settings-inline-hint" style={{ wordBreak: "break-all" }}>
+                    {formatVrCapabilityHint(vrCapability, vrSessionSupported)}
+                    {vrLastError ? ` · ${vrLastError}` : ""}
+                  </p>
+                </>
+              ) : null}
             </section>
           </div>
         ) : null}

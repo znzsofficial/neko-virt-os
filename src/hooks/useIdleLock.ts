@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useOsUiStore } from "../osUiStore";
+import { useVrDesktopStore } from "../vrDesktop/vrDesktopStore";
 
 const ACTIVITY_EVENTS: (keyof WindowEventMap)[] = [
   "pointerdown",
@@ -34,6 +35,11 @@ export function useIdleLock() {
 
     const timer = window.setInterval(() => {
       if (useOsUiStore.getState().sessionLocked) return;
+      // XR input does not fire window mousemove; do not idle-lock while VR is open.
+      if (useVrDesktopStore.getState().overlayOpen) {
+        lastActiveRef.current = Date.now();
+        return;
+      }
       const minutes = useOsUiStore.getState().systemPrefs.autoLockMinutes;
       if (!minutes) return;
       if (Date.now() - lastActiveRef.current >= minutes * 60_000) {

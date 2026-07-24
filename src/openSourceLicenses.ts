@@ -11,6 +11,7 @@ export const OPEN_SOURCE_PACKAGES: readonly OpenSourcePackage[] = [
   { name: "react-dom", version: "19.2.7", license: "MIT" },
   { name: "three", version: "0.185.1", license: "MIT" },
   { name: "@react-three/fiber", version: "9.6.1", license: "MIT" },
+  { name: "@react-three/xr", version: "6.6.30", license: "MIT" },
   { name: "@react-three/drei", version: "10.7.7", license: "MIT" },
   { name: "postprocessing", version: "6.39.2", license: "Zlib" },
   { name: "@yohawing/three-mmd-loader", version: "0.7.0", license: "MIT" },

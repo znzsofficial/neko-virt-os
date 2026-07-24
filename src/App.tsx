@@ -19,6 +19,8 @@ import { useIdleLock } from "./hooks/useIdleLock";
 import { applyThemeSettings, readThemeSettings, THEME_STORAGE_KEY } from "./theme";
 import type { ContextMenuState } from "./types";
 import { useDesktopStore } from "./windowStore";
+import { VrDesktopOverlay } from "./vrDesktop/VrDesktopOverlay";
+import { refreshVrCapability, useVrDesktopStore } from "./vrDesktop/vrDesktopStore";
 
 const CommandPalette = lazy(() => import("./components/CommandPalette").then((module) => ({ default: module.CommandPalette })));
 
@@ -40,6 +42,7 @@ export function App() {
   const immersiveWindowId = useOsUiStore((state) => state.immersiveWindowId);
   const sessionLocked = useOsUiStore((state) => state.sessionLocked);
   const exitImmersive = useOsUiStore((state) => state.exitImmersive);
+  const vrOverlayOpen = useVrDesktopStore((state) => state.overlayOpen);
   const initFs = useFsStore((state) => state.init);
   const t = useLanguageStore((state) => state.t);
   useIdleLock();
@@ -79,6 +82,21 @@ export function App() {
     };
     media.addEventListener?.("change", updateSystemTheme);
     return () => media.removeEventListener?.("change", updateSystemTheme);
+  }, []);
+
+  // Capability refresh: secure context + navigator.xr; isSessionSupported is advisory only.
+  useEffect(() => {
+    if (!useVrDesktopStore.getState().prefs.enabled) return;
+    void refreshVrCapability();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshVrCapability();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onVisible);
+    };
   }, []);
 
   function openContextMenu(event: MouseEvent<HTMLElement>) {
@@ -152,10 +170,10 @@ export function App() {
 
   return (
     <main
-      className={clsx("os", isImmersive && "is-immersive")}
-      onContextMenu={isImmersive ? (event) => event.preventDefault() : openContextMenu}
+      className={clsx("os", isImmersive && "is-immersive", vrOverlayOpen && "is-vr-desktop")}
+      onContextMenu={isImmersive || vrOverlayOpen ? (event) => event.preventDefault() : openContextMenu}
       onMouseDown={() => {
-        if (isImmersive) return;
+        if (isImmersive || vrOverlayOpen) return;
         closeLauncher();
         setContextMenu(null);
       }}
@@ -179,6 +197,7 @@ export function App() {
       {!isImmersive ? <Taskbar /> : null}
       <FpsOverlay />
       {sessionLocked ? <LockScreen /> : null}
+      <VrDesktopOverlay />
     </main>
   );
 }

@@ -1,26 +1,14 @@
 import { Icon } from "@iconify-icon/react";
 import { useEffect, useState } from "react";
 import { useLanguageStore } from "../languageStore";
-
-type StickyNote = { id: string; text: string };
-
-const STICKY_BOARD_STORAGE_KEY = "neko-virt-os.sticky-board.v1";
-
-function readStickyNotes(): StickyNote[] {
-  try {
-    const raw = localStorage.getItem(STICKY_BOARD_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
+import { readStickyNotes, writeStickyNotes, type StickyNote } from "../stickyBoardStorage";
 
 export function StickyBoardApp() {
   const [notes, setNotes] = useState<StickyNote[]>(readStickyNotes);
   const t = useLanguageStore((state) => state.t);
 
   useEffect(() => {
-    localStorage.setItem(STICKY_BOARD_STORAGE_KEY, JSON.stringify(notes));
+    writeStickyNotes(notes);
   }, [notes]);
 
   function addNote() {

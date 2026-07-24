@@ -262,7 +262,13 @@ export const useDesktopStore = create<DesktopStore>((set, get) => ({
     localStorage.removeItem(WINDOW_LAYOUT_STORAGE_KEY);
     localStorage.removeItem(DESKTOP_ICON_POSITIONS_KEY);
     localStorage.removeItem(DESKTOP_LAYOUT_MODE_KEY);
-    set({ windows: initialWindows, activeWindowId: "win-files", launcherOpen: false, desktopLayoutMode: "grid", desktopIconPositions: {} });
+    set({
+      windows: initialWindows,
+      activeWindowId: initialWindows[0]?.id ?? null,
+      launcherOpen: false,
+      desktopLayoutMode: "grid",
+      desktopIconPositions: {},
+    });
   },
   toggleLauncher: () => set((state) => ({ launcherOpen: !state.launcherOpen })),
   closeLauncher: () => set({ launcherOpen: false }),
@@ -307,19 +313,23 @@ export function snapWindowBounds(bounds: WindowBounds): WindowBounds {
 function loadWindowSnapshot() {
   try {
     const rawSnapshot = localStorage.getItem(WINDOW_LAYOUT_STORAGE_KEY);
-    if (!rawSnapshot) return { windows: initialWindows, activeWindowId: "win-files" };
+    if (!rawSnapshot) {
+      return { windows: initialWindows, activeWindowId: initialWindows[0]?.id ?? null };
+    }
     const snapshot = JSON.parse(rawSnapshot) as { windows?: WindowState[]; activeWindowId?: string | null };
     if (Array.isArray(snapshot.windows) && snapshot.windows.length === 0) {
       return { windows: [], activeWindowId: null };
     }
     const windows = snapshot.windows?.map(normalizeWindowState).filter(Boolean) as WindowState[] | undefined;
-    if (!windows?.length) return { windows: initialWindows, activeWindowId: "win-files" };
+    if (!windows?.length) {
+      return { windows: initialWindows, activeWindowId: initialWindows[0]?.id ?? null };
+    }
     const activeWindowId = windows.some((win) => win.id === snapshot.activeWindowId)
       ? snapshot.activeWindowId ?? null
-      : windows[0].id;
+      : windows[0]?.id ?? null;
     return { windows, activeWindowId };
   } catch {
-    return { windows: initialWindows, activeWindowId: "win-files" };
+    return { windows: initialWindows, activeWindowId: initialWindows[0]?.id ?? null };
   }
 }
 
