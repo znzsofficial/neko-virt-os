@@ -1,7 +1,8 @@
-import { Grid, OrbitControls, TransformControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import { TransformControls as StdTransformControls } from "three-stdlib";
 import {
   createMmdRuntimeHandle,
   type MmdAddModelOptions,
@@ -82,90 +83,191 @@ function isTypingTarget(target: EventTarget | null) {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
 }
 
+function readObjectTransform(object: THREE.Object3D) {
+  const euler = new THREE.Euler().setFromQuaternion(object.quaternion, "XYZ");
+  const scale = (object.scale.x + object.scale.y + object.scale.z) / 3;
+  return {
+    positionX: object.position.x,
+    positionY: object.position.y,
+    positionZ: object.position.z,
+    rotationX: THREE.MathUtils.radToDeg(euler.x),
+    rotationY: THREE.MathUtils.radToDeg(euler.y),
+    rotationZ: THREE.MathUtils.radToDeg(euler.z),
+    scale: Math.min(10, Math.max(0.01, scale)),
+  };
+}
+
+/**
+ * Gizmo lives in a private overlay Scene (never main scene — TC + EffectComposer hang).
+ * PostFx stays mounted. Overlay draws after composer (priority 2) or, if FX off, draws main+overlay.
+ */
 function ModelTransformGizmo({
   runtime,
   selectedModelId,
   mode,
   enabled,
   orbitRef,
+  gizmoDraggingRef,
+  postFxActive,
 }: {
   runtime: ReturnType<typeof createMmdRuntimeHandle>;
   selectedModelId: string | null;
   mode: "translate" | "rotate" | "scale";
   enabled: boolean;
   orbitRef: React.MutableRefObject<any>;
+  gizmoDraggingRef: React.MutableRefObject<boolean>;
+  /** True when MmdPostFx owns gl.render via useFrame priority 1. */
+  postFxActive: boolean;
 }) {
-  const controlsRef = useRef<any>(null);
-  const setSelectedModelId = useMmdStudioStore((state) => state.setSelectedModelId);
+  const { camera, gl, scene: mainScene } = useThree();
+  const overlayScene = useMemo(() => new THREE.Scene(), []);
   const models = useMmdStudioStore((state) => state.models);
   const effectiveId = selectedModelId && models.some((model) => model.id === selectedModelId)
     ? selectedModelId
     : models.find((model) => model.visible)?.id ?? models[0]?.id ?? null;
   const root = effectiveId ? runtime.getModelRoot(effectiveId) : null;
-  const selectedModel = models.find((item) => item.id === effectiveId) ?? null;
+  const controlsRef = useRef<StdTransformControls | null>(null);
+  const pivotRef = useRef<THREE.Object3D | null>(null);
+  const rootRef = useRef<THREE.Object3D | null>(null);
+  rootRef.current = root;
+  const postFxActiveRef = useRef(postFxActive);
+  postFxActiveRef.current = postFxActive;
 
-  // Ensure store selection exists when gizmo is on (otherwise nothing attaches).
-  useEffect(() => {
-    if (!enabled || !effectiveId) return;
-    if (selectedModelId !== effectiveId) {
-      runtime.selectModel(effectiveId);
-      setSelectedModelId(effectiveId);
+  useLayoutEffect(() => {
+    if (!enabled || !effectiveId || !root || !root.parent) {
+      gizmoDraggingRef.current = false;
+      return;
     }
-  }, [effectiveId, enabled, runtime, selectedModelId, setSelectedModelId]);
 
-  useEffect(() => {
-    const controls = controlsRef.current;
-    if (!controls) return;
-    const onDraggingChanged = (event: { value: boolean }) => {
+    const pivot = new THREE.Object3D();
+    pivot.name = "mmd-gizmo-pivot";
+    pivot.position.copy(root.position);
+    pivot.quaternion.copy(root.quaternion);
+    pivot.scale.copy(root.scale);
+    overlayScene.add(pivot);
+    pivotRef.current = pivot;
+
+    const controls = new StdTransformControls(camera, gl.domElement);
+    controls.setMode(mode);
+    controls.setSize(1.35);
+    controls.setSpace("world");
+    controls.attach(pivot);
+    overlayScene.add(controls);
+    controlsRef.current = controls;
+    // `mode` applied on create; later changes use setMode without rebuild.
+
+    const syncRootFromPivot = () => {
+      const target = rootRef.current;
+      if (!target) return;
+      target.position.copy(pivot.position);
+      target.quaternion.copy(pivot.quaternion);
+      target.scale.copy(pivot.scale);
+      target.updateMatrix();
+      target.updateMatrixWorld(false);
+    };
+
+    const onObjectChange = () => {
+      syncRootFromPivot();
+      // Keep entry.transform live for physics scale restore while locked (no React store write).
+      runtime.setModelTransform(effectiveId, readObjectTransform(pivot));
+    };
+
+    const onDraggingChanged = (event: { value?: boolean }) => {
+      const dragging = Boolean(event.value);
+      gizmoDraggingRef.current = dragging;
+      runtime.setModelGizmoLock(effectiveId, dragging);
       if (orbitRef.current) {
-        // Keep orbit usable in free camera; disable only while dragging gizmo.
         const free = useMmdStudioStore.getState().cameraMode === "free";
-        orbitRef.current.enabled = free && !event.value;
+        orbitRef.current.enabled = free && !dragging;
+      }
+      if (!dragging) {
+        syncRootFromPivot();
+        const patch = readObjectTransform(pivot);
+        runtime.setModelTransform(effectiveId, patch);
+        const state = useMmdStudioStore.getState();
+        const model = state.models.find((item) => item.id === effectiveId);
+        if (model) state.patchModel(effectiveId, { transform: { ...model.transform, ...patch } });
       }
     };
-    controls.addEventListener("dragging-changed", onDraggingChanged);
+
+    const tc = controls as StdTransformControls & {
+      addEventListener: (type: string, listener: (event: any) => void) => void;
+      removeEventListener: (type: string, listener: (event: any) => void) => void;
+    };
+    tc.addEventListener("objectChange", onObjectChange);
+    tc.addEventListener("dragging-changed", onDraggingChanged);
+
     return () => {
-      controls.removeEventListener("dragging-changed", onDraggingChanged);
+      tc.removeEventListener("objectChange", onObjectChange);
+      tc.removeEventListener("dragging-changed", onDraggingChanged);
+      runtime.setModelGizmoLock(effectiveId, false);
+      gizmoDraggingRef.current = false;
+      controlsRef.current = null;
+      pivotRef.current = null;
       if (orbitRef.current) {
         orbitRef.current.enabled = useMmdStudioStore.getState().cameraMode === "free";
       }
+      try {
+        controls.detach();
+      } catch {
+        // ignore
+      }
+      overlayScene.remove(controls);
+      controls.dispose();
+      overlayScene.remove(pivot);
+      // Only fill when PostFx is not owning the frame (avoid raw-frame flash over composer).
+      if (!postFxActiveRef.current) {
+        try {
+          gl.autoClear = true;
+          gl.render(mainScene, camera);
+        } catch {
+          // ignore
+        }
+      }
     };
-  }, [orbitRef, root, mode, effectiveId]);
+    // Intentionally omit `mode` — use setMode below so translate/rotate/scale does not dispose TC.
+  }, [camera, effectiveId, enabled, gl, gizmoDraggingRef, mainScene, orbitRef, overlayScene, root, runtime]);
 
-  function commitFromObject() {
-    if (!root || !effectiveId) return;
-    const euler = new THREE.Euler().setFromQuaternion(root.quaternion, "XYZ");
-    const scale = (root.scale.x + root.scale.y + root.scale.z) / 3;
-    const patch = {
-      positionX: root.position.x,
-      positionY: root.position.y,
-      positionZ: root.position.z,
-      rotationX: THREE.MathUtils.radToDeg(euler.x),
-      rotationY: THREE.MathUtils.radToDeg(euler.y),
-      rotationZ: THREE.MathUtils.radToDeg(euler.z),
-      scale: Math.min(10, Math.max(0.01, scale)),
-    };
-    runtime.setModelTransform(effectiveId, patch);
-    const state = useMmdStudioStore.getState();
-    const model = state.models.find((item) => item.id === effectiveId);
-    if (!model) return;
-    state.patchModel(effectiveId, { transform: { ...model.transform, ...patch } });
-  }
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls || !enabled) return;
+    try {
+      controls.setMode(mode);
+    } catch {
+      // ignore
+    }
+  }, [enabled, mode]);
 
-  if (!enabled || !root || !selectedModel?.visible) return null;
+  // priority 2: after PostFx (1). If no FX, we own the frame (main + overlay).
+  useFrame((state) => {
+    if (!enabled) return;
+    const renderer = state.gl;
+    const cam = state.camera;
+    const pivot = pivotRef.current;
+    const rootObj = rootRef.current;
+    // Sidebar / store TRS → pivot (not while dragging).
+    if (pivot && rootObj && !gizmoDraggingRef.current) {
+      pivot.position.copy(rootObj.position);
+      pivot.quaternion.copy(rootObj.quaternion);
+      pivot.scale.copy(rootObj.scale);
+    }
+    try {
+      if (!postFxActiveRef.current) {
+        renderer.autoClear = true;
+        renderer.render(state.scene, cam);
+      }
+      if (!controlsRef.current) return;
+      renderer.autoClear = false;
+      renderer.clearDepth();
+      renderer.render(overlayScene, cam);
+    } catch {
+      // ignore
+    } finally {
+      renderer.autoClear = true;
+    }
+  }, 2);
 
-  // size ~1.5 reads better on MMD-scale characters; remount when model/mode changes.
-  return (
-    <TransformControls
-      key={`${effectiveId}-${mode}`}
-      ref={controlsRef}
-      object={root}
-      mode={mode}
-      size={1.5}
-      space="world"
-      onObjectChange={() => commitFromObject()}
-    />
-  );
+  return null;
 }
 
 function DirectionalLightDebugHelper({ lightRef, enabled }: { lightRef: React.RefObject<THREE.DirectionalLight | null>; enabled: boolean }) {
@@ -269,6 +371,7 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
   const preserveModelsRef = useRef(preserveModelsOnUnmount);
   preserveModelsRef.current = preserveModelsOnUnmount;
   const controls = useRef<any>(null);
+  const gizmoDraggingRef = useRef(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -843,7 +946,11 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
       timeRef.current = state.currentTime;
     }
 
-    if (controls.current) controls.current.enabled = !useMotionCamera;
+    // Never re-enable orbit while gizmo is dragging (was wiping dragging-changed).
+    if (controls.current) {
+      const free = !useMotionCamera && !gizmoDraggingRef.current;
+      controls.current.enabled = free;
+    }
     // While exporting, drawing buffer aspect ≠ R3F CSS size — keep FOV correct.
     const exportBuf = recordingCanvasStateRef.current != null;
     const viewAspect = exportBuf
@@ -870,8 +977,8 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
     () => sunPositionFromAngles(lights.sunAzimuth, lights.sunElevation, lights.sunDistance),
     [lights.sunAzimuth, lights.sunDistance, lights.sunElevation],
   );
-  // WebGPU NodeBuilder rejects MeshDepthMaterial / ShaderMaterial used by
-  // drei Grid and classic shadow-map depth passes.
+  // Avoid drei <Grid/> (r185 uniforms crash). GridHelper works on WebGL + WebGPU.
+  // Classic shadow-map depth still WebGL-only.
   const isWebGpu = backend === "webgpu";
   const mapShadows = !isWebGpu && lights.shadowMode !== "off";
   const sunEnabled = lights.sunIntensity > 0.0001;
@@ -888,7 +995,7 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
   const groundY = -0.015;
   const dirLightRef = useRef<THREE.DirectionalLight>(null);
   const shadowMapSizeRef = useRef(lights.shadowMapSize);
-  const webGpuGrid = useMemo(() => {
+  const stageGrid = useMemo(() => {
     const helper = new THREE.GridHelper(80, 40, "#3a4254", "#2a3140");
     helper.position.y = 0.001;
     helper.frustumCulled = false;
@@ -1031,13 +1138,7 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
           />
         </mesh>
       ) : null}
-      {showGrid ? (
-        isWebGpu ? (
-          <primitive object={webGpuGrid} />
-        ) : (
-          <Grid infiniteGrid fadeDistance={80} sectionColor="#3a4254" cellColor="#2a3140" position={[0, 0.001, 0]} />
-        )
-      ) : null}
+      {showGrid ? <primitive object={stageGrid} /> : null}
       <OrbitControls
         ref={controls}
         makeDefault
@@ -1055,6 +1156,8 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
           mode={gizmoMode}
           enabled
           orbitRef={controls}
+          gizmoDraggingRef={gizmoDraggingRef}
+          postFxActive={backend === "webgl" && postFx !== "off"}
         />
       ) : null}
       {!exportingOffline && !recording && showLightHelper && sunEnabled ? (
@@ -1063,6 +1166,7 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
       {!exportingOffline && !recording && showSkeletonHelper ? (
         <SelectedSkeletonHelper runtime={runtime} selectedModelId={selectedModelId} enabled />
       ) : null}
+      {/* Gizmo is overlay-only; keep PostFx mounted so toggling gizmo never black-frames. */}
       {backend === "webgl" && postFx !== "off" ? (
         <Suspense fallback={null}>
           <MmdPostFx preset={postFx} />

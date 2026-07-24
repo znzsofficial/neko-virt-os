@@ -858,7 +858,9 @@ export function MmdPostFx({ preset }: { preset: MmdPostFxPreset }) {
     }
 
     // Sync composer to renderer logical size (EffectComposer multiplies by DPR).
+    // Never skip the frame on resize failure — that leaves a black canvas.
     const renderer = state.gl as THREE.WebGLRenderer;
+    if (isGlContextLost(renderer)) return;
     renderer.getSize(sizeScratch);
     const lw = Math.max(1, Math.round(sizeScratch.x));
     const lh = Math.max(1, Math.round(sizeScratch.y));
@@ -869,14 +871,19 @@ export function MmdPostFx({ preset }: { preset: MmdPostFxPreset }) {
       composer.inputBuffer
       && (composer.inputBuffer.width !== wantW || composer.inputBuffer.height !== wantH)
     ) {
-      if (!resizeComposerToRenderer(composer, renderer, sizeScratch)) return;
+      resizeComposerToRenderer(composer, renderer, sizeScratch);
     }
 
     state.gl.autoClear = true;
     try {
       composer.render(delta);
     } catch {
-      // Context lost / incomplete FBO — skip frame.
+      // Context lost / incomplete FBO — fall back to direct scene render.
+      try {
+        renderer.render(scene, camera);
+      } catch {
+        // ignore
+      }
     }
   }, 1);
 

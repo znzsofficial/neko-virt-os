@@ -13,7 +13,7 @@ export const OPEN_SOURCE_PACKAGES: readonly OpenSourcePackage[] = [
   { name: "@react-three/fiber", version: "9.6.1", license: "MIT" },
   { name: "@react-three/drei", version: "10.7.7", license: "MIT" },
   { name: "postprocessing", version: "6.39.2", license: "Zlib" },
-  { name: "@yohawing/three-mmd-loader", version: "0.6.0", license: "MIT" },
+  { name: "@yohawing/three-mmd-loader", version: "0.7.0", license: "MIT" },
   { name: "mediabunny", version: "1.50.8", license: "MPL-2.0" },
   { name: "zustand", version: "5.0.14", license: "MIT" },
   { name: "dexie", version: "4.4.4", license: "Apache-2.0" },

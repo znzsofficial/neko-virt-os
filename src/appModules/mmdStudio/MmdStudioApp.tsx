@@ -383,7 +383,8 @@ export function MmdStudioApp({ windowId }: { windowId?: string } = {}) {
     const models = listModelFiles(files);
     const { body, face, camera } = pickBodyAndFaceMotions(files);
     const audio = pickPrimaryAudio(files) ?? files.find(isAudioFile) ?? null;
-    const sky = pickSkyPanoramaFile(files);
+    // Never auto-promote model pack PNG/JPG to sky (was setting character tex as equirect env).
+    const sky = pickSkyPanoramaFile(files, { hasModels: models.length > 0 });
 
     if (models.length === 1) {
       await loadModelBundle(models[0]!, companionsForModel(models[0]!, files));

@@ -1,14 +1,20 @@
 # MMD Studio — 进度与约定
 
-最后更新：2026-07-14（IBL / SSR / 侧栏精简 / 系统式文案）
+最后更新：2026-07-23（`@yohawing/three-mmd-loader@0.7.0`）
 
 ## 定位
 
 NekoVirtOS 内的浏览器 MMD 工作台：多模型预览、动作/表情/镜头、物理、HDR、后处理、地面真阴影、项目存取、离线/实时导出。
 
 - **成片路径：WebGL**
-- **WebGPU：实验预览**（无完整 toon / 后处理 / map 阴影）
+- **WebGPU：实验预览**（无完整 toon / 后处理 / map 阴影；官方 `/webgpu` TSL pipeline 尚未接入）
 - 后处理：**WebGL-only**
+- **依赖**：`@yohawing/three-mmd-loader@0.7.0`（mmd-anim WASM 随包 0.3.1）；Bullet 脚本 `public/mmd/mmd_bullet.{js,wasm}` 与包内 physics 目录同步
+
+### 0.7.0 注意
+
+- Toon + 自阴影对齐 MMD 9.32：`shadowMap.enabled` 时 toon 会随场景自阴影状态变化；本工作室仍 **角色 cast-only、关闭 MMD self-shadow 接收**（`enforceModelCastOnlyShadows`），与 0.6 策略一致，但 toon 色带可能有细微差别，需手测阴影 on/off。
+- 加载时纹理就绪后再创建 runtime（库侧修复），有利于材质 enhance。
 
 ## 当前能力
 

@@ -64,6 +64,8 @@ export type RuntimeEntry = {
   materialVisible: Record<string, boolean>;
   materialOverrides: Record<string, MaterialOverride>;
   transform: MmdModelTransform;
+  /** Viewport gizmo is driving root TRS; update() must not stomp pos/rot. */
+  gizmoLock?: boolean;
   hasCameraTrack: boolean;
   duration: number;
   modelFile: File;

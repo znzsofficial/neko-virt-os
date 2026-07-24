@@ -87,6 +87,8 @@ export type MmdRuntimeHandle = {
   getModelRoot: (id: string | null) => THREE.Object3D | null;
   setModelVisible: (id: string, visible: boolean) => void;
   setModelTransform: (id: string, patch: Partial<MmdModelTransform>) => void;
+  /** When true, update() will not overwrite root TRS from entry.transform (gizmo drag). */
+  setModelGizmoLock: (id: string, locked: boolean) => void;
   loadMotion: (file: File, slot?: MmdMotionSlot, modelId?: string | null) => Promise<void>;
   setMorphWeight: (modelId: string, morphName: string, weight: number) => void;
   setMaterialVisible: (modelId: string, materialName: string, visible: boolean) => void;
@@ -150,6 +152,17 @@ function buildTextureMap(modelFile: File, companionFiles: readonly File[] = []):
  * `physicsStep: true` forces root scale=1 (collider sizes are model-unit, not scaled).
  */
 function syncEntryWorldMatrix(entry: RuntimeEntry, physicsStep = false) {
+  // Gizmo owns pos/rot; still force unit scale for Bullet, then restore visual scale.
+  if (entry.gizmoLock) {
+    if (physicsStep) {
+      entry.model.root.scale.setScalar(1);
+    } else {
+      const scale = Math.min(10, Math.max(0.01, entry.transform.scale));
+      entry.model.root.scale.setScalar(scale);
+    }
+    entry.model.root.updateMatrixWorld(true);
+    return;
+  }
   applyModelTransform(entry, { physicsStep });
   entry.model.root.updateMatrixWorld(true);
 }
@@ -471,7 +484,17 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
         ...entry.transform,
         ...patch,
       };
-      syncEntryWorldMatrix(entry);
+      if (!entry.gizmoLock) {
+        syncEntryWorldMatrix(entry);
+      } else {
+        // Keep entry.transform current for physics scale restore; do not stomp gizmo TRS.
+        entry.model.root.updateMatrixWorld(true);
+      }
+    },
+    setModelGizmoLock(id, locked) {
+      const entry = entries.get(id);
+      if (!entry) return;
+      entry.gizmoLock = locked;
     },
     setMaterialOverride(modelId, materialName, patch) {
       const entry = entries.get(modelId);

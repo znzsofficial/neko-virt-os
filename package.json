@@ -13,7 +13,7 @@
     "@iconify-icon/react": "latest",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
-    "@yohawing/three-mmd-loader": "^0.6.0",
+    "@yohawing/three-mmd-loader": "^0.7.0",
     "clsx": "latest",
     "cmdk": "^1.1.1",
     "dexie": "latest",

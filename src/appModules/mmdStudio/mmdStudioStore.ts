@@ -971,7 +971,8 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
   skyAsEnvironment: true,
   envIntensity: 1,
   showGrid: true,
-  showGizmo: true,
+  // Off by default: TransformControls can steal pointer events / break orbit if attach races.
+  showGizmo: false,
   gizmoMode: "translate",
   showLightHelper: false,
   showSkeletonHelper: false,
