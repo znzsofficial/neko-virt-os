@@ -8,19 +8,23 @@ import {
 
 describe("applyCommonQualityAxes", () => {
   it("overrides dpr / aa / frameRate", () => {
-    const base = { dpr: 1 as number | [number, number], antialias: false, frameRate: "low" as const };
+    const base = { dpr: 1 as number | [number, number], antialias: false, frameRate: "low" as const, framebufferScale: 0.7, foveation: 1 };
     const next = applyCommonQualityAxes(base, {
       dprPref: "1.5",
       antialiasPref: "on",
       frameRatePref: "high",
+      framebufferScalePref: "1",
+      foveationPref: "off",
     });
     expect(next.dpr).toEqual([1, 1.5]);
     expect(next.antialias).toBe(true);
     expect(next.frameRate).toBe("high");
+    expect(next.framebufferScale).toBe(1);
+    expect(next.foveation).toBe(0);
   });
 
   it("leaves auto prefs alone", () => {
-    const base = { dpr: 1 as number | [number, number], antialias: false, frameRate: "mid" as const };
+    const base = { dpr: 1 as number | [number, number], antialias: false, frameRate: "mid" as const, framebufferScale: 0.85, foveation: 0.5 };
     const next = applyCommonQualityAxes(base, {
       dprPref: "auto",
       antialiasPref: "auto",

@@ -50,6 +50,8 @@ export function VrBrowserPanel({ open, onClose, disabled, initialUrl }: Props) {
   const panelScale = useVrDesktopStore((s) => getVrRenderProfile(s.prefs).panelScale);
   const chromeW = scalePanelSize(CHROME_BASE.w, panelScale);
   const chromeH = scalePanelSize(CHROME_BASE.h, panelScale);
+  const chromeScaleX = chromeW / CHROME_BASE.w;
+  const chromeScaleY = chromeH / CHROME_BASE.h;
 
   const [history, setHistory] = useState<string[]>([VR_BROWSER_HOME]);
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -57,6 +59,7 @@ export function VrBrowserPanel({ open, onClose, disabled, initialUrl }: Props) {
   const [iframeEpoch, setIframeEpoch] = useState(0);
   const hitsRef = useRef<VrBrowserChromeHit[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const hoverIdRef = useRef<string | null>(null);
   const historyIndexRef = useRef(0);
   const loadStateRef = useRef<LoadState>("idle");
   historyIndexRef.current = historyIndex;
@@ -132,7 +135,8 @@ export function VrBrowserPanel({ open, onClose, disabled, initialUrl }: Props) {
       chromeW,
       chromeH,
       (p) => {
-        hits = paintVrBrowserChrome(p, paintState);
+        p.ctx.setTransform(chromeScaleX, 0, 0, chromeScaleY, 0, 0);
+        hits = paintVrBrowserChrome({ ...p, width: CHROME_BASE.w, height: CHROME_BASE.h }, { ...paintState, hoverId: hoverIdRef.current });
       },
       language,
     );
@@ -140,19 +144,34 @@ export function VrBrowserPanel({ open, onClose, disabled, initialUrl }: Props) {
     canvasRef.current = map.image as HTMLCanvasElement;
     return map;
     // paintState identity changes with nav/status; size/language rebuild canvas
-  }, [chromeH, chromeW, language, paintState]);
+  }, [chromeH, chromeScaleX, chromeScaleY, chromeW, language, paintState]);
 
   const repaint = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    ctx.setTransform(chromeScaleX, 0, 0, chromeScaleY, 0, 0);
     hitsRef.current = paintVrBrowserChrome(
-      { ctx, width: chromeW, height: chromeH, language },
-      paintState,
+      { ctx, width: CHROME_BASE.w, height: CHROME_BASE.h, language },
+      { ...paintState, hoverId: hoverIdRef.current },
     );
     texture.needsUpdate = true;
-  }, [chromeH, chromeW, language, paintState, texture]);
+  }, [chromeScaleX, chromeScaleY, language, paintState, texture]);
+
+  const repaintHover = useCallback((hoverId: string | null) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    hoverIdRef.current = hoverId;
+    ctx.setTransform(chromeScaleX, 0, 0, chromeScaleY, 0, 0);
+    hitsRef.current = paintVrBrowserChrome(
+      { ctx, width: CHROME_BASE.w, height: CHROME_BASE.h, language },
+      { ...paintState, hoverId },
+    );
+    texture.needsUpdate = true;
+  }, [chromeScaleX, chromeScaleY, language, paintState, texture]);
 
   useEffect(() => {
     repaint();
@@ -212,7 +231,12 @@ export function VrBrowserPanel({ open, onClose, disabled, initialUrl }: Props) {
   }
 
   function hitTest(uv: THREE.Vector2 | undefined): VrBrowserChromeHit | undefined {
-    return hitTestByUv(uv, chromeW, chromeH, hitsRef.current);
+    return hitTestByUv(uv, CHROME_BASE.w, CHROME_BASE.h, hitsRef.current);
+  }
+
+  function getHoverId(hit: VrBrowserChromeHit | undefined) {
+    if (!hit) return null;
+    return hit.kind === "bookmark" ? `bookmark:${hit.url}` : `nav:${hit.action}`;
   }
 
   function onChromeActivate(uv: THREE.Vector2 | undefined) {
@@ -264,13 +288,17 @@ export function VrBrowserPanel({ open, onClose, disabled, initialUrl }: Props) {
       {/* Chrome + hits. Transparent material so cutout shows iframe, not opaque black. */}
       <mesh
         position={[0, 0, vrTheme.panelDepth / 2 + 0.001]}
-        onPointerDown={(e) => {
-          e.stopPropagation();
-          // Only handle hits in chrome/bookmark rects (content UV has no hits).
-          onChromeActivate(e.uv);
+        onPointerDown={(event) => event.stopPropagation()}
+        onPointerMove={(event) => {
+          const hoverId = getHoverId(hitTest(event.uv));
+          if (hoverId !== hoverIdRef.current) repaintHover(hoverId);
+        }}
+        onPointerOut={() => {
+          if (hoverIdRef.current != null) repaintHover(null);
         }}
         onClick={(e) => {
           e.stopPropagation();
+          // Use one activation event so controller clicks cannot navigate twice.
           onChromeActivate(e.uv);
         }}
       >

@@ -82,13 +82,20 @@ export function MmdVrScene() {
             emptyHint={t("settingsMmdVrEmptyNoAssets")}
             hideLabel={t("settingsMmdVrHideModel")}
             showLabel={t("settingsMmdVrShowModel")}
-            selectPlaceLabel={t("settingsMmdVrSelectPlace")}
             placeOnLabel={t("settingsMmdVrPlaceOn")}
             placeOffLabel={t("settingsMmdVrPlaceOff")}
             placeHint={t("settingsMmdVrPlaceHint")}
             lightStageLabel={t("settingsMmdVrLightStage")}
             lightSoftLabel={t("settingsMmdVrLightSoft")}
             lightContrastLabel={t("settingsMmdVrLightContrast")}
+            shadowsLabel={t("settingsMmdVrShadows")}
+            gridLabel={t("settingsMmdVrGrid")}
+            scaleLabel={t("settingsMmdVrModelScale")}
+            heightLabel={t("settingsMmdVrUserHeight")}
+            resetValueLabel={t("settingsMmdVrValueReset")}
+            panelHideLabel={t("settingsMmdVrPanelHide")}
+            panelShowLabel={t("settingsMmdVrPanelShow")}
+            panelDragLabel={t("settingsMmdVrPanelDrag")}
             onExit={exitVr}
             busy={exiting}
           />

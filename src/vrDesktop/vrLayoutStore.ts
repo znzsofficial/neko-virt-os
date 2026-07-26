@@ -65,6 +65,7 @@ type VrLayoutStore = {
   poses: LayoutMap;
   setPose: (id: VrMovablePanelId, pose: VrPanelPose) => void;
   setPosition: (id: VrMovablePanelId, position: [number, number, number]) => void;
+  resetPose: (id: VrMovablePanelId) => void;
   resetPoses: () => void;
 };
 
@@ -87,6 +88,11 @@ export const useVrLayoutStore = create<VrLayoutStore>((set, get) => ({
       position: clampPanelPosition(position),
       rotation: prev.rotation,
     });
+  },
+  resetPose: (id) => {
+    const poses = { ...get().poses, [id]: defaultPose(id) };
+    writeLayout(poses);
+    set({ poses });
   },
   resetPoses: () => {
     const poses = buildDefaults();

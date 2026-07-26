@@ -48,3 +48,11 @@ export function getUpcomingEvents(limit = 5): LocalCalendarEvent[] {
     .sort((a, b) => a.date.localeCompare(b.date) || (a.time || "").localeCompare(b.time || ""))
     .slice(0, limit);
 }
+
+export function getNextUpcomingEvent(now = new Date()): LocalCalendarEvent | null {
+  const todayKey = todayDateKey(now);
+  const nowTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  return getUpcomingEvents(Number.MAX_SAFE_INTEGER).find((event) => (
+    event.date > todayKey || event.date === todayKey && (!event.time || event.time >= nowTime)
+  )) ?? null;
+}

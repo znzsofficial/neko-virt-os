@@ -19,8 +19,6 @@ import { useIdleLock } from "./hooks/useIdleLock";
 import { applyThemeSettings, readThemeSettings, THEME_STORAGE_KEY } from "./system/theme";
 import type { ContextMenuState } from "./types";
 import { useDesktopStore } from "./windowStore";
-import { MmdVrOverlay } from "./mmdVrShowcase/MmdVrOverlay";
-import { useMmdVrStore } from "./mmdVrShowcase/mmdVrStore";
 import { VrDesktopOverlay } from "./vrDesktop/VrDesktopOverlay";
 import { refreshVrCapability, useVrDesktopStore } from "./vrDesktop/vrDesktopStore";
 
@@ -45,8 +43,7 @@ export function App() {
   const sessionLocked = useOsUiStore((state) => state.sessionLocked);
   const exitImmersive = useOsUiStore((state) => state.exitImmersive);
   const vrOverlayOpen = useVrDesktopStore((state) => state.overlayOpen);
-  const mmdVrOverlayOpen = useMmdVrStore((state) => state.overlayOpen);
-  const anyVrOverlayOpen = vrOverlayOpen || mmdVrOverlayOpen;
+  const anyVrOverlayOpen = vrOverlayOpen;
   const initFs = useFsStore((state) => state.init);
   const t = useLanguageStore((state) => state.t);
   useIdleLock();
@@ -202,7 +199,6 @@ export function App() {
       <FpsOverlay />
       {sessionLocked ? <LockScreen /> : null}
       <VrDesktopOverlay />
-      <MmdVrOverlay />
     </main>
   );
 }

@@ -63,9 +63,9 @@ export function hitTestByUv<T extends { rect: { x: number; y: number; w: number;
 
 /** Quiet secondary control (exit / reset / HUD buttons). Colors match VR shell. */
 const SECONDARY_BTN = {
-  fill: "#1a2030",
-  border: "#3a4860",
-  ink: "#dce4f0",
+  fill: "#211d20",
+  border: "#51454b",
+  ink: "#eee6e9",
 } as const;
 
 export function paintSecondaryButton(

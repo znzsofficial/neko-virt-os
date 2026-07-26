@@ -16,11 +16,17 @@ describe("getVrRenderProfile", () => {
       panelScalePref: "high",
       frameRatePref: "high",
       antialiasPref: "on",
+      framebufferScalePref: "1",
+      foveationPref: "off",
+      floorDetailPref: "high",
     });
     expect(profile.dpr).toEqual([1, 1.5]);
     expect(profile.panelScale).toBe(1);
     expect(profile.frameRate).toBe("high");
     expect(profile.antialias).toBe(true);
+    expect(profile.framebufferScale).toBe(1);
+    expect(profile.foveation).toBe(0);
+    expect(profile.floorSegments).toBe(48);
     // low preset still disallows soft edges
     expect(profile.allowSoftEdges).toBe(false);
   });

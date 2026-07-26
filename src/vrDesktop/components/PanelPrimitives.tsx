@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import type { VrPanelPose } from "../vrLayout";
 import { createPanelTexture, paintSecondaryButton } from "../vrPanelTexture";
@@ -68,6 +68,8 @@ export function SecondaryButton({
   onPress: () => void;
   size?: [number, number];
 }) {
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
   const panelScale = useVrDesktopStore((s) => getVrRenderProfile(s.prefs).panelScale);
   const texW = scalePanelSize(VR_PANEL_BASE.exit.w, panelScale);
   const texH = scalePanelSize(VR_PANEL_BASE.exit.h, panelScale);
@@ -93,6 +95,20 @@ export function SecondaryButton({
     <mesh
       position={pose.position}
       rotation={pose.rotation}
+      scale={pressed ? 0.97 : hovered && !disabled ? 1.035 : 1}
+      onPointerEnter={(event) => {
+        event.stopPropagation();
+        if (!disabled) setHovered(true);
+      }}
+      onPointerLeave={() => {
+        setHovered(false);
+        setPressed(false);
+      }}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+        if (!disabled) setPressed(true);
+      }}
+      onPointerUp={() => setPressed(false)}
       onClick={(e) => {
         e.stopPropagation();
         if (disabled) return;
@@ -100,7 +116,15 @@ export function SecondaryButton({
       }}
     >
       <planeGeometry args={size} />
-      <meshBasicMaterial map={texture} toneMapped={false} transparent fog={false} side={THREE.FrontSide} />
+      <meshBasicMaterial
+        map={texture}
+        color={disabled ? "#777077" : hovered ? "#ffffff" : "#eee8eb"}
+        toneMapped={false}
+        transparent
+        opacity={disabled ? 0.48 : 1}
+        fog={false}
+        side={THREE.FrontSide}
+      />
     </mesh>
   );
 }
@@ -114,8 +138,16 @@ export function StageFloor() {
         <meshBasicMaterial color={vrTheme.floor} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
-        <ringGeometry args={[2.8, 2.9, Math.max(16, Math.floor(segments / 2))]} />
-        <meshBasicMaterial color={vrTheme.floorRing} transparent opacity={0.35} side={THREE.FrontSide} />
+        <ringGeometry args={[2.75, 2.79, Math.max(24, Math.floor(segments / 2))]} />
+        <meshBasicMaterial color={vrTheme.floorRing} transparent opacity={0.72} side={THREE.FrontSide} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.003, -1.9]}>
+        <ringGeometry args={[0.32, 0.335, 32]} />
+        <meshBasicMaterial color={vrTheme.primary} transparent opacity={0.48} side={THREE.FrontSide} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.0035, -1.32]}>
+        <planeGeometry args={[0.022, 0.72]} />
+        <meshBasicMaterial color={vrTheme.floorGuide} transparent opacity={0.68} side={THREE.DoubleSide} />
       </mesh>
     </group>
   );

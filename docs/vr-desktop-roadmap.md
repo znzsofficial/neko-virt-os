@@ -1,200 +1,228 @@
-# VR 桌面（WebXR）— 路线图
+# VR Desktop Roadmap
 
-最后更新：2026-07-24  
+最后更新：2026-07-27
 
-> **状态：基线收尾 · 暂缓**  
-> 不再新增 VR 桌面功能；维护级 bugfix 除外。  
-> **当前产品重心 → [MMD VR 展示器](./mmd-vr-showcase-roadmap.md)**。
+> 状态：恢复规划。先完成可靠的空间工作台，再扩展 VR 原生应用；MMD VR 继续保持独立页面和独立会话。
 
-## 1. 产品定位
+## 产品定位
 
-**NekoVirtOS VR** 是浏览器内的 **独立沉浸工作台**，不是 2D 桌面的镜像，也不是把 `react-rnd` 窗口像素流进头盔。
+NekoVirtOS VR Desktop 是浏览器内的轻量空间工作台，不是 2D 桌面的像素镜像。它应让用户在头显中稳定完成一组短任务：查看状态、排列常用面板、阅读内容、记录信息、使用有限但可靠的 VR 原生工具。
 
-| | 2D 桌面 | VR 桌面 |
-|--|---------|---------|
-| 渲染 | DOM + CSS | WebGL + WebXR（`@react-three/xr`） |
-| 应用 | 完整 app 模块 | **仅 VR 原生表面**（当前：浏览器、便签预览） |
-| 启动耦合 | — | **禁止** `openApp` / 因点应用而 `endSession` |
-| 退出 | — | 用户主动「退出」或锁屏 |
+设计原则：
 
-与 **MMD Studio**：分会话；禁止 VR 内接 MMD WebGPU TSL / 全量 postprocessing。
+- Stay in VR：除用户主动退出、锁屏或不可恢复错误外，任何应用操作都不得结束会话。
+- VR-native：只展示有空间交互实现的能力，不在后台偷偷打开 2D 窗口。
+- Comfort first：默认静止工作区；移动能力必须可选、可预测并提供舒适选项。
+- Direct manipulation：抓取、移动、缩放、吸附和聚焦应围绕控制器射线与手部输入设计。
+- Local-first：布局、便签、偏好和会话恢复边界必须清楚，设置失败不能静默。
+- Performance budget：Quest 级设备以稳定帧率和文字清晰度优先，不为装饰引入全量后处理。
 
-### 1.1 成片原则
+## 当前基线
 
-1. **Stay in VR** — 除退出与锁屏外，交互不得把用户踢回 2D。  
-2. **VR-native only** — 启动台只列有 VR 实现的能力；未实现则状态提示，不打开 2D 窗。  
-3. **HTTPS 真源** — 会话成败以 click 内 `requestSession` 为准，不以 `isSessionSupported === false` 锁死入口。  
-4. **轻量画布 UI** — 面板 = Canvas 贴图 + 射线；不用 uikit/troika（除非 canvas 交互成本过高再评估）。  
-5. **可动可记** — 主面板可拖拽，位姿本地持久化，可一键重置。
+已交付：
 
-### 1.2 非目标（刻意不做）
+- 独立 `immersive-vr` 会话，与 MMD VR 会话互斥。
+- 主屏、启动台、便签预览和基础 VR 浏览器。
+- 控制器射线、30 度 snap turn、面板拖拽、布局持久化和重置。
+- 高/均衡/低画质预设，以及 DPR、面板分辨率、目标帧率和抗锯齿细项。
+- 可选 FPS、柔化边缘、锁屏退出和场景 lazy load。
+- 独立 `vr-desktop` 窗口应用，集中管理能力状态、进入操作、画质和布局。
+- Home 显示待办数量和下一日程，不再用不可操作的 2D 窗口数占据摘要位。
+- VR Browser 使用单一 click 激活路径，避免一次控制器操作执行两次导航。
+- 启动器点击便签会将既有面板召回默认可见位置。
+- 面板拖拽在 pointer cancel、capture 丢失、禁用和卸载时会保存最后有效位置并清理状态。
+- VR 视觉系统已统一为中性暗面板与暖红身份色；地面提供低对比方向标记。
+- 面板边框、拖拽条、Launcher、Browser chrome 和次级按钮均提供射线 hover/pressed/grab 反馈。
+- Browser 打开时进入焦点构图，隐藏后方 Launcher/便签并降低 Home 明度。
+- 面板画质档只改变纹理清晰度，不再改变 Canvas UI 的逻辑排版和命中坐标。
+- Home 时钟改为分钟级刷新，减少大尺寸 Canvas 纹理上传。
 
-- 整桌面 / 全窗口像素流进 VR  
-- 离屏 DOM → 纹理跑完整 2D app  
-- 进 VR 前说明 dialog（打断 WebXR 用户手势）  
-- Safari / Firefox 默认可用承诺  
-- WebGPU 作为 VR 渲染后端  
-- VR 内 postprocessing 全栈  
+当前不足：
 
----
+- 主屏已有本地摘要，但仍缺少快速启动和会话状态等连续工作流。
+- 面板只能移动，缺少双手缩放、吸附、编组、前景聚焦和遮挡管理。
+- 浏览器依赖 iframe，兼容性、输入和站点策略反馈不完整。
+- 便签仅预览，无法在 VR 内完成记录闭环。
+- 控制器交互有实现但缺少统一状态模型和设备手感签字。
+- 没有空间恢复、首次校准、坐姿/站姿和可达范围配置。
+- 画质设置丰富，但缺少运行时性能建议和自动降级反馈。
 
-## 2. 当前基线（v1 — 已交付）
+## P0：可靠会话与空间基础
 
-### 2.1 能力清单
+### 1. 进入前检查与错误恢复
 
-| 模块 | 状态 | 说明 |
-|------|------|------|
-| 进入 / 退出 immersive-vr | ✅ | 设置 + 控制中心；Quest 手势同步 `requestSession` |
-| 能力探测 | ✅ | HTTPS 硬门槛；`isSessionSupported` 仅记 true |
-| 主屏 | ✅ | 时钟 12/24h、日期、窗口数 pill、status 行 |
-| 应用屏 | ✅ | VR 独立启动台（空间：浏览器 / 便签） |
-| 便签预览 | ✅ | 读 `shared` 便签存储，不打开 2D 便签板 |
-| VR 浏览器 | ✅ | canvas 导航 + Html iframe；**书签目前用默认目录**（不读 2D 用户书签） |
-| 拖拽布局 | ✅ | 主屏 / 应用 / 便签 / 浏览器；边框与顶条拖拽 |
-| 布局持久化 | ✅ | `vrLayoutStore` → localStorage |
-| 重置布局 | ✅ | 场景钮 + 设置；回默认位姿 + 视角归零 |
-| Snap turn | ✅ | 30°，无连续平移 |
-| 画质档 | ✅ | 预设高/均衡/低 + **细项**（DPR / 面板分辨率 / 目标帧率 / AA） |
-| 显示帧率 | ✅ | 可选 in-scene FPS 徽章 |
-| 柔化边缘 | ✅ | 可选；低画质强制关 |
-| 锁屏 / idle | ✅ | VR 中不计 idle；锁屏结束 XR |
-| 包体 | ✅ | Scene lazy load |
-| 与 MMD 展示互斥 | ✅ | `requestImmersiveEnter` 互斥；独立 XR store |
+- 独立应用显示 HTTPS、WebXR API、`immersive-vr` probe 和最近一次失败。
+- 保持 click 栈内同步 `requestSession`，probe 仅作建议，不以 false 永久锁死入口。
+- 将 `NotAllowedError`、`NotSupportedError`、会话占用、设备断开和渲染初始化失败映射为本地化原因。
+- 进入失败后完整关闭 overlay、pending session、renderer 资源和 busy 状态。
+- 增加“重新检查设备”操作，不自动高频探测。
 
-### 2.2 工程结构
+验收：
 
-```
-src/xr/                     # 共用 WebXR 核心（分会话实例）
-  createProductXrSession · qualityAxes · createXrSceneMountGuard
-  requestImmersiveEnter · AttachPendingXrSession · pendingSessionSlot …
+- Quest 浏览器正常进入、拒绝权限、取消进入和重复点击均不会卡在 entering。
+- MMD VR 占用时有明确错误，不会结束对方会话。
+- 非 HTTPS 和无 WebXR 浏览器的入口禁用原因可被读屏读取。
 
-src/shared/                 # 2D + VR 业务域（无 React UI）
-  sticky/ · browser/ · panelTexture.ts · localPrefs.ts
+### 2. 空间校准与恢复
 
-src/appModules/*App.tsx     # 仅 2D 壳
+- 首次进入提供坐姿/站姿选择和“将工作区置于正前方”。
+- 以头部朝向和可达距离生成默认布局，不假设固定房间尺度。
+- 增加 recenter，不重置用户面板相对布局。
+- 区分“重置视角”“重置面板布局”“清除所有 VR 偏好”。
+- 布局 schema 版本化；异常位姿、NaN、过远或位于用户身后的面板自动归位。
 
-src/vrDesktop/              # VR 桌面表面（薄包装 + 业务）
-  requestVrEnter.ts · vrSession.ts   # → createProductXrSession
-  vrDesktopStore · vrQuality · vrLayout* · vrLauncher
-  vrPanelTexture.ts         # 桌面专用 paint；原语 re-export shared
-  usePanelTexture.ts · VrDesktopScene.tsx · components/
-```
+验收：
 
-依赖：`three` · `@react-three/fiber` · `@react-three/xr` · `zustand` · `@react-three/drei`（Html iframe）
+- 重新进入会话后布局稳定恢复。
+- 坐姿用户无需起身即可触达核心面板。
+- tracking origin 改变或布局数据损坏时仍能看到恢复入口。
 
-### 2.3 会话流
+### 3. 输入状态机
 
-```
-设置 / 控制中心 onClick
-  → requestImmersiveEnter
-      · 互斥检查（MMD 展示占用则失败）
-      · openOverlay + preload Scene   # 与 requestSession 并行暖 Canvas
-      · beginFromClick → requestSession（手势栈内同步启动）
-  → AttachPendingXrSession：gl.xr.setSession(pending)（可重试）
-  → phase active；使用（拖拽 / 浏览器 / …）
-  → 退出钮 | sessionend | lockSession
-  → endVrDesktopSession + closeOverlay
-```
+- 统一 hover、pressed、dragging、resizing、scrolling 和 disabled 状态。
+- 点击与拖拽使用距离和时间阈值，不能因轻微抖动误触。
+- 控制器射线提供目标、按下、抓取和不可用反馈。
+- 手部追踪作为 optional feature；未稳定前不替代控制器主路径。
+- 所有关键操作都能单手完成，双手只用于增强缩放和精细调整。
 
----
+验收：
 
-## 3. 阶段规划（已冻结）
+- Quest Touch 连续拖拽 30 次不丢失抓取、不误点击内容。
+- 左右手切换、控制器暂时断连和 session visibility change 后状态可恢复。
 
-**自 2026-07-24 起：v1.1+ / v1.2 / v2 桌面新功能一律搁置。**  
-仅保留：崩溃级 / 进不了会话 / 安全相关修复。  
-产品推进见 [mmd-vr-showcase-roadmap.md](./mmd-vr-showcase-roadmap.md)。
+## P1：从面板集合到工作区
 
-### 3.1 基线已交付（冻结清单）
+### 4. 面板管理
 
-| 能力 | 状态 |
-|------|------|
-| 独立 immersive-vr 会话 + click 内 `requestSession` | ✅ |
-| 与 MMD 展示器会话互斥 | ✅ |
-| 主屏 / 启动台 / 便签预览 / VR 浏览器 | ✅ |
-| 拖拽布局 + 持久化 + 重置 | ✅ |
-| 画质预设 + 细项（DPR / 面板 / 帧率 / AA） | ✅ |
-| 首次进 VR 挂载竞态修复 | ✅ |
-| 设置 / 控制中心入口 | ✅ |
+- 面板增加前景聚焦、关闭/隐藏、固定、恢复和最小化状态。
+- 支持单手远距缩放与双手缩放，限制最小文字尺寸和最大物理尺寸。
+- 提供水平/垂直吸附、等距排列和轻量弧形工作区预设。
+- 遮挡严重时提供“整理工作区”，但不自动移动正在使用的面板。
+- 启动台显示已打开状态，避免重复创建同一单例面板。
 
-### 3.2 原 v1.1–v2  backlog（不执行，仅归档）
+### 5. Home 重新设计
 
-| ID | 原任务 | 备注 |
-|----|--------|------|
-| A1–A6 | 帧率签字、拖拽手感、浏览器文案、书签统一… | 搁置 |
-| B1–B5 | 时钟增强、便签编辑、计算器、设置片… | 搁置 |
-| C1–C4 | 双柄缩放、吸附、手部、空间音频 | 搁置 |
-| D1 | MMD 独立展示器 | **已拆出** → mmd-vr-showcase；**当前重心** |
-| D2–D4 | AR / uikit / 离屏 DOM | 仍非目标或搁置 |
+Home 不再只是大时钟。建议结构：
 
----
+- 当前时间、日期和会话时长。
+- 快速启动：最近使用的 3 个 VR 原生应用。
+- 今日信息：待办数量、下一个日程、便签摘要。
+- 系统状态：帧率档、网络状态、电量 API 可用时显示头显/控制器电量。
+- 工作区操作：重新居中、整理面板、打开应用库、退出 VR。
 
-## 4. 明确不做的路线（更新）
+不做：大面积装饰场景、无任务价值的 3D 小组件、持续动画背景。
 
-| 想法 | 决定 |
-|------|------|
-| 点 VR 应用 → 退会话开 2D 窗 | **已废弃** |
-| 后台 `openApp` 假装联动 | **已废弃** |
-| 2D 整桌面像素流 | **不做**（非目标） |
-| 进 VR 前系统 intro dialog | **不做**（手势） |
+### 6. 应用库与权限表达
 
----
+- 应用库只列 `vrCapability: native | preview | unavailable` 明确声明的能力。
+- native 可直接打开；preview 显示限制；unavailable 解释缺少什么，不模拟打开。
+- 记录最近使用，但不把 2D launcher 的全部应用直接复制进 VR。
+- 为每个应用定义单例/多实例、默认面板尺寸、最小尺寸和持久化策略。
 
-## 5. WebXR / 性能备忘
+## P1：VR 原生应用闭环
 
-### 检测
+### 7. 便签编辑
 
-| 层级 | 规则 |
-|------|------|
-| 硬门槛 | `isSecureContext` |
-| API | click 时 `navigator.xr` |
-| 建议探测 | `isSessionSupported` 只吸收 **true** |
-| 真源 | 同步 `requestSession` |
+- 从只读预览升级为创建、编辑、删除和颜色分类。
+- 优先支持系统虚拟键盘/物理键盘；自绘键盘只作为后续备选。
+- 编辑期间明确保存状态；输入焦点离开时不丢草稿。
+- 与 2D 便签使用同一业务存储，不复制数据模型。
 
-### 性能
+### 8. 任务与日历概览
 
-- 禁止热路径 React `setState`  
-- 贴图：`generateMipmaps = false`；面板 `FrontSide`  
-- 时钟 / hover：原地 canvas + `needsUpdate`  
-- `frameloop = always`（会话中）  
-- dpr / AA / 贴图缩放 / 目标帧率 → `vrQuality` 预设 + 细项覆盖  
-- 默认不开 hand-tracking optional  
-- 首次进入：`openOverlay` 与 `requestSession` 并行；overlay 仍开时不因 remount 杀会话  
-- 会话核心在 `src/xr`；桌面 / MMD 各持独立 store + pending slot  
+- 提供今日任务列表、完成切换和下一日程。
+- 不在第一版实现完整日历编辑器；复杂编辑可标记为仅 2D 可用，但不得退出 VR。
+- 与 `shared/tasks`、`shared/calendar` 共用纯业务层。
 
-### 画质档（手测表）
+### 9. 计算器与计时器
 
-| 档位 | 意图 | 手测记录 |
-|------|------|----------|
-| 高 | 清晰优先 |  |
-| 均衡（默认） | ≥50–72 FPS 可玩 |  |
-| 低 | 稳帧优先 |  |
+- 计算器适合作为小尺寸常驻工具，支持控制器点击和物理键盘。
+- 计时器支持开始、暂停、重置，并在 VR 内给出非惊吓式完成反馈。
+- 通知遵循免打扰设置，不播放突兀空间音效。
 
----
+### 10. 浏览器硬化
 
-## 6. 风险
+- 显示 iframe 被拒、CSP/X-Frame-Options、加载超时和离线状态。
+- 与 2D 浏览器共用经过校验的书签和 URL 规范化，不继续维护默认目录分叉。
+- 支持地址输入、前进后退、刷新、书签和可控滚动。
+- 明确浏览器仍是受限预览器，不承诺所有网站可嵌入。
 
-| 风险 | 对策 |
-|------|------|
-| 手势链断裂 | 进入路径无 await dialog / 无 await probe |
-| iframe 被拒 | 文案 + 书签切换；不退 VR |
-| 拖拽 vs 点击 | 边框/顶条拖；内容面点击；位移阈值 |
-| 晕动 | 仅 snap turn；少加速 |
-| 包体 | Scene lazy；不引 uikit |
+## P2：沉浸体验与适配
 
----
+### 11. 舒适性
 
-## 7. 近期建议顺序（执行）
+- 默认仅 snap turn；连续转向和移动必须显式开启。
+- 提供转向角度、主手、射线长度、坐姿高度和面板距离。
+- 移动时可选 vignette；静止工作流不使用。
+- 避免头部绑定 HUD，状态信息放在稳定空间面板中。
 
-**VR 桌面：无。** 仅维护。
+### 12. 环境与音频
 
-**全项目优先（MMD VR）：** 见 [mmd-vr-showcase-roadmap.md](./mmd-vr-showcase-roadmap.md) §7。
+- 环境以安静、低对比、可读性优先；提供少量内置主题而非复杂场景市场。
+- 音频仅用于确认、计时和错误，提供总开关与音量。
+- 空间音频必须与来源位置一致；UI 点击默认保持克制。
 
----
+### 13. 自适应性能
 
-## 8. 参考
+- 收集本地会话帧时间滑动窗口，不上传设备信息。
+- 连续掉帧时建议降低面板分辨率/DPR，默认不悄悄覆盖用户选择。
+- 自动模式可按设备和刷新率选择档位，并显示当前实际 profile。
+- 建立面板数量、Canvas texture 尺寸、draw call 和内存预算。
 
-- [Immersive Web](https://immersiveweb.dev/)  
-- [three.js WebXR](https://threejs.org/docs/#manual/en/introduction/How-to-create-VR-content)  
-- [@react-three/xr](https://docs.pmnd.rs/xr)  
-- [R3F pitfalls](https://docs.pmnd.rs/react-three-fiber/advanced/pitfalls)  
-- `docs/mmd-studio.md` · `docs/settings-roadmap.md` · `docs/README.md`  
+建议预算：
+
+| 项目 | 均衡档目标 |
+|------|------------|
+| 帧率 | 跟随头显 72Hz；持续低于 60fps 给出建议 |
+| 同时可见主面板 | 6 个以内 |
+| 动态 Canvas 更新 | 只更新脏区域/脏帧 |
+| 后处理 | 默认无 |
+| 阴影 | 默认无实时阴影 |
+
+## 工程治理
+
+- `src/xr` 继续承载产品无关的 session、pending slot、质量轴和 mount guard。
+- `src/vrDesktop` 只承载 VR Desktop 场景、交互与薄业务适配。
+- 2D/VR 共用的数据能力放 `src/shared`，不得从 VR 场景 import 2D React app。
+- 高频 frame loop 不执行 React `setState`；使用 ref、Three 对象原地更新或受控外部 store。
+- 面板位姿、偏好和应用状态分别版本化，避免一个 reset 清除全部数据。
+- VR 独立设置应用是配置和诊断入口；控制中心只保留快速进入。
+
+## 测试矩阵
+
+自动测试：
+
+- 会话状态机、互斥、取消、sessionend 和 stale mount。
+- 位姿规范化、schema 迁移、越界恢复和 reset 范围。
+- 点击/拖拽阈值、单例面板和应用能力注册。
+- 画质 profile、自动建议和偏好 round-trip。
+
+设备手测：
+
+- Quest 2 / Quest 3：进入、退出、控制器、拖拽、文字清晰度和 30 分钟稳定性。
+- Chrome Android + 兼容头显：基础会话。
+- Desktop Chrome 无头显：禁用原因和模拟测试，不声称可用。
+- Firefox/Safari：明确 unsupported/limited 状态，不出现死循环 probe。
+
+## 推荐实施顺序
+
+1. 会话错误恢复、独立设置应用诊断和设备签字。
+2. 空间校准、recenter、布局 schema 与异常恢复。
+3. 输入状态机、拖拽手感、缩放和面板聚焦。
+4. Home 与应用能力注册表。
+5. 便签编辑闭环。
+6. 任务/日历概览、计算器和计时器。
+7. 浏览器硬化与共享书签。
+8. 舒适性、环境主题和自适应性能。
+
+第一阶段完成标准：用户可以从独立应用确认设备状态，可靠进入 Quest 会话，在坐姿或站姿下重新居中，移动/缩放/整理面板，退出后再次进入仍恢复可用布局；整个流程不依赖打开任何 2D 应用窗口。
+
+## 相关代码
+
+- `src/appModules/VrDesktopSettingsApp.tsx`
+- `src/vrDesktop/`
+- `src/xr/`
+- `src/shared/`
+- `src/components/ControlCenter.tsx`
+- `docs/settings-roadmap.md`
+- `docs/mmd-vr-showcase-roadmap.md`

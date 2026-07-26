@@ -43,7 +43,8 @@ export function paintHomePanel(
   clock: string,
   dateLine: string,
   meta?: {
-    windowCount?: number;
+    pendingTaskCount?: number;
+    nextEvent?: string;
     language?: "zh" | "en";
     statusLine?: string | null;
   },
@@ -80,14 +81,18 @@ export function paintHomePanel(
   ctx.fillText(dateLine, width / 2, clockY + 48);
   ctx.textAlign = "left";
 
-  if (meta?.windowCount != null && !hasStatus) {
-    const n = meta.windowCount;
-    const pill =
-      lang === "zh" ? (n === 1 ? "1 个窗口" : `${n} 个窗口`) : n === 1 ? "1 Window" : `${n} Windows`;
+  if (meta?.pendingTaskCount != null && !hasStatus) {
+    const n = meta.pendingTaskCount;
+    const tasks = lang === "zh" ? `${n} 个待办` : n === 1 ? "1 pending" : `${n} pending`;
+    const event = truncateCanvasText(ctx, meta.nextEvent ?? (lang === "zh" ? "暂无近期日程" : "No upcoming events"), width * 0.46, "500 20px system-ui, sans-serif");
     ctx.font = "500 20px system-ui, sans-serif";
-    const tw = ctx.measureText(pill).width;
-    const pw = tw + 32;
-    paintPill(ctx, (width - pw) / 2, Math.floor(height * 0.78), pill, "500 20px system-ui, sans-serif");
+    const taskW = ctx.measureText(tasks).width + 32;
+    const eventW = ctx.measureText(event).width + 32;
+    const gap = 12;
+    const startX = (width - taskW - eventW - gap) / 2;
+    const y = Math.floor(height * 0.78);
+    paintPill(ctx, startX, y, tasks, "500 20px system-ui, sans-serif");
+    paintPill(ctx, startX + taskW + gap, y, event, "500 20px system-ui, sans-serif");
   }
 
   if (meta?.statusLine) {
@@ -109,6 +114,14 @@ export function paintHomePanel(
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
   }
+}
+
+function truncateCanvasText(ctx: CanvasRenderingContext2D, value: string, maxWidth: number, font: string) {
+  ctx.font = font;
+  if (ctx.measureText(value).width <= maxWidth) return value;
+  let next = value;
+  while (next.length > 4 && ctx.measureText(`${next}…`).width > maxWidth) next = next.slice(0, -1);
+  return `${next}…`;
 }
 
 export type LauncherHit =
@@ -151,13 +164,14 @@ export function paintLauncherPanel(
     const tw = ctx.measureText(label).width;
     const tabW = Math.max(88, tw + 36);
     const active = i === pageIndex;
+    const hovered = hoverId === `tab:${i}`;
 
     roundRectPath(ctx, tabX, tabY, tabW, tabH, 10);
-    if (active) {
+    if (active || hovered) {
       ctx.fillStyle = vrTheme.panelHover;
       ctx.fill();
-      ctx.strokeStyle = vrTheme.primary;
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = active ? vrTheme.primary : vrTheme.borderStrong;
+      ctx.lineWidth = 2;
       ctx.stroke();
       ctx.fillStyle = vrTheme.ink;
     } else {
@@ -175,7 +189,7 @@ export function paintLauncherPanel(
 
   // Divider under tabs
   ctx.strokeStyle = vrTheme.border;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(40, tabY + tabH + 12);
   ctx.lineTo(width - 40, tabY + tabH + 12);
@@ -214,8 +228,7 @@ export function paintLauncherPanel(
     ctx.fillStyle = vrTheme.ink;
     ctx.font = "500 21px system-ui, sans-serif";
     ctx.textBaseline = "middle";
-    const maxChars = 8;
-    const label = item.label.length > maxChars ? `${item.label.slice(0, maxChars - 1)}…` : item.label;
+    const label = truncateCanvasText(ctx, item.label, cellW - 56, "500 21px system-ui, sans-serif");
     ctx.fillText(label, x + 44, cy + 0.5);
     ctx.textBaseline = "alphabetic";
 
@@ -296,6 +309,7 @@ export function paintVrBrowserChrome(
     canForward: boolean;
     bookmarks: { title: string; url: string }[];
     status?: string | null;
+    hoverId?: string | null;
     /** Leave page area transparent for Html iframe. */
     cutoutContent?: boolean;
   },
@@ -335,10 +349,11 @@ export function paintVrBrowserChrome(
   for (const item of nav) {
     const w = item.action === "home" || item.action === "external" ? 70 : btnW;
     roundRectPath(ctx, x, barY, w, barH, 12);
-    ctx.fillStyle = item.enabled ? vrTheme.panel : vrTheme.bgDeep;
+    const hovered = state.hoverId === `nav:${item.action}`;
+    ctx.fillStyle = item.enabled ? hovered ? vrTheme.panelHover : vrTheme.panel : vrTheme.bgDeep;
     ctx.fill();
-    ctx.strokeStyle = vrTheme.border;
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = hovered && item.enabled ? vrTheme.primary : vrTheme.border;
+    ctx.lineWidth = hovered ? 2 : 1.5;
     ctx.stroke();
     ctx.fillStyle = item.enabled ? vrTheme.ink : vrTheme.subtle;
     ctx.font = "600 20px system-ui, sans-serif";
@@ -380,14 +395,16 @@ export function paintVrBrowserChrome(
     const w = Math.min(140, Math.max(72, tw + 28));
     if (bmX + w > width - 20) break;
     roundRectPath(ctx, bmX, bmY, w, bmH, 10);
-    ctx.fillStyle = vrTheme.panel;
+    const hovered = state.hoverId === `bookmark:${bm.url}`;
+    ctx.fillStyle = hovered ? vrTheme.panelHover : vrTheme.panel;
     ctx.fill();
-    ctx.strokeStyle = vrTheme.border;
+    ctx.strokeStyle = hovered ? vrTheme.primary : vrTheme.border;
+    ctx.lineWidth = hovered ? 2 : 1.5;
     ctx.stroke();
     ctx.fillStyle = vrTheme.ink;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(bm.title, bmX + w / 2, bmY + bmH / 2 + 1);
+    ctx.fillText(truncateCanvasText(ctx, bm.title, w - 20, "600 18px system-ui, sans-serif"), bmX + w / 2, bmY + bmH / 2 + 1);
     hits.push({ kind: "bookmark", url: bm.url, rect: { x: bmX, y: bmY, w, h: bmH } });
     bmX += w + 8;
   }
@@ -439,7 +456,7 @@ export function paintStickyPreviewPanel(
   ctx.fillText(title, 40, 46);
 
   ctx.strokeStyle = vrTheme.border;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(40, 62);
   ctx.lineTo(width - 40, 62);
@@ -447,7 +464,7 @@ export function paintStickyPreviewPanel(
 
   const list = notes.filter((n) => n.text.trim()).slice(0, 4);
   if (!list.length) {
-    ctx.fillStyle = vrTheme.subtle;
+    ctx.fillStyle = vrTheme.muted;
     ctx.font = "500 24px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(empty, width / 2, height * 0.45);

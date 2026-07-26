@@ -1,0 +1,287 @@
+.mmd-vr-prep-shell {
+  height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--os-ink);
+  background:
+    linear-gradient(90deg, color-mix(in oklab, var(--os-border) 28%, transparent) 1px, transparent 1px) 0 0 / 48px 48px,
+    linear-gradient(color-mix(in oklab, var(--os-border) 28%, transparent) 1px, transparent 1px) 0 0 / 48px 48px,
+    var(--os-bg);
+}
+
+.mmd-vr-prep-nav {
+  height: 64px;
+  padding: 0 clamp(20px, 4vw, 64px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--os-border);
+  background: color-mix(in oklab, var(--os-bg) 88%, transparent);
+  backdrop-filter: blur(16px);
+}
+
+.mmd-vr-prep-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.mmd-vr-prep-mark,
+.mmd-vr-prep-kicker {
+  font: 700 11px/1.2 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--os-muted);
+}
+
+.mmd-vr-prep-layout {
+  width: min(1180px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: clamp(42px, 7vh, 84px) 0 64px;
+  display: grid;
+  grid-template-columns: minmax(260px, .72fr) minmax(480px, 1.28fr);
+  gap: clamp(40px, 7vw, 110px);
+  align-items: start;
+}
+
+.mmd-vr-prep-intro {
+  position: sticky;
+  top: 112px;
+}
+
+.mmd-vr-prep-intro h1 {
+  margin: 18px 0;
+  max-width: 9ch;
+  font-size: clamp(42px, 5.5vw, 76px);
+  line-height: .98;
+  letter-spacing: -.055em;
+}
+
+.mmd-vr-prep-intro p {
+  max-width: 38ch;
+  color: var(--os-muted);
+  line-height: 1.7;
+}
+
+.mmd-vr-prep-signal {
+  margin-top: 32px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.mmd-vr-prep-signal span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--os-primary);
+  box-shadow: 0 0 0 5px color-mix(in oklab, var(--os-primary) 16%, transparent);
+}
+
+.mmd-vr-prep-workbench {
+  display: grid;
+  gap: 18px;
+}
+
+.mmd-vr-prep-drop,
+.mmd-vr-prep-section,
+.mmd-vr-prep-motion-grid {
+  border: 1px solid var(--os-border);
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--os-surface) 94%, transparent);
+}
+
+.mmd-vr-prep-drop {
+  min-height: 138px;
+  padding: 22px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 18px;
+  transition: border-color .16s ease, transform .16s ease;
+}
+
+.mmd-vr-prep-drop.is-dragging {
+  border-color: var(--os-primary);
+  transform: translateY(-2px);
+}
+
+.mmd-vr-prep-drop-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: var(--os-primary);
+  background: color-mix(in oklab, var(--os-primary) 12%, var(--os-surface));
+}
+
+.mmd-vr-prep-drop strong,
+.mmd-vr-prep-section-head strong { display: block; font-size: 16px; }
+.mmd-vr-prep-drop p { margin: 6px 0 0; color: var(--os-muted); font-size: 13px; line-height: 1.5; }
+.mmd-vr-prep-section { padding: 22px; }
+.mmd-vr-prep-section-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.mmd-vr-prep-section-head span { display: block; margin-top: 5px; color: var(--os-muted); font-size: 12px; }
+.mmd-vr-prep-section-head b { font: 700 18px/1 ui-monospace, monospace; color: var(--os-primary); }
+.mmd-vr-prep-models { margin-top: 18px; display: grid; gap: 8px; }
+
+.mmd-vr-prep-model {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-align: left;
+  background: var(--os-panel);
+}
+
+.mmd-vr-prep-model.is-selected { border-color: color-mix(in oklab, var(--os-primary) 55%, var(--os-border)); }
+.mmd-vr-prep-model > span { color: var(--os-muted); font: 700 11px/1 ui-monospace, monospace; }
+.mmd-vr-prep-model strong, .mmd-vr-prep-model small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mmd-vr-prep-model small { margin-top: 4px; color: var(--os-muted); }
+.mmd-vr-prep-model > iconify-icon { color: var(--os-primary); }
+.mmd-vr-prep-empty { margin-top: 18px; padding: 32px; border: 1px dashed var(--os-border); border-radius: 12px; color: var(--os-muted); text-align: center; }
+
+.mmd-vr-prep-motion-grid {
+  padding: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.mmd-vr-prep-motion-grid label { display: grid; gap: 7px; color: var(--os-muted); font-size: 12px; font-weight: 700; }
+.mmd-vr-prep-motion-grid select { width: 100%; min-width: 0; padding: 11px 12px; border: 1px solid var(--os-border); border-radius: 10px; color: var(--os-ink); background: var(--os-panel); }
+.mmd-vr-prep-error { margin: 0; color: var(--os-danger); font-size: 13px; }
+
+.mmd-vr-prep-config {
+  border: 1px solid var(--os-border);
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--os-surface) 94%, transparent);
+  overflow: clip;
+}
+
+.mmd-vr-prep-config summary {
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.mmd-vr-prep-config summary::-webkit-details-marker { display: none; }
+.mmd-vr-prep-config summary strong { display: block; }
+.mmd-vr-prep-config summary span { display: block; margin-top: 5px; color: var(--os-muted); font-size: 11px; line-height: 1.45; }
+.mmd-vr-prep-config summary > iconify-icon { flex: 0 0 auto; transition: transform .16s ease; }
+.mmd-vr-prep-config[open] summary > iconify-icon { transform: rotate(180deg); }
+
+.mmd-vr-prep-config-body {
+  padding: 0 20px 20px;
+  display: grid;
+  gap: 14px;
+  border-top: 1px solid var(--os-border);
+}
+
+.mmd-vr-prep-config-row,
+.mmd-vr-prep-toggle {
+  padding-top: 14px;
+  display: grid;
+  grid-template-columns: minmax(110px, .7fr) minmax(260px, 1.3fr);
+  align-items: center;
+  gap: 14px;
+  color: var(--os-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mmd-vr-prep-options {
+  padding: 3px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 3px;
+  border-radius: 10px;
+  background: var(--os-panel);
+}
+
+.mmd-vr-prep-options button {
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--os-muted);
+  background: transparent;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.mmd-vr-prep-options button.is-active {
+  color: var(--os-primary-contrast);
+  background: var(--os-primary);
+}
+
+.mmd-vr-theme-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mmd-vr-theme-swatches button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+}
+
+.mmd-vr-theme-swatches button.is-active {
+  border-color: var(--os-ink);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--os-primary) 30%, transparent), inset 0 0 0 1px rgba(255, 255, 255, .22);
+  transform: scale(1.1);
+}
+
+.mmd-vr-prep-toggle { grid-template-columns: 1fr auto; }
+.mmd-vr-prep-toggle input { width: 19px; height: 19px; accent-color: var(--os-primary); }
+.mmd-vr-prep-config-body > p { margin: 0; color: var(--os-muted); font-size: 11px; line-height: 1.5; }
+
+.mmd-vr-prep-enter {
+  min-height: 62px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 14px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  color: var(--os-primary-contrast);
+  background: var(--os-primary);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.mmd-vr-prep-enter:disabled { opacity: .45; cursor: not-allowed; }
+.mmd-vr-prep-enter:not(:disabled):active { transform: translateY(1px); }
+
+@media (max-width: 780px) {
+  .mmd-vr-prep-layout { grid-template-columns: 1fr; gap: 32px; padding-top: 36px; }
+  .mmd-vr-prep-intro { position: static; }
+  .mmd-vr-prep-intro h1 { max-width: 12ch; font-size: clamp(40px, 13vw, 58px); }
+  .mmd-vr-prep-drop { grid-template-columns: auto 1fr; }
+  .mmd-vr-prep-drop .button-primary { grid-column: 1 / -1; width: 100%; }
+  .mmd-vr-prep-motion-grid { grid-template-columns: 1fr; }
+  .mmd-vr-prep-config-row { grid-template-columns: 1fr; }
+  .mmd-vr-prep-options { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mmd-vr-prep-mark { display: none; }
+}

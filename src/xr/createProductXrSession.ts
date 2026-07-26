@@ -20,6 +20,7 @@ export type ProductXrSession<Q> = {
  */
 export function createProductXrSession<Q>(opts: {
   resolveFrameRate: (quality: Q) => ImmersiveFrameRate;
+  configureRenderer?: (gl: WebGLRenderer, quality: Q) => void;
 }): ProductXrSession<Q> {
   const xrStore = createAppXrStore();
   const slot = createPendingSessionSlot();
@@ -39,8 +40,10 @@ export function createProductXrSession<Q>(opts: {
     clear: () => slot.clear(),
     beginFromClick: () => slot.beginFromClick(),
     applyFrameRate,
-    attachToRenderer: (gl, quality) =>
-      slot.attachToRenderer(gl, quality !== undefined ? () => applyFrameRate(quality) : undefined),
+    attachToRenderer: (gl, quality) => {
+      if (quality !== undefined && !gl.xr.isPresenting) opts.configureRenderer?.(gl, quality);
+      return slot.attachToRenderer(gl, quality !== undefined ? () => applyFrameRate(quality) : undefined);
+    },
     end: () => slot.end(() => xrStore.getState().session),
   };
 }

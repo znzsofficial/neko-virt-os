@@ -1,39 +1,27 @@
 import { create } from "zustand";
 import { createLocalPrefsStorage } from "../shared/localPrefs";
 import {
-  normalizeImmersiveAntialias,
-  normalizeImmersiveDpr,
-  normalizeImmersiveFrameRate,
   normalizeImmersiveQuality,
-  type ImmersiveAntialiasPref,
-  type ImmersiveDprPref,
-  type ImmersiveFrameRatePref,
-  type ImmersiveRenderQuality,
 } from "../xr";
 import { getXrDiagnostics, getXrSystem } from "./vrSession";
+import {
+  VR_DESKTOP_PREFS_KEY,
+  VR_DESKTOP_PREFS_LEGACY_KEY,
+  normalizeVrDesktopPrefs,
+  type VrDesktopPrefs,
+} from "./vrDesktopPrefs";
 
-export type VrRenderQuality = ImmersiveRenderQuality;
-/** Per-setting override; auto = follow renderQuality preset. */
-export type VrDprPref = ImmersiveDprPref;
-export type VrPanelScalePref = "auto" | "low" | "medium" | "high";
-export type VrFrameRatePref = ImmersiveFrameRatePref;
-export type VrAntialiasPref = ImmersiveAntialiasPref;
-
-export type VrDesktopPrefs = {
-  /** Settings → Developer switch. */
-  enabled: boolean;
-  /** Soft edge vignette in VR (default off; also disabled on low quality). */
-  softEdges: boolean;
-  /** VR-only render budget (independent of global animation quality). */
-  renderQuality: VrRenderQuality;
-  /** In-scene FPS readout for headset acceptance. */
-  showFps: boolean;
-  /** Fine overrides (auto = use preset). */
-  dprPref: VrDprPref;
-  panelScalePref: VrPanelScalePref;
-  frameRatePref: VrFrameRatePref;
-  antialiasPref: VrAntialiasPref;
-};
+export type {
+  VrAntialiasPref,
+  VrDesktopPrefs,
+  VrDprPref,
+  VrFrameRatePref,
+  VrFramebufferScalePref,
+  VrFoveationPref,
+  VrFloorDetailPref,
+  VrPanelScalePref,
+  VrRenderQuality,
+} from "./vrDesktopPrefs";
 
 export type VrSessionPhase = "idle" | "entering" | "active" | "error";
 
@@ -71,14 +59,9 @@ type VrDesktopStore = {
   resetLayout: () => void;
 };
 
-function normalizePanelScale(value: unknown): VrPanelScalePref {
-  if (value === "auto" || value === "low" || value === "medium" || value === "high") return value;
-  return "auto";
-}
-
 const prefsStorage = createLocalPrefsStorage<VrDesktopPrefs>({
-  key: "neko-virt-os.vr-desktop.v2",
-  legacyKey: "neko-virt-os.vr-desktop.v1",
+  key: VR_DESKTOP_PREFS_KEY,
+  legacyKey: VR_DESKTOP_PREFS_LEGACY_KEY,
   defaults: () => ({
     enabled: true,
     softEdges: false,
@@ -88,17 +71,12 @@ const prefsStorage = createLocalPrefsStorage<VrDesktopPrefs>({
     panelScalePref: "auto",
     frameRatePref: "auto",
     antialiasPref: "auto",
+    framebufferScalePref: "auto",
+    foveationPref: "auto",
+    floorDetailPref: "auto",
+    themeColor: "blue",
   }),
-  normalize: (parsed) => ({
-    enabled: parsed.enabled !== false,
-    softEdges: Boolean(parsed.softEdges),
-    renderQuality: normalizeImmersiveQuality(parsed.renderQuality),
-    showFps: Boolean(parsed.showFps),
-    dprPref: normalizeImmersiveDpr(parsed.dprPref),
-    panelScalePref: normalizePanelScale(parsed.panelScalePref),
-    frameRatePref: normalizeImmersiveFrameRate(parsed.frameRatePref),
-    antialiasPref: normalizeImmersiveAntialias(parsed.antialiasPref),
-  }),
+  normalize: normalizeVrDesktopPrefs,
 });
 
 function computeCapability(): VrCapability {
@@ -146,10 +124,8 @@ export const useVrDesktopStore = create<VrDesktopStore>((set, get) => ({
     if (patch.renderQuality != null) {
       prefs.renderQuality = normalizeImmersiveQuality(patch.renderQuality);
     }
-    if (patch.dprPref != null) prefs.dprPref = normalizeImmersiveDpr(patch.dprPref);
-    if (patch.panelScalePref != null) prefs.panelScalePref = normalizePanelScale(patch.panelScalePref);
-    if (patch.frameRatePref != null) prefs.frameRatePref = normalizeImmersiveFrameRate(patch.frameRatePref);
-    if (patch.antialiasPref != null) prefs.antialiasPref = normalizeImmersiveAntialias(patch.antialiasPref);
+    const normalized = normalizeVrDesktopPrefs(prefs);
+    Object.assign(prefs, normalized);
     prefsStorage.write(prefs);
     set({ prefs });
     if (prefs.enabled) void refreshVrCapability();

@@ -7,6 +7,7 @@ import { useLanguageStore, type TranslationKey } from "../languageStore";
 import { phrase } from "../shell/phrase";
 import {
   collectNetworkSnapshot,
+  formatConnectionType,
   formatEffectiveType,
   subscribeNetworkChange,
   type NetworkSnapshot,
@@ -23,6 +24,7 @@ import {
   downloadSettingsBackup,
   parseSettingsBackup,
 } from "../system/settingsBackup";
+import { resetSiteData } from "../system/siteDataReset";
 import {
   ACCENT_CHROMA,
   ACCENT_COLORS,
@@ -42,26 +44,9 @@ import {
   type StorageSnapshot,
 } from "../system/systemInfo";
 import type { AutoLockMinutes } from "../system/systemPrefs";
-import { requestMmdVrEnter } from "../mmdVrShowcase/requestMmdVrEnter";
-import {
-  formatMmdVrProfileSummary,
-  getMmdVrRenderProfile,
-} from "../mmdVrShowcase/mmdVrQuality";
-import { useMmdVrStore } from "../mmdVrShowcase/mmdVrStore";
-import { requestVrDesktopEnter } from "../vrDesktop/requestVrEnter";
-import {
-  formatVrCapabilityHint,
-  refreshVrCapability,
-  useVrDesktopStore,
-  type VrAntialiasPref,
-  type VrDprPref,
-  type VrFrameRatePref,
-  type VrPanelScalePref,
-} from "../vrDesktop/vrDesktopStore";
-import { formatVrProfileSummary, getVrRenderProfile } from "../vrDesktop/vrQuality";
 import { useDesktopStore } from "../windowStore";
-
-type SettingsSection = "general" | "appearance" | "notifications" | "network" | "data" | "developer" | "about";
+import { SettingsChoiceGroup, SettingsSwitch } from "./settings/components/SettingsControls";
+import { consumeSettingsSection, subscribeSettingsSection, type SettingsSection } from "./settings/settingsNavigation";
 
 function dash(value: string | number | null | undefined, empty = "—") {
   if (value == null || value === "" || value === "—") return empty;
@@ -87,16 +72,18 @@ function SettingsRowLabel({ icon, children }: { icon: string; children: ReactNod
 }
 
 export function SettingsApp() {
-  const [section, setSection] = useState<SettingsSection>("general");
+  const [section, setSection] = useState<SettingsSection>(() => consumeSettingsSection("general"));
   const [themeSettings, setThemeSettings] = useState<ThemeSettings>(readThemeSettings);
-  const [storage, setStorage] = useState<StorageSnapshot | null>(null);
+  const [storage, setStorage] = useState<StorageSnapshot | null | undefined>(undefined);
   const [deviceInfo, setDeviceInfo] = useState<DeviceSnapshot | undefined>();
   const [network, setNetwork] = useState<NetworkSnapshot | null>(null);
   const [networkBusy, setNetworkBusy] = useState(false);
+  const [networkError, setNetworkError] = useState(false);
+  const [siteDataBusy, setSiteDataBusy] = useState(false);
+  const [settingsTransferBusy, setSettingsTransferBusy] = useState(false);
 
   const addNotification = useNotificationStore((state) => state.addNotification);
   const resetVirtualFiles = useFsStore((state) => state.resetVirtualFiles);
-  const resetWindowLayout = useDesktopStore((state) => state.resetWindowLayout);
   const language = useLanguageStore((state) => state.language);
   const setLanguage = useLanguageStore((state) => state.setLanguage);
   const t = useLanguageStore((state) => state.t);
@@ -110,29 +97,41 @@ export function SettingsApp() {
   const setWidgetsCollapsed = useOsUiStore((state) => state.setWidgetsCollapsed);
   const desktopLayoutMode = useDesktopStore((state) => state.desktopLayoutMode);
   const setDesktopLayoutMode = useDesktopStore((state) => state.setDesktopLayoutMode);
-  const vrPrefs = useVrDesktopStore((state) => state.prefs);
-  const setVrPrefs = useVrDesktopStore((state) => state.setPrefs);
-  const vrCapability = useVrDesktopStore((state) => state.capability);
-  const mmdVrPhase = useMmdVrStore((state) => state.phase);
-  const mmdVrPrefs = useMmdVrStore((state) => state.prefs);
-  const setMmdVrPrefs = useMmdVrStore((state) => state.setPrefs);
-  const vrSessionSupported = useVrDesktopStore((state) => state.sessionSupported);
-  const vrPhase = useVrDesktopStore((state) => state.phase);
-  const vrLastError = useVrDesktopStore((state) => state.lastError);
+  const openApp = useDesktopStore((state) => state.openApp);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const networkControllerRef = useRef<AbortController | null>(null);
+  const networkGenerationRef = useRef(0);
   const dndEnabled = notificationPrefs.dndEnabled;
   const dndStart = notificationPrefs.dndStart;
   const dndEnd = notificationPrefs.dndEnd;
 
-  useEffect(() => {
-    navigator.storage?.estimate().then(setStorage).catch(() => setStorage(null));
-    void readHighEntropyDeviceInfo().then(setDeviceInfo);
-  }, []);
+  useEffect(() => subscribeSettingsSection(setSection), []);
 
   useEffect(() => {
-    if (!vrPrefs.enabled) return;
-    void refreshVrCapability();
-  }, [vrPrefs.enabled]);
+    if (section !== "data" || storage !== undefined) return;
+    let cancelled = false;
+    navigator.storage?.estimate()
+      .then((snapshot) => {
+        if (!cancelled) setStorage(snapshot);
+      })
+      .catch(() => {
+        if (!cancelled) setStorage(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [section, storage]);
+
+  useEffect(() => {
+    if (section !== "about" || deviceInfo !== undefined) return;
+    let cancelled = false;
+    void readHighEntropyDeviceInfo().then((snapshot) => {
+      if (!cancelled) setDeviceInfo(snapshot ?? {});
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [deviceInfo, section]);
 
   useEffect(() => {
     // Keep document tokens in sync when local settings state changes (mode/density/wallpaper/accent).
@@ -140,30 +139,22 @@ export function SettingsApp() {
   }, [themeSettings]);
 
   useEffect(() => {
-    let cancelled = false;
-    const controller = new AbortController();
-
-    async function refresh() {
-      setNetworkBusy(true);
-      try {
-        const snapshot = await collectNetworkSnapshot(controller.signal);
-        if (!cancelled) setNetwork(snapshot);
-      } finally {
-        if (!cancelled) setNetworkBusy(false);
-      }
-    }
-
-    void refresh();
+    if (section !== "network") return;
     const unsubscribe = subscribeNetworkChange(() => {
-      void refresh();
+      networkControllerRef.current?.abort();
+      networkGenerationRef.current += 1;
+      setNetwork(null);
+      setNetworkBusy(false);
+      setNetworkError(false);
     });
-
     return () => {
-      cancelled = true;
-      controller.abort();
       unsubscribe();
+      networkControllerRef.current?.abort();
+      networkControllerRef.current = null;
+      networkGenerationRef.current += 1;
+      setNetworkBusy(false);
     };
-  }, []);
+  }, [section]);
 
   async function clearCacheStorage() {
     if (!("caches" in window)) {
@@ -197,6 +188,7 @@ export function SettingsApp() {
   }
 
   async function clearSiteData() {
+    if (siteDataBusy) return;
     const ok = await appConfirm({
       title: t("dialogConfirmTitle"),
       message: t("confirmClearSiteData"),
@@ -204,15 +196,35 @@ export function SettingsApp() {
       danger: true,
     });
     if (!ok) return;
-    if ("caches" in window) {
-      const keys = await caches.keys();
-      await Promise.all(keys.map((key) => caches.delete(key)));
+    setSiteDataBusy(true);
+    try {
+      const result = await resetSiteData();
+      if (!result.ok) {
+        const failedCount = result.stages.filter((stage) => !stage.ok).length;
+        addNotification({
+          title: t("siteDataResetFailed"),
+          message: `${t("siteDataResetFailedMessage")} (${failedCount})`,
+          type: "error",
+          category: "system",
+          appId: "settings",
+        });
+        window.setTimeout(() => window.location.reload(), 700);
+        return;
+      }
+      addNotification({ title: t("siteDataCleared"), message: t("siteDataClearedMessage"), type: "success", category: "system", appId: "settings" });
+      window.setTimeout(() => window.location.reload(), 700);
+    } catch {
+      addNotification({
+        title: t("siteDataResetFailed"),
+        message: t("siteDataResetFailedMessage"),
+        type: "error",
+        category: "system",
+        appId: "settings",
+      });
+      window.setTimeout(() => window.location.reload(), 700);
+    } finally {
+      setSiteDataBusy(false);
     }
-    localStorage.clear();
-    resetWindowLayout();
-    await resetVirtualFiles();
-    addNotification({ title: t("siteDataCleared"), message: t("siteDataClearedMessage"), type: "success", category: "system", appId: "settings" });
-    window.setTimeout(() => window.location.reload(), 700);
   }
 
   async function setWallpaper(target: "light" | "dark", wallpaperId: ThemeSettings["wallpaperId"]) {
@@ -249,7 +261,7 @@ export function SettingsApp() {
     return groups;
   }, {});
   const randomWallpaperIds = wallpaperEntries.map(([id]) => id);
-  const aboutRows = useMemo(() => getDeviceRows(storage, deviceInfo, t), [deviceInfo, storage, t]);
+  const aboutRows = useMemo(() => getDeviceRows(storage ?? null, deviceInfo, t), [deviceInfo, storage, t]);
 
   function syncWallpapers() {
     const sourceId = effectiveTheme === "dark" ? themeSettings.wallpaperDarkId : themeSettings.wallpaperLightId;
@@ -269,20 +281,42 @@ export function SettingsApp() {
   }
 
   async function refreshNetwork() {
+    networkControllerRef.current?.abort();
+    const controller = new AbortController();
+    networkControllerRef.current = controller;
+    const generation = ++networkGenerationRef.current;
     setNetworkBusy(true);
+    setNetworkError(false);
     try {
-      setNetwork(await collectNetworkSnapshot());
+      const snapshot = await collectNetworkSnapshot(controller.signal);
+      if (generation === networkGenerationRef.current) setNetwork(snapshot);
+    } catch (error) {
+      if (generation === networkGenerationRef.current && !(error instanceof DOMException && error.name === "AbortError")) {
+        setNetworkError(true);
+      }
     } finally {
-      setNetworkBusy(false);
+      if (generation === networkGenerationRef.current) {
+        setNetworkBusy(false);
+        if (networkControllerRef.current === controller) networkControllerRef.current = null;
+      }
     }
   }
 
   function exportSettings() {
-    downloadSettingsBackup();
-    addNotification({ title: t("settingsExportDone"), message: "", type: "success", category: "system", appId: "settings" });
+    if (settingsTransferBusy) return;
+    setSettingsTransferBusy(true);
+    try {
+      downloadSettingsBackup();
+      addNotification({ title: t("settingsExportDone"), message: t("settingsBackupScope"), type: "success", category: "system", appId: "settings" });
+    } catch {
+      addNotification({ title: t("settingsExportFailed"), message: t("settingsExportFailedMessage"), type: "error", category: "system", appId: "settings" });
+    } finally {
+      setSettingsTransferBusy(false);
+    }
   }
 
   async function importSettingsFile(file: File) {
+    if (settingsTransferBusy) return;
     const ok = await appConfirm({
       title: t("dialogConfirmTitle"),
       message: t("confirmImportSettings"),
@@ -290,11 +324,12 @@ export function SettingsApp() {
       danger: true,
     });
     if (!ok) return;
+    setSettingsTransferBusy(true);
     try {
       const text = await file.text();
       const backup = parseSettingsBackup(text);
       applySettingsBackup(backup);
-      addNotification({ title: t("settingsImportDone"), message: "", type: "success", category: "system", appId: "settings" });
+      addNotification({ title: t("settingsImportDone"), message: t("settingsImportDoneMessage"), type: "success", category: "system", appId: "settings" });
       window.setTimeout(() => window.location.reload(), 400);
     } catch {
       addNotification({
@@ -304,6 +339,8 @@ export function SettingsApp() {
         category: "system",
         appId: "settings",
       });
+    } finally {
+      setSettingsTransferBusy(false);
     }
   }
 
@@ -325,6 +362,8 @@ export function SettingsApp() {
             key={item.id}
             type="button"
             className={clsx("settings-nav-item", item.tint, section === item.id && "is-active")}
+            aria-current={section === item.id ? "page" : undefined}
+            aria-label={t(item.label)}
             onClick={() => setSection(item.id)}
           >
             <Icon icon={item.icon} width={16} height={16} />
@@ -333,114 +372,75 @@ export function SettingsApp() {
         ))}
       </aside>
 
-      <div className="settings-main">
+      <div className="settings-main" id={`settings-panel-${section}`} aria-labelledby={`settings-heading-${section}`}>
         {section === "general" ? (
           <div className="settings-stack">
             <header className="settings-pane-head">
-              <h2>{t("settingsNavGeneral")}</h2>
+              <h2 id="settings-heading-general">{t("settingsNavGeneral")}</h2>
             </header>
 
             <section className="settings-card">
               <header className="settings-card-head">
                 <SettingsCardTitle icon="solar:global-bold-duotone">{t("settingsLanguage")}</SettingsCardTitle>
               </header>
-              <div className="settings-choice-grid">
-                {(["zh", "en"] as const).map((lang) => (
-                  <button
-                    key={lang}
-                    type="button"
-                    className={clsx("settings-choice-card", language === lang && "is-active")}
-                    onClick={() => setLanguage(lang)}
-                  >
-                    <span className="settings-choice-icon">
-                      <Icon icon={lang === "zh" ? "solar:global-bold-duotone" : "solar:text-bold-duotone"} width={16} height={16} />
-                    </span>
-                    <strong>{lang === "zh" ? t("languageChinese") : t("languageEnglish")}</strong>
-                  </button>
-                ))}
-              </div>
+              <SettingsChoiceGroup
+                label={t("settingsLanguage")}
+                value={language}
+                onChange={setLanguage}
+                options={(["zh", "en"] as const).map((lang) => ({
+                  value: lang,
+                  label: lang === "zh" ? t("languageChinese") : t("languageEnglish"),
+                  content: <><span className="settings-choice-icon"><Icon icon={lang === "zh" ? "solar:global-bold-duotone" : "solar:text-bold-duotone"} width={16} height={16} /></span><strong>{lang === "zh" ? t("languageChinese") : t("languageEnglish")}</strong></>,
+                }))}
+              />
             </section>
 
             <section className="settings-card">
               <header className="settings-card-head">
                 <SettingsCardTitle icon="solar:clock-circle-bold-duotone">{t("settingsTimeFormat")}</SettingsCardTitle>
               </header>
-              <div className="settings-choice-grid">
-                {([
+              <SettingsChoiceGroup
+                label={t("settingsTimeFormat")}
+                value={systemPrefs.hour12 ? "12" : "24"}
+                onChange={(value) => setSystemPrefs({ hour12: value === "12" })}
+                options={([
                   { hour12: false, label: t("settingsTime24h"), icon: "solar:clock-circle-bold-duotone" },
                   { hour12: true, label: t("settingsTime12h"), icon: "solar:history-bold-duotone" },
-                ]).map((item) => (
-                  <button
-                    key={String(item.hour12)}
-                    type="button"
-                    className={clsx("settings-choice-card", systemPrefs.hour12 === item.hour12 && "is-active")}
-                    onClick={() => setSystemPrefs({ hour12: item.hour12 })}
-                  >
-                    <span className="settings-choice-icon">
-                      <Icon icon={item.icon} width={16} height={16} />
-                    </span>
-                    <strong>{item.label}</strong>
-                  </button>
-                ))}
-              </div>
+                ]).map((item) => ({ value: item.hour12 ? "12" as const : "24" as const, label: item.label, content: <><span className="settings-choice-icon"><Icon icon={item.icon} width={16} height={16} /></span><strong>{item.label}</strong></> }))}
+              />
             </section>
 
             <section className="settings-card">
               <header className="settings-card-head">
                 <SettingsCardTitle icon="solar:lock-keyhole-bold-duotone">{t("settingsAutoLock")}</SettingsCardTitle>
               </header>
-              <div className="settings-select-group">
-                {([
+              <SettingsChoiceGroup
+                label={t("settingsAutoLock")}
+                value={String(systemPrefs.autoLockMinutes)}
+                className="settings-select-group"
+                optionClassName="settings-btn-pill"
+                onChange={(value) => setSystemPrefs({ autoLockMinutes: Number(value) as AutoLockMinutes })}
+                options={([
                   { minutes: 0 as AutoLockMinutes, label: t("settingsAutoLockNever") },
                   { minutes: 5 as AutoLockMinutes, label: t("settingsAutoLock5") },
                   { minutes: 15 as AutoLockMinutes, label: t("settingsAutoLock15") },
                   { minutes: 30 as AutoLockMinutes, label: t("settingsAutoLock30") },
-                ]).map((item) => (
-                  <button
-                    key={item.minutes}
-                    type="button"
-                    className={clsx("settings-btn-pill", systemPrefs.autoLockMinutes === item.minutes && "is-active")}
-                    onClick={() => setSystemPrefs({ autoLockMinutes: item.minutes })}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
+                ]).map((item) => ({ value: String(item.minutes), label: item.label }))}
+              />
             </section>
 
             <section className="settings-card">
               <div className="settings-row-line">
                 <SettingsRowLabel icon="solar:text-bold-duotone">{t("settingsTaskbarLabels")}</SettingsRowLabel>
-                <button
-                  type="button"
-                  className={clsx("settings-switch", systemPrefs.taskbarShowLabels && "is-on")}
-                  aria-pressed={systemPrefs.taskbarShowLabels}
-                  onClick={() => setSystemPrefs({ taskbarShowLabels: !systemPrefs.taskbarShowLabels })}
-                >
-                  <i />
-                </button>
+                <SettingsSwitch checked={systemPrefs.taskbarShowLabels} label={t("settingsTaskbarLabels")} onChange={(checked) => setSystemPrefs({ taskbarShowLabels: checked })} />
               </div>
               <div className="settings-row-line">
                 <SettingsRowLabel icon="solar:eye-bold-duotone">{t("settingsTaskbarAutoHide")}</SettingsRowLabel>
-                <button
-                  type="button"
-                  className={clsx("settings-switch", systemPrefs.taskbarAutoHide && "is-on")}
-                  aria-pressed={systemPrefs.taskbarAutoHide}
-                  onClick={() => setSystemPrefs({ taskbarAutoHide: !systemPrefs.taskbarAutoHide })}
-                >
-                  <i />
-                </button>
+                <SettingsSwitch checked={systemPrefs.taskbarAutoHide} label={t("settingsTaskbarAutoHide")} onChange={(checked) => setSystemPrefs({ taskbarAutoHide: checked })} />
               </div>
               <div className="settings-row-line">
                 <SettingsRowLabel icon="solar:widget-2-bold-duotone">{t("settingsDesktopWidgets")}</SettingsRowLabel>
-                <button
-                  type="button"
-                  className={clsx("settings-switch", !widgetsCollapsed && "is-on")}
-                  aria-pressed={!widgetsCollapsed}
-                  onClick={() => setWidgetsCollapsed(!widgetsCollapsed)}
-                >
-                  <i />
-                </button>
+                <SettingsSwitch checked={!widgetsCollapsed} label={t("settingsDesktopWidgets")} onChange={(checked) => setWidgetsCollapsed(!checked)} />
               </div>
             </section>
 
@@ -448,24 +448,15 @@ export function SettingsApp() {
               <header className="settings-card-head">
                 <SettingsCardTitle icon="solar:widget-4-bold-duotone">{t("settingsDesktopLayout")}</SettingsCardTitle>
               </header>
-              <div className="settings-choice-grid">
-                {([
+              <SettingsChoiceGroup
+                label={t("settingsDesktopLayout")}
+                value={desktopLayoutMode}
+                onChange={setDesktopLayoutMode}
+                options={([
                   { mode: "grid" as const, label: t("settingsDesktopLayoutGrid"), icon: "solar:widget-4-bold-duotone" },
                   { mode: "free" as const, label: t("settingsDesktopLayoutFree"), icon: "solar:cursor-bold-duotone" },
-                ]).map((item) => (
-                  <button
-                    key={item.mode}
-                    type="button"
-                    className={clsx("settings-choice-card", desktopLayoutMode === item.mode && "is-active")}
-                    onClick={() => setDesktopLayoutMode(item.mode)}
-                  >
-                    <span className="settings-choice-icon">
-                      <Icon icon={item.icon} width={16} height={16} />
-                    </span>
-                    <strong>{item.label}</strong>
-                  </button>
-                ))}
-              </div>
+                ]).map((item) => ({ value: item.mode, label: item.label, content: <><span className="settings-choice-icon"><Icon icon={item.icon} width={16} height={16} /></span><strong>{item.label}</strong></> }))}
+              />
             </section>
 
             <section className="settings-card">
@@ -474,36 +465,15 @@ export function SettingsApp() {
               </header>
               <div className="settings-row-line">
                 <SettingsRowLabel icon="solar:play-circle-bold-duotone">{t("settingsReduceMotion")}</SettingsRowLabel>
-                <button
-                  type="button"
-                  className={clsx("settings-switch", developerPrefs.reduceMotion && "is-on")}
-                  aria-pressed={developerPrefs.reduceMotion}
-                  onClick={() => setDeveloperPrefs({ reduceMotion: !developerPrefs.reduceMotion })}
-                >
-                  <i />
-                </button>
+                <SettingsSwitch checked={developerPrefs.reduceMotion} label={t("settingsReduceMotion")} onChange={(checked) => setDeveloperPrefs({ reduceMotion: checked })} />
               </div>
               <div className="settings-row-line">
                 <SettingsRowLabel icon="solar:cursor-bold-duotone">{t("settingsLargeTargets")}</SettingsRowLabel>
-                <button
-                  type="button"
-                  className={clsx("settings-switch", developerPrefs.largeTargets && "is-on")}
-                  aria-pressed={developerPrefs.largeTargets}
-                  onClick={() => setDeveloperPrefs({ largeTargets: !developerPrefs.largeTargets })}
-                >
-                  <i />
-                </button>
+                <SettingsSwitch checked={developerPrefs.largeTargets} label={t("settingsLargeTargets")} onChange={(checked) => setDeveloperPrefs({ largeTargets: checked })} />
               </div>
               <div className="settings-row-line">
                 <SettingsRowLabel icon="solar:moon-bold-duotone">{t("settingsHighContrast")}</SettingsRowLabel>
-                <button
-                  type="button"
-                  className={clsx("settings-switch", developerPrefs.highContrast && "is-on")}
-                  aria-pressed={developerPrefs.highContrast}
-                  onClick={() => setDeveloperPrefs({ highContrast: !developerPrefs.highContrast })}
-                >
-                  <i />
-                </button>
+                <SettingsSwitch checked={developerPrefs.highContrast} label={t("settingsHighContrast")} onChange={(checked) => setDeveloperPrefs({ highContrast: checked })} />
               </div>
             </section>
           </div>
@@ -512,81 +482,56 @@ export function SettingsApp() {
         {section === "appearance" ? (
           <div className="settings-stack">
             <header className="settings-pane-head">
-              <h2>{t("settingsNavAppearance")}</h2>
+              <h2 id="settings-heading-appearance">{t("settingsNavAppearance")}</h2>
             </header>
 
             <section className="settings-card">
               <header className="settings-card-head">
                 <SettingsCardTitle icon="solar:pallete-2-bold-duotone">{t("settingsTheme")}</SettingsCardTitle>
               </header>
-              <div className="settings-choice-grid cols-3">
-                {([
+              <SettingsChoiceGroup
+                label={t("settingsTheme")}
+                value={themeSettings.theme}
+                className="settings-choice-grid cols-3"
+                onChange={(theme) => setThemeSettings(updateThemeSettings({ theme }))}
+                options={([
                   { mode: "system" as const, label: t("colorSystem"), icon: "solar:laptop-bold-duotone" },
                   { mode: "light" as const, label: t("colorLight"), icon: "solar:sun-bold-duotone" },
                   { mode: "dark" as const, label: t("colorDark"), icon: "solar:moon-bold-duotone" },
-                ]).map((item) => (
-                  <button
-                    key={item.mode}
-                    type="button"
-                    className={clsx("settings-choice-card", themeSettings.theme === item.mode && "is-active")}
-                    onClick={() => {
-                      const next = updateThemeSettings({ theme: item.mode });
-                      setThemeSettings(next);
-                    }}
-                  >
-                    <span className="settings-choice-icon">
-                      <Icon icon={item.icon} width={16} height={16} />
-                    </span>
-                    <strong>{item.label}</strong>
-                  </button>
-                ))}
-              </div>
+                ]).map((item) => ({ value: item.mode, label: item.label, content: <><span className="settings-choice-icon"><Icon icon={item.icon} width={16} height={16} /></span><strong>{item.label}</strong></> }))}
+              />
             </section>
 
             <section className="settings-card">
               <header className="settings-card-head">
                 <SettingsCardTitle icon="solar:pallete-2-bold-duotone">{t("settingsAccent")}</SettingsCardTitle>
               </header>
-              <div className="settings-accent-row">
-                {ACCENT_COLORS.map((color) => {
+              <SettingsChoiceGroup
+                label={t("settingsAccent")}
+                value={themeSettings.accentColor}
+                className="settings-accent-row"
+                optionClassName="settings-accent-swatch"
+                onChange={(accentColor) => setThemeSettings(updateThemeSettings({ accentColor }))}
+                options={ACCENT_COLORS.map((color) => {
                   const labelKey = `accent${color[0].toUpperCase()}${color.slice(1)}` as TranslationKey;
-                  return (
-                    <button
-                      key={color}
-                      type="button"
-                      className={clsx("settings-accent-swatch", themeSettings.accentColor === color && "is-active")}
-                      style={{ background: `oklch(0.62 ${ACCENT_CHROMA[color]} ${ACCENT_HUES[color]})` }}
-                      title={t(labelKey)}
-                      aria-label={t(labelKey)}
-                      onClick={() => setThemeSettings(updateThemeSettings({ accentColor: color }))}
-                    />
-                  );
+                  return { value: color, label: t(labelKey), style: { background: `oklch(0.62 ${ACCENT_CHROMA[color]} ${ACCENT_HUES[color]})` }, content: <span className="settings-visually-hidden">{t(labelKey)}</span> };
                 })}
-              </div>
+              />
             </section>
 
             <section className="settings-card">
               <header className="settings-card-head">
                 <SettingsCardTitle icon="solar:slider-minimalistic-horizontal-bold-duotone">{t("settingsDensity")}</SettingsCardTitle>
               </header>
-              <div className="settings-choice-grid">
-                {([
+              <SettingsChoiceGroup
+                label={t("settingsDensity")}
+                value={themeSettings.density}
+                onChange={(density) => setThemeSettings(updateThemeSettings({ density }))}
+                options={([
                   { d: "cozy" as const, label: t("densityCozy"), icon: "solar:widget-bold-duotone" },
                   { d: "compact" as const, label: t("densityCompact"), icon: "solar:slider-minimalistic-horizontal-bold-duotone" },
-                ]).map((item) => (
-                  <button
-                    key={item.d}
-                    type="button"
-                    className={clsx("settings-choice-card", themeSettings.density === item.d && "is-active")}
-                    onClick={() => setThemeSettings(updateThemeSettings({ density: item.d }))}
-                  >
-                    <span className="settings-choice-icon">
-                      <Icon icon={item.icon} width={16} height={16} />
-                    </span>
-                    <strong>{item.label}</strong>
-                  </button>
-                ))}
-              </div>
+                ]).map((item) => ({ value: item.d, label: item.label, content: <><span className="settings-choice-icon"><Icon icon={item.icon} width={16} height={16} /></span><strong>{item.label}</strong></> }))}
+              />
             </section>
 
             <section className="settings-card">
@@ -598,8 +543,8 @@ export function SettingsApp() {
                 </div>
               </header>
               {(["light", "dark"] as const).map((target) => (
-                <div key={target} className="settings-subsection wallpaper-mode-section">
-                  <h4>{t(target === "light" ? "settingsWallpaperLight" : "settingsWallpaperDark")}</h4>
+                  <fieldset key={target} className="settings-subsection wallpaper-mode-section settings-choice-fieldset">
+                    <legend className="settings-group-legend">{t(target === "light" ? "settingsWallpaperLight" : "settingsWallpaperDark")}</legend>
                   {Object.entries(wallpaperGroups).map(([categoryKey, entries]) => (
                     <section key={`${target}-${categoryKey}`} className="wallpaper-group">
                       <h4>{t(categoryKey as TranslationKey)}</h4>
@@ -607,52 +552,49 @@ export function SettingsApp() {
                         {entries.map(([id, wallpaper]) => {
                           const activeWallpaperId = target === "light" ? themeSettings.wallpaperLightId : themeSettings.wallpaperDarkId;
                           return (
-                            <button
+                            <label
                               key={`${target}-${id}`}
-                              type="button"
                               className={clsx("wallpaper-option", activeWallpaperId === id && "is-active")}
-                              onClick={() => void setWallpaper(target, id)}
                               style={wallpaper.url ? { backgroundImage: `linear-gradient(180deg, oklch(0 0 0 / 0.08), oklch(0 0 0 / 0.44)), url("${wallpaper.url}")` } : undefined}
                             >
+                              <input
+                                type="radio"
+                                name={`settings-wallpaper-${target}`}
+                                value={id}
+                                checked={activeWallpaperId === id}
+                                onChange={() => void setWallpaper(target, id)}
+                              />
                               <span>{t(wallpaper.labelKey)}</span>
-                            </button>
+                            </label>
                           );
                         })}
                       </div>
                     </section>
                   ))}
-                </div>
+                  </fieldset>
               ))}
               <div className="settings-split-row">
                 <div>
                   <h4>{t("wallpaperFit")}</h4>
-                  <div className="settings-select-group">
-                    {(["cover", "contain", "stretch", "tile"] as const).map((fit) => (
-                      <button
-                        key={fit}
-                        type="button"
-                        className={clsx("settings-btn-pill", themeSettings.wallpaperFit === fit && "is-active")}
-                        onClick={() => setThemeSettings(updateThemeSettings({ wallpaperFit: fit }))}
-                      >
-                        {t(fit === "cover" ? "wallpaperFitCover" : fit === "contain" ? "wallpaperFitContain" : fit === "stretch" ? "wallpaperFitStretch" : "wallpaperFitTile")}
-                      </button>
-                    ))}
-                  </div>
+                  <SettingsChoiceGroup
+                    label={t("wallpaperFit")}
+                    value={themeSettings.wallpaperFit}
+                    className="settings-select-group"
+                    optionClassName="settings-btn-pill"
+                    onChange={(wallpaperFit) => setThemeSettings(updateThemeSettings({ wallpaperFit }))}
+                    options={(["cover", "contain", "stretch", "tile"] as const).map((fit) => ({ value: fit, label: t(fit === "cover" ? "wallpaperFitCover" : fit === "contain" ? "wallpaperFitContain" : fit === "stretch" ? "wallpaperFitStretch" : "wallpaperFitTile") }))}
+                  />
                 </div>
                 <div>
                   <h4>{t("settingsWallpaperOverlay")}</h4>
-                  <div className="settings-select-group">
-                    {(["off", "soft", "standard"] as const).map((overlay) => (
-                      <button
-                        key={overlay}
-                        type="button"
-                        className={clsx("settings-btn-pill", themeSettings.wallpaperOverlay === overlay && "is-active")}
-                        onClick={() => setThemeSettings(updateThemeSettings({ wallpaperOverlay: overlay }))}
-                      >
-                        {t(overlay === "off" ? "wallpaperOverlayOff" : overlay === "soft" ? "wallpaperOverlaySoft" : "wallpaperOverlayStandard")}
-                      </button>
-                    ))}
-                  </div>
+                  <SettingsChoiceGroup
+                    label={t("settingsWallpaperOverlay")}
+                    value={themeSettings.wallpaperOverlay}
+                    className="settings-select-group"
+                    optionClassName="settings-btn-pill"
+                    onChange={(wallpaperOverlay) => setThemeSettings(updateThemeSettings({ wallpaperOverlay }))}
+                    options={(["off", "soft", "standard"] as const).map((overlay) => ({ value: overlay, label: t(overlay === "off" ? "wallpaperOverlayOff" : overlay === "soft" ? "wallpaperOverlaySoft" : "wallpaperOverlayStandard") }))}
+                  />
                 </div>
               </div>
             </section>
@@ -662,20 +604,13 @@ export function SettingsApp() {
         {section === "notifications" ? (
           <div className="settings-stack">
             <header className="settings-pane-head">
-              <h2>{t("settingsNavNotifications")}</h2>
+              <h2 id="settings-heading-notifications">{t("settingsNavNotifications")}</h2>
             </header>
 
             <section className="settings-card">
               <div className="settings-row-line">
                 <SettingsRowLabel icon="solar:moon-sleep-bold-duotone">{t("notificationDndToggle")}</SettingsRowLabel>
-                <button
-                  type="button"
-                  className={clsx("settings-switch", dndEnabled && "is-on")}
-                  aria-pressed={dndEnabled}
-                  onClick={() => setNotificationPrefs({ dndEnabled: !dndEnabled })}
-                >
-                  <i />
-                </button>
+                <SettingsSwitch checked={dndEnabled} label={t("notificationDndToggle")} onChange={(checked) => setNotificationPrefs({ dndEnabled: checked })} />
               </div>
             </section>
 
@@ -707,22 +642,18 @@ export function SettingsApp() {
               <header className="settings-card-head">
                 <SettingsCardTitle icon="solar:bell-bold-duotone">{t("settingsBannerDuration")}</SettingsCardTitle>
               </header>
-              <div className="settings-select-group">
-                {([
+              <SettingsChoiceGroup
+                label={t("settingsBannerDuration")}
+                value={notificationPrefs.bannerDuration}
+                className="settings-select-group"
+                optionClassName="settings-btn-pill"
+                onChange={(bannerDuration) => setNotificationPrefs({ bannerDuration })}
+                options={([
                   { id: "short" as BannerDuration, label: t("settingsBannerShort") },
                   { id: "standard" as BannerDuration, label: t("settingsBannerStandard") },
                   { id: "long" as BannerDuration, label: t("settingsBannerLong") },
-                ]).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={clsx("settings-btn-pill", notificationPrefs.bannerDuration === item.id && "is-active")}
-                    onClick={() => setNotificationPrefs({ bannerDuration: item.id })}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
+                ]).map((item) => ({ value: item.id, label: item.label }))}
+              />
             </section>
 
             <section className="settings-card">
@@ -737,22 +668,19 @@ export function SettingsApp() {
               ]).map((item) => (
                 <div key={item.id} className="settings-row-line">
                   <SettingsRowLabel icon={item.icon}>{item.label}</SettingsRowLabel>
-                  <button
-                    type="button"
-                    className={clsx("settings-switch", notificationPrefs.categories[item.id] && "is-on")}
-                    aria-pressed={notificationPrefs.categories[item.id]}
-                    onClick={() =>
+                  <SettingsSwitch
+                    checked={notificationPrefs.categories[item.id]}
+                    label={item.label}
+                    onChange={(checked) =>
                       setNotificationPrefs((current) => ({
                         ...current,
                         categories: {
                           ...current.categories,
-                          [item.id]: !current.categories[item.id],
+                          [item.id]: checked,
                         },
                       }))
                     }
-                  >
-                    <i />
-                  </button>
+                  />
                 </div>
               ))}
             </section>
@@ -762,55 +690,75 @@ export function SettingsApp() {
         {section === "network" ? (
           <div className="settings-stack">
             <header className="settings-pane-head">
-              <h2>{t("settingsNavNetwork")}</h2>
+              <h2 id="settings-heading-network">{t("settingsNavNetwork")}</h2>
               <button type="button" className="settings-btn-pill" disabled={networkBusy} onClick={() => void refreshNetwork()}>
-                {networkBusy ? t("settingsNetworkRefreshing") : t("settingsNetworkRefresh")}
+                {networkBusy
+                  ? t("settingsNetworkRefreshing")
+                  : network
+                    ? t("settingsNetworkRefresh")
+                    : t("settingsNetworkRunDiagnostics")}
               </button>
             </header>
 
-            <dl className="settings-kv settings-kv-plain">
-              {([
-                [t("settingsNetworkType"), network?.online ? t("settingsNetworkOnline") : t("settingsNetworkOffline")],
-                [t("settingsNetworkPublicIp"), dash(network?.publicIp)],
-                [t("settingsNetworkMeasuredRtt"), network?.measuredRttMs != null ? `${network.measuredRttMs} ms` : "—"],
-                [t("settingsNetworkLanIp"), network?.lanIps?.length ? network.lanIps.join(", ") : "—"],
-                [t("settingsNetworkLocalIp"), network?.localIps?.length ? network.localIps.join(", ") : network?.mdnsHosts?.length ? network.mdnsHosts.join(", ") : "—"],
-                [t("settingsNetworkEffective"), formatEffectiveType(network?.effectiveType ?? "unknown")],
-                [t("settingsNetworkDownlink"), network?.downlinkMbps != null ? `${network.downlinkMbps} Mbps` : "—"],
-                [t("settingsNetworkRtt"), network?.rttMs != null ? `${network.rttMs} ms` : "—"],
-                [t("settingsNetworkSaveData"), network?.saveData ? t("yes") : t("no")],
-                [t("settingsNetworkPageHost"), dash(network?.pageHost)],
-              ] as const).map(([label, value]) => (
-                <div key={label}>
-                  <dt>{label}</dt>
-                  <dd title={value}>{value}</dd>
-                </div>
-              ))}
-            </dl>
+            <p className="settings-inline-hint">{t("settingsNetworkDiagnosticsPrivacy")}</p>
+            <div aria-live="polite">
+              {networkBusy ? <p className="settings-inline-hint">{t("settingsNetworkRefreshing")}</p> : null}
+              {networkError ? <p className="settings-inline-hint settings-error-text">{t("settingsNetworkDiagnosticsFailed")}</p> : null}
+              {!network && !networkBusy && !networkError ? <p className="settings-inline-hint">{t("settingsNetworkDiagnosticsIdle")}</p> : null}
+            </div>
+            {network ? (
+              <dl className="settings-kv settings-kv-plain">
+                {([
+                  [t("settingsNetworkStatus"), network.online ? t("settingsNetworkOnline") : t("settingsNetworkOffline")],
+                  [t("settingsNetworkType"), formatConnectionType(network.connectionType)],
+                  [t("settingsNetworkPublicIp"), dash(network.publicIp)],
+                  [t("settingsNetworkPublicIpSource"), dash(network.publicIpSource)],
+                  [t("settingsNetworkMeasuredRtt"), network.measuredRttMs != null ? `${network.measuredRttMs} ms` : "—"],
+                  [t("settingsNetworkLanIp"), network.lanIps.length ? network.lanIps.join(", ") : "—"],
+                  [t("settingsNetworkLocalIp"), network.localIps.length ? network.localIps.join(", ") : network.mdnsHosts.length ? network.mdnsHosts.join(", ") : "—"],
+                  [t("settingsNetworkEffective"), formatEffectiveType(network.effectiveType)],
+                  [t("settingsNetworkDownlink"), network.downlinkMbps != null ? `${network.downlinkMbps} Mbps` : "—"],
+                  [t("settingsNetworkRtt"), network.rttMs != null ? `${network.rttMs} ms` : "—"],
+                  [t("settingsNetworkSaveData"), network.saveData ? t("yes") : t("no")],
+                  [t("settingsNetworkPageHost"), dash(network.pageHost)],
+                  [t("settingsNetworkPageProtocol"), dash(network.pageProtocol)],
+                ] as const).map(([label, value]) => (
+                  <div key={label}>
+                    <dt>{label}</dt>
+                    <dd title={value}>{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
           </div>
         ) : null}
 
         {section === "data" ? (
           <div className="settings-stack">
             <header className="settings-pane-head">
-              <h2>{t("settingsNavData")}</h2>
+              <h2 id="settings-heading-data">{t("settingsNavData")}</h2>
             </header>
 
             <dl className="settings-kv settings-kv-plain">
               <div>
                 <dt>{t("dataOriginStorage")}</dt>
-                <dd>{getStorageLabel(storage)}</dd>
+                <dd>{getStorageLabel(storage ?? null)}</dd>
               </div>
             </dl>
 
             <section className="settings-card">
+              <p className="settings-inline-hint">{t("settingsBackupScope")}</p>
               <div className="settings-row-line">
                 <SettingsRowLabel icon="solar:download-minimalistic-bold-duotone">{t("settingsExport")}</SettingsRowLabel>
-                <button type="button" className="settings-btn-pill" onClick={exportSettings}>{t("settingsExport")}</button>
+                <button type="button" className="settings-btn-pill" disabled={settingsTransferBusy} onClick={exportSettings}>
+                  {settingsTransferBusy ? t("settingsTransferring") : t("settingsExport")}
+                </button>
               </div>
               <div className="settings-row-line">
                 <SettingsRowLabel icon="solar:upload-minimalistic-bold-duotone">{t("settingsImport")}</SettingsRowLabel>
-                <button type="button" className="settings-btn-pill" onClick={() => importInputRef.current?.click()}>{t("settingsImport")}</button>
+                <button type="button" className="settings-btn-pill" disabled={settingsTransferBusy} onClick={() => importInputRef.current?.click()}>
+                  {settingsTransferBusy ? t("settingsTransferring") : t("settingsImport")}
+                </button>
                 <input
                   ref={importInputRef}
                   type="file"
@@ -833,7 +781,14 @@ export function SettingsApp() {
               </div>
               <div className="settings-row-line">
                 <SettingsRowLabel icon="solar:database-bold-duotone">{t("siteData")}</SettingsRowLabel>
-                <button type="button" className="settings-btn-pill" onClick={() => void clearSiteData()}>{t("clearSiteData")}</button>
+                <button
+                  type="button"
+                  className="settings-btn-pill"
+                  disabled={siteDataBusy}
+                  onClick={() => void clearSiteData()}
+                >
+                  {siteDataBusy ? t("settingsResetting") : t("clearSiteData")}
+                </button>
               </div>
             </section>
           </div>
@@ -842,55 +797,32 @@ export function SettingsApp() {
         {section === "developer" ? (
           <div className="settings-stack">
             <header className="settings-pane-head">
-              <h2>{t("settingsNavDeveloper")}</h2>
+              <h2 id="settings-heading-developer">{t("settingsNavDeveloper")}</h2>
             </header>
 
             <section className="settings-card">
               <header className="settings-card-head">
                 <SettingsCardTitle icon="solar:play-circle-bold-duotone">{t("settingsAnimationQuality")}</SettingsCardTitle>
               </header>
-              <div className="settings-choice-grid">
-                {([
+              <SettingsChoiceGroup
+                label={t("settingsAnimationQuality")}
+                value={developerPrefs.animationQuality}
+                onChange={(animationQuality) => setDeveloperPrefs({ animationQuality })}
+                options={([
                   { id: "fluid" as const, label: t("settingsAnimationFluid"), icon: "solar:bolt-bold-duotone" },
                   { id: "power" as const, label: t("settingsAnimationPower"), icon: "solar:battery-charge-bold-duotone" },
-                ]).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={clsx("settings-choice-card", developerPrefs.animationQuality === item.id && "is-active")}
-                    onClick={() => setDeveloperPrefs({ animationQuality: item.id })}
-                  >
-                    <span className="settings-choice-icon">
-                      <Icon icon={item.icon} width={16} height={16} />
-                    </span>
-                    <strong>{item.label}</strong>
-                  </button>
-                ))}
-              </div>
+                ]).map((item) => ({ value: item.id, label: item.label, content: <><span className="settings-choice-icon"><Icon icon={item.icon} width={16} height={16} /></span><strong>{item.label}</strong></> }))}
+              />
             </section>
 
             <section className="settings-card">
               <div className="settings-row-line">
                 <SettingsRowLabel icon="solar:graph-up-bold-duotone">{t("settingsShowFps")}</SettingsRowLabel>
-                <button
-                  type="button"
-                  className={clsx("settings-switch", developerPrefs.showFps && "is-on")}
-                  aria-pressed={developerPrefs.showFps}
-                  onClick={() => setDeveloperPrefs({ showFps: !developerPrefs.showFps })}
-                >
-                  <i />
-                </button>
+                <SettingsSwitch checked={developerPrefs.showFps} label={t("settingsShowFps")} onChange={(checked) => setDeveloperPrefs({ showFps: checked })} />
               </div>
               <div className="settings-row-line">
                 <SettingsRowLabel icon="solar:ruler-cross-pen-bold-duotone">{t("settingsDebugBorders")}</SettingsRowLabel>
-                <button
-                  type="button"
-                  className={clsx("settings-switch", developerPrefs.debugBorders && "is-on")}
-                  aria-pressed={developerPrefs.debugBorders}
-                  onClick={() => setDeveloperPrefs({ debugBorders: !developerPrefs.debugBorders })}
-                >
-                  <i />
-                </button>
+                <SettingsSwitch checked={developerPrefs.debugBorders} label={t("settingsDebugBorders")} onChange={(checked) => setDeveloperPrefs({ debugBorders: checked })} />
               </div>
             </section>
 
@@ -900,401 +832,18 @@ export function SettingsApp() {
                 <span className="settings-badge-muted">{t("settingsVrDesktopExperimental")}</span>
               </header>
               <div className="settings-row-line">
-                <SettingsRowLabel icon="solar:check-circle-bold-duotone">{t("settingsVrDesktopEnable")}</SettingsRowLabel>
-                <button
-                  type="button"
-                  className={clsx("settings-switch", vrPrefs.enabled && "is-on")}
-                  aria-pressed={vrPrefs.enabled}
-                  onClick={() => {
-                    setVrPrefs({ enabled: !vrPrefs.enabled });
-                  }}
-                >
-                  <i />
-                </button>
+                <SettingsRowLabel icon="solar:settings-bold-duotone">{t("vrDesktopSettingsLead")}</SettingsRowLabel>
+                <button type="button" className="settings-btn-pill" onClick={() => openApp("vr-desktop")}>{t("vrDesktopSettingsOpen")}</button>
               </div>
-              {vrPrefs.enabled ? (
-                <>
-                  <div className="settings-row-line">
-                    <SettingsRowLabel icon="solar:login-2-bold-duotone">
-                      {vrPhase === "entering"
-                        ? t("settingsVrDesktopEntering")
-                        : vrPhase === "error"
-                          ? t("settingsVrDesktopFailed")
-                          : vrCapability === "unavailable"
-                            ? t("settingsVrDesktopNeedHttps")
-                            : t("settingsVrDesktopEnter")}
-                    </SettingsRowLabel>
-                    <button
-                      type="button"
-                      className="settings-btn-pill"
-                      disabled={vrPhase === "entering" || vrPhase === "active"}
-                      onClick={() => {
-                        // Sync call path — no await before requestSession (Quest).
-                        void requestVrDesktopEnter({ t, addNotification });
-                      }}
-                    >
-                      {t("settingsVrDesktopEnter")}
-                    </button>
-                  </div>
-                  <div className="settings-row-line">
-                    <SettingsRowLabel icon="solar:slider-minimalistic-horizontal-bold-duotone">{t("settingsVrDesktopQuality")}</SettingsRowLabel>
-                  </div>
-                  <div className="settings-choice-grid cols-3">
-                    {([
-                      { id: "high" as const, label: t("settingsVrDesktopQualityHigh"), icon: "solar:star-bold-duotone" },
-                      { id: "balanced" as const, label: t("settingsVrDesktopQualityBalanced"), icon: "solar:widget-bold-duotone" },
-                      { id: "low" as const, label: t("settingsVrDesktopQualityLow"), icon: "solar:battery-charge-bold-duotone" },
-                    ]).map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={clsx(
-                          "settings-choice-card",
-                          vrPrefs.renderQuality === item.id && "is-active",
-                        )}
-                        onClick={() => setVrPrefs({ renderQuality: item.id })}
-                      >
-                        <span className="settings-choice-icon">
-                          <Icon icon={item.icon} width={16} height={16} />
-                        </span>
-                        <strong>{item.label}</strong>
-                      </button>
-                    ))}
-                  </div>
-
-                  <header className="settings-card-head" style={{ marginTop: 12 }}>
-                    <SettingsCardTitle icon="solar:settings-bold-duotone">{t("settingsVrDesktopQualityAdvanced")}</SettingsCardTitle>
-                  </header>
-                  <p className="settings-inline-hint">
-                    {formatVrProfileSummary(getVrRenderProfile(vrPrefs), language)}
-                  </p>
-                  <p className="settings-inline-hint">{t("settingsVrDesktopQualityHint")}</p>
-
-                  <div className="settings-row-line">
-                    <SettingsRowLabel icon="solar:full-screen-bold-duotone">{t("settingsVrDesktopDpr")}</SettingsRowLabel>
-                  </div>
-                  <div className="settings-select-group">
-                    {([
-                      { id: "auto" as VrDprPref, label: t("settingsVrDesktopQualityAuto") },
-                      { id: "1" as VrDprPref, label: "1×" },
-                      { id: "1.25" as VrDprPref, label: "1.25×" },
-                      { id: "1.5" as VrDprPref, label: "1.5×" },
-                    ]).map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={clsx("settings-btn-pill", vrPrefs.dprPref === item.id && "is-active")}
-                        onClick={() => setVrPrefs({ dprPref: item.id })}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="settings-row-line">
-                    <SettingsRowLabel icon="solar:widget-2-bold-duotone">{t("settingsVrDesktopPanelScale")}</SettingsRowLabel>
-                  </div>
-                  <div className="settings-select-group">
-                    {([
-                      { id: "auto" as VrPanelScalePref, label: t("settingsVrDesktopQualityAuto") },
-                      { id: "low" as VrPanelScalePref, label: t("settingsVrDesktopPanelScaleLow") },
-                      { id: "medium" as VrPanelScalePref, label: t("settingsVrDesktopPanelScaleMedium") },
-                      { id: "high" as VrPanelScalePref, label: t("settingsVrDesktopPanelScaleHigh") },
-                    ]).map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={clsx("settings-btn-pill", vrPrefs.panelScalePref === item.id && "is-active")}
-                        onClick={() => setVrPrefs({ panelScalePref: item.id })}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="settings-row-line">
-                    <SettingsRowLabel icon="solar:graph-up-bold-duotone">{t("settingsVrDesktopFrameRate")}</SettingsRowLabel>
-                  </div>
-                  <div className="settings-select-group">
-                    {([
-                      { id: "auto" as VrFrameRatePref, label: t("settingsVrDesktopQualityAuto") },
-                      { id: "high" as VrFrameRatePref, label: t("settingsVrDesktopFrameRateHigh") },
-                      { id: "mid" as VrFrameRatePref, label: t("settingsVrDesktopFrameRateMid") },
-                      { id: "low" as VrFrameRatePref, label: t("settingsVrDesktopFrameRateLow") },
-                    ]).map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={clsx("settings-btn-pill", vrPrefs.frameRatePref === item.id && "is-active")}
-                        onClick={() => setVrPrefs({ frameRatePref: item.id })}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="settings-row-line">
-                    <SettingsRowLabel icon="solar:star-bold-duotone">{t("settingsVrDesktopAntialias")}</SettingsRowLabel>
-                  </div>
-                  <div className="settings-select-group">
-                    {([
-                      { id: "auto" as VrAntialiasPref, label: t("settingsVrDesktopQualityAuto") },
-                      { id: "on" as VrAntialiasPref, label: t("settingsVrDesktopAaOn") },
-                      { id: "off" as VrAntialiasPref, label: t("settingsVrDesktopAaOff") },
-                    ]).map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={clsx("settings-btn-pill", vrPrefs.antialiasPref === item.id && "is-active")}
-                        onClick={() => setVrPrefs({ antialiasPref: item.id })}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="settings-row-line">
-                    <SettingsRowLabel icon="solar:full-screen-bold-duotone">{t("settingsVrDesktopSoftEdges")}</SettingsRowLabel>
-                    <button
-                      type="button"
-                      className={clsx("settings-switch", vrPrefs.softEdges && "is-on")}
-                      aria-pressed={vrPrefs.softEdges}
-                      disabled={getVrRenderProfile(vrPrefs).allowSoftEdges === false}
-                      onClick={() => setVrPrefs({ softEdges: !vrPrefs.softEdges })}
-                    >
-                      <i />
-                    </button>
-                  </div>
-                  <div className="settings-row-line">
-                    <SettingsRowLabel icon="solar:graph-up-bold-duotone">{t("settingsVrDesktopShowFps")}</SettingsRowLabel>
-                    <button
-                      type="button"
-                      className={clsx("settings-switch", vrPrefs.showFps && "is-on")}
-                      aria-pressed={vrPrefs.showFps}
-                      onClick={() => setVrPrefs({ showFps: !vrPrefs.showFps })}
-                    >
-                      <i />
-                    </button>
-                  </div>
-                  <div className="settings-row-line">
-                    <SettingsRowLabel icon="solar:restart-bold-duotone">{t("settingsVrDesktopResetLayout")}</SettingsRowLabel>
-                    <button
-                      type="button"
-                      className="settings-btn-pill"
-                      onClick={() => useVrDesktopStore.getState().resetLayout()}
-                    >
-                      {t("settingsVrDesktopResetLayout")}
-                    </button>
-                  </div>
-                  <p className="settings-inline-hint" style={{ wordBreak: "break-all" }}>
-                    {formatVrCapabilityHint(vrCapability, vrSessionSupported)}
-                    {vrLastError ? ` · ${vrLastError}` : ""}
-                  </p>
-                </>
-              ) : null}
             </section>
 
-            <section className="settings-card">
-              <header className="settings-card-head">
-                <SettingsCardTitle icon="solar:clapperboard-edit-bold-duotone">{t("settingsMmdVrShowcase")}</SettingsCardTitle>
-                <span className="settings-badge-muted">{t("settingsVrDesktopExperimental")}</span>
-              </header>
-              <div className="settings-row-line">
-                <SettingsRowLabel icon="solar:login-2-bold-duotone">
-                  {mmdVrPhase === "entering"
-                    ? t("settingsMmdVrEntering")
-                    : mmdVrPhase === "error"
-                      ? t("settingsVrDesktopFailed")
-                      : t("settingsMmdVrEnter")}
-                </SettingsRowLabel>
-                <button
-                  type="button"
-                  className="settings-btn-pill"
-                  disabled={mmdVrPhase === "entering" || mmdVrPhase === "active"}
-                  onClick={() => {
-                    void requestMmdVrEnter({ t, addNotification });
-                  }}
-                >
-                  {t("settingsMmdVrEnter")}
-                </button>
-              </div>
-              <div className="settings-row-line">
-                <SettingsRowLabel icon="solar:slider-minimalistic-horizontal-bold-duotone">{t("settingsVrDesktopQuality")}</SettingsRowLabel>
-              </div>
-              <div className="settings-choice-grid cols-3">
-                {([
-                  { id: "high" as const, label: t("settingsVrDesktopQualityHigh"), icon: "solar:star-bold-duotone" },
-                  { id: "balanced" as const, label: t("settingsVrDesktopQualityBalanced"), icon: "solar:widget-bold-duotone" },
-                  { id: "low" as const, label: t("settingsVrDesktopQualityLow"), icon: "solar:battery-charge-bold-duotone" },
-                ]).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={clsx(
-                      "settings-choice-card",
-                      mmdVrPrefs.renderQuality === item.id && "is-active",
-                    )}
-                    onClick={() => setMmdVrPrefs({ renderQuality: item.id })}
-                  >
-                    <span className="settings-choice-icon">
-                      <Icon icon={item.icon} width={16} height={16} />
-                    </span>
-                    <strong>{item.label}</strong>
-                  </button>
-                ))}
-              </div>
-
-              <header className="settings-card-head" style={{ marginTop: 12 }}>
-                <SettingsCardTitle icon="solar:settings-bold-duotone">{t("settingsMmdVrQualityAdvanced")}</SettingsCardTitle>
-              </header>
-              <p className="settings-inline-hint">
-                {formatMmdVrProfileSummary(getMmdVrRenderProfile(mmdVrPrefs), language)}
-              </p>
-              <p className="settings-inline-hint">{t("settingsVrDesktopQualityHint")}</p>
-
-              <div className="settings-row-line">
-                <SettingsRowLabel icon="solar:full-screen-bold-duotone">{t("settingsVrDesktopDpr")}</SettingsRowLabel>
-              </div>
-              <div className="settings-select-group">
-                {([
-                  { id: "auto" as const, label: t("settingsVrDesktopQualityAuto") },
-                  { id: "1" as const, label: "1×" },
-                  { id: "1.25" as const, label: "1.25×" },
-                  { id: "1.5" as const, label: "1.5×" },
-                ]).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={clsx("settings-btn-pill", mmdVrPrefs.dprPref === item.id && "is-active")}
-                    onClick={() => setMmdVrPrefs({ dprPref: item.id })}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="settings-row-line">
-                <SettingsRowLabel icon="solar:graph-up-bold-duotone">{t("settingsVrDesktopFrameRate")}</SettingsRowLabel>
-              </div>
-              <div className="settings-select-group">
-                {([
-                  { id: "auto" as const, label: t("settingsVrDesktopQualityAuto") },
-                  { id: "high" as const, label: t("settingsVrDesktopFrameRateHigh") },
-                  { id: "mid" as const, label: t("settingsVrDesktopFrameRateMid") },
-                  { id: "low" as const, label: t("settingsVrDesktopFrameRateLow") },
-                ]).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={clsx("settings-btn-pill", mmdVrPrefs.frameRatePref === item.id && "is-active")}
-                    onClick={() => setMmdVrPrefs({ frameRatePref: item.id })}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="settings-row-line">
-                <SettingsRowLabel icon="solar:star-bold-duotone">{t("settingsVrDesktopAntialias")}</SettingsRowLabel>
-              </div>
-              <div className="settings-select-group">
-                {([
-                  { id: "auto" as const, label: t("settingsVrDesktopQualityAuto") },
-                  { id: "on" as const, label: t("settingsVrDesktopAaOn") },
-                  { id: "off" as const, label: t("settingsVrDesktopAaOff") },
-                ]).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={clsx("settings-btn-pill", mmdVrPrefs.antialiasPref === item.id && "is-active")}
-                    onClick={() => setMmdVrPrefs({ antialiasPref: item.id })}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="settings-row-line">
-                <SettingsRowLabel icon="solar:sun-bold-duotone">{t("settingsMmdVrShadows")}</SettingsRowLabel>
-              </div>
-              <div className="settings-select-group">
-                {([
-                  { id: "auto" as const, label: t("settingsVrDesktopQualityAuto") },
-                  { id: "on" as const, label: t("settingsVrDesktopAaOn") },
-                  { id: "off" as const, label: t("settingsVrDesktopAaOff") },
-                ]).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={clsx("settings-btn-pill", mmdVrPrefs.shadowsPref === item.id && "is-active")}
-                    onClick={() => setMmdVrPrefs({ shadowsPref: item.id })}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="settings-row-line">
-                <SettingsRowLabel icon="solar:widget-4-bold-duotone">{t("settingsMmdVrGrid")}</SettingsRowLabel>
-              </div>
-              <div className="settings-select-group">
-                {([
-                  { id: "auto" as const, label: t("settingsVrDesktopQualityAuto") },
-                  { id: "on" as const, label: t("settingsVrDesktopAaOn") },
-                  { id: "off" as const, label: t("settingsVrDesktopAaOff") },
-                ]).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={clsx("settings-btn-pill", mmdVrPrefs.gridPref === item.id && "is-active")}
-                    onClick={() => setMmdVrPrefs({ gridPref: item.id })}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="settings-row-line">
-                <SettingsRowLabel icon="solar:cursor-bold-duotone">{t("settingsMmdVrWalkSpeed")}</SettingsRowLabel>
-              </div>
-              <div className="settings-select-group">
-                {([
-                  { id: "auto" as const, label: t("settingsVrDesktopQualityAuto") },
-                  { id: "slow" as const, label: t("settingsMmdVrWalkSlow") },
-                  { id: "normal" as const, label: t("settingsMmdVrWalkNormal") },
-                  { id: "fast" as const, label: t("settingsMmdVrWalkFast") },
-                ]).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={clsx("settings-btn-pill", mmdVrPrefs.walkSpeedPref === item.id && "is-active")}
-                    onClick={() => setMmdVrPrefs({ walkSpeedPref: item.id })}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="settings-row-line">
-                <SettingsRowLabel icon="solar:graph-up-bold-duotone">{t("settingsVrDesktopShowFps")}</SettingsRowLabel>
-                <button
-                  type="button"
-                  className={clsx("settings-switch", mmdVrPrefs.showFps && "is-on")}
-                  aria-pressed={mmdVrPrefs.showFps}
-                  onClick={() => setMmdVrPrefs({ showFps: !mmdVrPrefs.showFps })}
-                >
-                  <i />
-                </button>
-              </div>
-              <p className="settings-inline-hint">{t("settingsMmdVrEmpty")}</p>
-            </section>
           </div>
         ) : null}
 
         {section === "about" ? (
           <div className="settings-stack">
             <header className="settings-pane-head">
-              <h2>{t("settingsNavAbout")}</h2>
+              <h2 id="settings-heading-about">{t("settingsNavAbout")}</h2>
             </header>
 
             <dl className="settings-kv settings-kv-plain">

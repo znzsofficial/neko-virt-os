@@ -3,7 +3,6 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { TransformControls as StdTransformControls } from "three-stdlib";
-import { useMmdVrStore } from "../../mmdVrShowcase/mmdVrStore";
 import { useVrDesktopStore } from "../../vrDesktop/vrDesktopStore";
 import {
   createMmdRuntimeHandle,
@@ -22,8 +21,10 @@ import { getActivePmremEnvMap, subscribePmremEnvMap } from "./mmdPmremEnvMap";
 import { useMmdStudioStore, type MmdPostFxPreset, type MmdRendererBackend, type MmdSceneModel } from "./mmdStudioStore";
 import { sunPositionFromAngles } from "./mmdProjectDb";
 import { createStudioMmdTslPipeline, type MmdTslPipeline } from "./mmdTslPipeline";
+import { stopCaptureVideoTracks } from "./mmdCaptureStream";
 
 export type MmdSceneApi = {
+  readonly backend: MmdRendererBackend;
   addModel: (modelFile: File, companionFiles?: File[], options?: MmdAddModelOptions) => Promise<MmdLoadReport>;
   removeModel: (id: string) => void;
   selectModel: (id: string | null) => void;
@@ -484,7 +485,8 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
   }
 
   useEffect(() => {
-    apiRef.current = {
+    const api: MmdSceneApi = {
+      backend,
       addModel: async (modelFile, companionFiles = [], options = {}) => {
         setStatus("loading");
         try {
@@ -784,9 +786,7 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
           recorderRef.current = recorder;
           return recorder;
         } catch {
-          captureStreamRef.current?.getTracks().forEach((track) => {
-            if (track.kind === "video") track.stop();
-          });
+          stopCaptureVideoTracks(captureStreamRef.current);
           captureStreamRef.current = null;
           return null;
         }
@@ -804,9 +804,7 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
           recorderRef.current = null;
           const stream = captureStreamRef.current;
           if (stream) {
-            stream.getTracks().forEach((track) => {
-              if (track.kind === "video") track.stop();
-            });
+            stopCaptureVideoTracks(stream);
             captureStreamRef.current = null;
           }
           resolve(blob);
@@ -824,18 +822,30 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
         }
       }),
     };
+    apiRef.current = api;
 
     return () => {
-      apiRef.current = null;
+      if (apiRef.current === api) apiRef.current = null;
       try {
         if (recorderRef.current && recorderRef.current.state !== "inactive") recorderRef.current.stop();
       } catch {
         // ignore
       }
       captureStreamRef.current?.getTracks().forEach((track) => {
-        if (track.kind === "video") track.stop();
+        track.stop();
       });
       captureStreamRef.current = null;
+      try {
+        audioSourceRef.current?.disconnect();
+        audioDestRef.current?.disconnect();
+        void audioCtxRef.current?.close();
+      } catch {
+        // ignore
+      }
+      audioSourceRef.current = null;
+      audioDestRef.current = null;
+      audioCtxRef.current = null;
+      audioBoundElRef.current = null;
       runtime.dispose();
       // Dispose official TSL pipeline before losing the WebGPU device.
       try {
@@ -859,7 +869,7 @@ function StudioScene({ audioRef, apiRef, preserveModelsOnUnmount = false, backen
       }
       if (!preserveModelsRef.current) setModels([], null);
     };
-  }, [apiRef, gl, runtime, setCameraMode, setCurrentTime, setDuration, setModels, setPhysicsReady, setSelectedModelId, setStatus]);
+  }, [apiRef, backend, gl, runtime, setCameraMode, setCurrentTime, setDuration, setModels, setPhysicsReady, setSelectedModelId, setStatus]);
 
   useEffect(() => {
     const canvas = gl.domElement;
@@ -1243,9 +1253,8 @@ export function MmdCanvas({ backend, audioRef, apiRef, preserveModelsOnUnmount =
   const webgpuAvailable = useMmdStudioStore((state) => state.webgpuAvailable);
   const setBackend = useMmdStudioStore((state) => state.setBackend);
   const setWebgpuAvailable = useMmdStudioStore((state) => state.setWebgpuAvailable);
-  // Avoid dual WebGL cost while any immersive XR overlay is presenting.
-  const pauseForXr =
-    useMmdVrStore((state) => state.overlayOpen) || useVrDesktopStore((state) => state.overlayOpen);
+  // VR Desktop remains part of the shell; MMD VR runs on its own page.
+  const pauseForXr = useVrDesktopStore((state) => state.overlayOpen);
 
   useEffect(() => {
     let cancelled = false;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatConnectionType, formatEffectiveType, parseIceCandidate } from "./networkInfo";
+import { discoverLocalIps, formatConnectionType, formatEffectiveType, parseIceCandidate } from "./networkInfo";
 
 describe("parseIceCandidate", () => {
   it("parses host IPv4 candidates", () => {
@@ -37,5 +37,38 @@ describe("format helpers", () => {
   it("maps unknown connection type to dash", () => {
     expect(formatConnectionType("unknown")).toBe("—");
     expect(formatEffectiveType("4g")).toBe("4G+");
+  });
+});
+
+describe("discoverLocalIps", () => {
+  it("returns fail when peer connection construction fails", async () => {
+    const result = await discoverLocalIps(10, undefined, () => {
+      throw new Error("WebRTC unavailable");
+    });
+
+    expect(result.status).toBe("fail");
+  });
+
+  it("aborts gathering and closes the peer connection", async () => {
+    const controller = new AbortController();
+    let closed = false;
+    const peer = {
+      createDataChannel() {},
+      createOffer: () => new Promise<RTCSessionDescriptionInit>(() => undefined),
+      setLocalDescription: async () => undefined,
+      close: () => {
+        closed = true;
+      },
+      onicecandidate: null,
+      onicegatheringstatechange: null,
+      iceGatheringState: "gathering",
+      localDescription: null,
+    } as unknown as RTCPeerConnection;
+
+    const pending = discoverLocalIps(10_000, controller.signal, () => peer);
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(closed).toBe(true);
   });
 });

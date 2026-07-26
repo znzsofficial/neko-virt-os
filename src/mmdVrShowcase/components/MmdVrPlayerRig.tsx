@@ -1,5 +1,5 @@
 import { useXRControllerLocomotion, XROrigin } from "@react-three/xr";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type * as THREE from "three";
 import { getMmdVrRenderProfile } from "../mmdVrQuality";
 import { useMmdVrStore } from "../mmdVrStore";
@@ -18,13 +18,20 @@ export function MmdVrPlayerRig({
   emptyHint,
   hideLabel,
   showLabel,
-  selectPlaceLabel,
   placeOnLabel,
   placeOffLabel,
   placeHint,
   lightStageLabel,
   lightSoftLabel,
   lightContrastLabel,
+  shadowsLabel,
+  gridLabel,
+  scaleLabel,
+  heightLabel,
+  resetValueLabel,
+  panelHideLabel,
+  panelShowLabel,
+  panelDragLabel,
   onExit,
   busy,
 }: {
@@ -37,13 +44,20 @@ export function MmdVrPlayerRig({
   emptyHint: string;
   hideLabel: string;
   showLabel: string;
-  selectPlaceLabel: string;
   placeOnLabel: string;
   placeOffLabel: string;
   placeHint: string;
   lightStageLabel: string;
   lightSoftLabel: string;
   lightContrastLabel: string;
+  shadowsLabel: string;
+  gridLabel: string;
+  scaleLabel: string;
+  heightLabel: string;
+  resetValueLabel: string;
+  panelHideLabel: string;
+  panelShowLabel: string;
+  panelDragLabel: string;
   onExit: () => void;
   busy: boolean;
 }) {
@@ -51,19 +65,26 @@ export function MmdVrPlayerRig({
   const viewEpoch = useMmdVrStore((s) => s.viewEpoch);
   const mmdPrefs = useMmdVrStore((s) => s.prefs);
   const speed = getMmdVrRenderProfile(mmdPrefs).walkSpeed;
+  const heightOffset = mmdPrefs.heightOffset;
+  const [panelDragging, setPanelDragging] = useState(false);
 
   useXRControllerLocomotion(
     originRef,
-    { speed },
+    { speed: panelDragging ? 0 : speed },
     { type: "snap", degrees: 30, deadZone: 0.65 },
   );
 
   useEffect(() => {
     const g = originRef.current;
     if (!g) return;
-    g.position.set(0, 0, 0);
+    g.position.set(0, heightOffset, 0);
     g.rotation.set(0, 0, 0);
   }, [viewEpoch]);
+
+  useEffect(() => {
+    const g = originRef.current;
+    if (g) g.position.y = heightOffset;
+  }, [heightOffset]);
 
   return (
     <XROrigin ref={originRef}>
@@ -77,13 +98,21 @@ export function MmdVrPlayerRig({
         emptyHint={emptyHint}
         hideLabel={hideLabel}
         showLabel={showLabel}
-        selectPlaceLabel={selectPlaceLabel}
         placeOnLabel={placeOnLabel}
         placeOffLabel={placeOffLabel}
         placeHint={placeHint}
         lightStageLabel={lightStageLabel}
         lightSoftLabel={lightSoftLabel}
         lightContrastLabel={lightContrastLabel}
+        shadowsLabel={shadowsLabel}
+        gridLabel={gridLabel}
+        scaleLabel={scaleLabel}
+        heightLabel={heightLabel}
+        resetValueLabel={resetValueLabel}
+        panelHideLabel={panelHideLabel}
+        panelShowLabel={panelShowLabel}
+        panelDragLabel={panelDragLabel}
+        onDragChange={setPanelDragging}
         onExit={onExit}
         busy={busy}
       />

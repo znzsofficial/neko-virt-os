@@ -578,6 +578,22 @@ export function useMmdRecordingController({
       mountedRef.current = false;
       offlineCancelRef.current = true;
       clearRecordTimer();
+      const store = useMmdStudioStore.getState();
+      store.setRecording(false);
+      store.setExportingOffline(false);
+      store.setExportProgress(null);
+      store.setPlaying(false);
+      audioRef.current?.pause();
+      if (gridRestoreRef.current != null) store.setShowGrid(gridRestoreRef.current);
+      if (speedRestoreRef.current != null) store.setSpeed(speedRestoreRef.current);
+      gridRestoreRef.current = null;
+      speedRestoreRef.current = null;
+      try {
+        apiRef.current?.restoreRecordingCanvasSize();
+        void apiRef.current?.stopRecording();
+      } catch {
+        // ignore
+      }
       if (exportObjectUrlRef.current) {
         try {
           URL.revokeObjectURL(exportObjectUrlRef.current);

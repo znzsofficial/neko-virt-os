@@ -17,12 +17,17 @@ export type VrAttachQuality =
   | VrQualityInput
   | Pick<
       VrDesktopPrefs,
-      "renderQuality" | "dprPref" | "panelScalePref" | "frameRatePref" | "antialiasPref"
+      "renderQuality" | "dprPref" | "panelScalePref" | "frameRatePref" | "antialiasPref" | "framebufferScalePref" | "foveationPref" | "floorDetailPref"
     >;
 
 /** Dedicated XR session for VR desktop — never share with MMD showcase. */
 const session = createProductXrSession<VrAttachQuality>({
   resolveFrameRate: (quality) => getVrRenderProfile(quality).frameRate,
+  configureRenderer: (gl, quality) => {
+    const profile = getVrRenderProfile(quality);
+    gl.xr.setFramebufferScaleFactor(profile.framebufferScale);
+    gl.xr.setFoveation(profile.foveation);
+  },
 });
 
 export const vrXrStore = session.xrStore;

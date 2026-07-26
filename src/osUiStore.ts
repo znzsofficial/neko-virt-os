@@ -11,20 +11,20 @@ import {
   updateSystemPrefs,
   type SystemPrefs,
 } from "./system/systemPrefs";
+import {
+  DEFAULT_NOTIFICATION_PREFS,
+  NOTIFY_PREFS_KEY,
+  WIDGETS_KEY,
+  WORKSPACE_KEY,
+  normalizeNotificationPrefs,
+  type BannerDuration,
+  type NotificationCategory,
+  type NotificationPrefs,
+} from "./system/notificationPrefs";
 
-export type NotificationCategory = "system" | "files" | "apps" | "media";
-
-export type BannerDuration = "short" | "standard" | "long";
+export type { BannerDuration, NotificationCategory, NotificationPrefs } from "./system/notificationPrefs";
 
 export type WorkspaceId = 0 | 1 | 2;
-
-export type NotificationPrefs = {
-  dndEnabled: boolean;
-  dndStart: string;
-  dndEnd: string;
-  bannerDuration: BannerDuration;
-  categories: Record<NotificationCategory, boolean>;
-};
 
 type OsUiStore = {
   activeWorkspace: WorkspaceId;
@@ -58,23 +58,6 @@ applyDeveloperPrefs(initialDeveloperPrefs);
 const initialSystemPrefs = readSystemPrefs();
 applySystemPrefs(initialSystemPrefs);
 
-const WORKSPACE_KEY = "neko-virt-os.workspace.v1";
-const NOTIFY_PREFS_KEY = "neko-virt-os.notification-prefs.v1";
-const WIDGETS_KEY = "neko-virt-os.widgets-collapsed.v1";
-
-const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
-  dndEnabled: false,
-  dndStart: "22:00",
-  dndEnd: "08:00",
-  bannerDuration: "standard",
-  categories: {
-    system: true,
-    files: true,
-    apps: true,
-    media: true,
-  },
-};
-
 export const BANNER_DURATION_MS: Record<BannerDuration, number> = {
   short: 2000,
   standard: 3500,
@@ -88,24 +71,6 @@ function loadWorkspace(): WorkspaceId {
   } catch {
     return 0;
   }
-}
-
-function normalizeNotificationPrefs(value: Partial<NotificationPrefs> & { categories?: Partial<Record<NotificationCategory, boolean>> } = {}): NotificationPrefs {
-  const bannerDuration = (["short", "standard", "long"] as const).includes(value.bannerDuration as BannerDuration)
-    ? (value.bannerDuration as BannerDuration)
-    : DEFAULT_NOTIFICATION_PREFS.bannerDuration;
-  return {
-    dndEnabled: Boolean(value.dndEnabled),
-    dndStart: typeof value.dndStart === "string" && value.dndStart ? value.dndStart : DEFAULT_NOTIFICATION_PREFS.dndStart,
-    dndEnd: typeof value.dndEnd === "string" && value.dndEnd ? value.dndEnd : DEFAULT_NOTIFICATION_PREFS.dndEnd,
-    bannerDuration,
-    categories: {
-      system: value.categories?.system !== false,
-      files: value.categories?.files !== false,
-      apps: value.categories?.apps !== false,
-      media: value.categories?.media !== false,
-    },
-  };
 }
 
 function loadPrefs(): NotificationPrefs {

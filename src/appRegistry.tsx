@@ -11,7 +11,6 @@ function lazyApp(loader: () => Promise<{ default: ComponentType<AppModuleProps> 
 
 export const appComponentRegistry: Partial<Record<AppId, AppModuleComponent>> = {
   "api-tester": lazyApp(() => import("./appModules/ApiTesterApp").then((module) => ({ default: module.ApiTesterApp }))),
-  about: lazyApp(() => import("./appModules/AboutApp").then((module) => ({ default: module.AboutApp }))),
   browser: lazyApp(() => import("./appModules/BrowserApp").then((module) => ({ default: module.BrowserApp }))),
   calculator: lazyApp(() => import("./appModules/CalculatorApp").then((module) => ({ default: module.CalculatorApp }))),
   calendar: lazyApp(() => import("./appModules/CalendarApp").then((module) => ({ default: module.CalendarApp }))),
@@ -26,6 +25,7 @@ export const appComponentRegistry: Partial<Record<AppId, AppModuleComponent>> = 
   palette: lazyApp(() => import("./appModules/PaletteApp").then((module) => ({ default: module.PaletteApp }))),
   tasks: lazyApp(() => import("./appModules/TasksApp").then((module) => ({ default: module.TasksApp }))),
   settings: lazyApp(() => import("./appModules/SettingsApp").then((module) => ({ default: module.SettingsApp }))),
+  "vr-desktop": lazyApp(() => import("./appModules/VrDesktopSettingsApp").then((module) => ({ default: module.VrDesktopSettingsApp }))),
   "task-manager": lazyApp(() => import("./appModules/TaskManagerApp").then((module) => ({ default: module.TaskManagerApp }))),
   trash: lazyApp(() => import("./appModules/TrashApp").then((module) => ({ default: module.TrashApp }))),
   "video-player": lazyApp(() => import("./appModules/VideoPlayerApp").then((module) => ({ default: module.VideoPlayerApp }))),

@@ -43,6 +43,42 @@ describe("attachPendingSessionToRenderer", () => {
     expect(gl.xr.enabled).toBe(true);
   });
 
+  it("configures XR resolution before attaching the session", async () => {
+    const session = {
+      addEventListener: vi.fn(),
+      end: vi.fn(),
+    } as unknown as XRSession;
+    await seedPending(session);
+
+    const calls: string[] = [];
+    const gl = {
+      xr: {
+        enabled: false,
+        isPresenting: false,
+        setFramebufferScaleFactor: vi.fn(() => calls.push("scale")),
+        setFoveation: vi.fn(() => calls.push("foveation")),
+        setSession: vi.fn(async () => {
+          calls.push("session");
+        }),
+      },
+    } as unknown as import("three").WebGLRenderer;
+
+    await attachPendingSessionToRenderer(gl, {
+      renderQuality: "low",
+      dprPref: "auto",
+      panelScalePref: "auto",
+      frameRatePref: "auto",
+      antialiasPref: "auto",
+      framebufferScalePref: "1",
+      foveationPref: "off",
+      floorDetailPref: "auto",
+    });
+
+    expect(gl.xr.setFramebufferScaleFactor).toHaveBeenCalledWith(1);
+    expect(gl.xr.setFoveation).toHaveBeenCalledWith(0);
+    expect(calls).toEqual(["scale", "foveation", "session"]);
+  });
+
   it("does not drop pending session when setSession fails", async () => {
     const session = {
       addEventListener: vi.fn(),

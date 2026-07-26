@@ -8,7 +8,7 @@ import { createXrSceneMountGuard } from "../xr";
 import { HomeScreen } from "./components/HomeScreen";
 import { LauncherScreen } from "./components/LauncherScreen";
 import { SecondaryButton, StageFloor } from "./components/PanelPrimitives";
-import { vrTheme } from "./vrTheme";
+import { setVrThemeColor, vrTheme } from "./vrTheme";
 import { PlayerRig } from "./components/PlayerRig";
 import { AttachPendingSession, HeadsetHudGate, SessionSync } from "./components/SessionBridge";
 import { StickyPreviewScreen } from "./components/StickyPreviewScreen";
@@ -18,6 +18,7 @@ import { VrBrowserPanel } from "./VrBrowserPanel";
 import { endVrDesktopSession, peekPendingVrSession, vrXrStore } from "./vrSession";
 import { useVrDesktopStore } from "./vrDesktopStore";
 import { getVrRenderProfile } from "./vrQuality";
+import { useVrLayoutStore } from "./vrLayoutStore";
 
 const { useXrSceneLifecycle } = createXrSceneMountGuard();
 
@@ -48,12 +49,10 @@ function Stage({
     <>
       <color attach="background" args={[vrTheme.stageBg]} />
       <fog attach="fog" args={[vrTheme.fog, 7, 18]} />
-      <ambientLight intensity={0.45} />
-      <directionalLight position={[2, 4, 1.5]} intensity={0.85} />
       <StageFloor />
-      <HomeScreen statusLine={statusLine} />
-      <LauncherScreen onLaunch={onLaunch} disabled={busy || browserOpen} />
-      <StickyPreviewScreen />
+      <HomeScreen statusLine={statusLine} dimmed={browserOpen} />
+      {!browserOpen ? <LauncherScreen onLaunch={onLaunch} disabled={busy} /> : null}
+      {!browserOpen ? <StickyPreviewScreen /> : null}
       <VrBrowserPanel open={browserOpen} onClose={onCloseBrowser} disabled={busy} />
       <SecondaryButton
         pose={VR_DEFAULT_LAYOUT.exit}
@@ -81,6 +80,7 @@ export function VrDesktopScene() {
   const t = useLanguageStore((state) => state.t);
   const sessionLocked = useOsUiStore((state) => state.sessionLocked);
   const vrPrefs = useVrDesktopStore((state) => state.prefs);
+  setVrThemeColor(vrPrefs.themeColor);
   const profile = getVrRenderProfile(vrPrefs);
   const [hud, setHud] = useState<HudStatus>({ kind: "idle" });
   const [hideExitHud, setHideExitHud] = useState(false);
@@ -156,7 +156,8 @@ export function VrDesktopScene() {
     }
 
     if (appId === "sticky-board") {
-      flashStatus(t("settingsVrDesktopInVrOnly").replace("{app}", label));
+      useVrLayoutStore.getState().resetPose("sticky");
+      flashStatus(t("settingsVrDesktopPanelRecalled").replace("{app}", label));
       return;
     }
 

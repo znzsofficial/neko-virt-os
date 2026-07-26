@@ -13,6 +13,10 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     rollupOptions: {
+      input: {
+        main: "index.html",
+        mmdVr: "mmd-vr.html",
+      },
       output: {
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;

@@ -158,6 +158,13 @@ export async function deleteMmdProject(id: string) {
   });
 }
 
+export async function clearAllMmdProjectData() {
+  await db.transaction("rw", db.projects, db.assets, async () => {
+    await db.projects.clear();
+    await db.assets.clear();
+  });
+}
+
 export async function loadMmdProjectAsset(assetId: string): Promise<File | null> {
   const row = await db.assets.get(assetId);
   if (!row) return null;

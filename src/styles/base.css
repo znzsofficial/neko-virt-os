@@ -2,7 +2,7 @@
 
 @font-face {
   font-family: "OPPO Sans";
-  src: url("./assets/fonts/oppo-sans-4.woff2") format("woff2");
+  src: url("../assets/fonts/oppo-sans-4.woff2") format("woff2");
   font-weight: 400 700;
   font-style: normal;
   font-display: swap;
@@ -1442,14 +1442,21 @@ html[data-large-targets="on"] .taskbar-item,
 html[data-large-targets="on"] .nav-item,
 html[data-large-targets="on"] .button-ghost,
 html[data-large-targets="on"] .button-primary {
-  min-height: 36px;
+  min-height: 44px;
+}
+html[data-large-targets="on"] .settings-choice-card,
+html[data-large-targets="on"] .settings-nav-item,
+html[data-large-targets="on"] .settings-accent-swatch,
+html[data-large-targets="on"] .wallpaper-option {
+  min-height: 44px;
 }
 html[data-large-targets="on"] .settings-switch {
-  width: 52px;
-  height: 32px;
+  width: 58px;
+  height: 44px;
+  padding: 8px 6px;
 }
 html[data-large-targets="on"] .settings-switch.is-on i {
-  transform: translateX(20px);
+  transform: translateX(24px);
 }
 html[data-high-contrast="on"] {
   --os-border: color-mix(in oklch, var(--os-ink) 28%, var(--os-border));

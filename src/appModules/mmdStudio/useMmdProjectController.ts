@@ -3,6 +3,7 @@ import { useDownloadStore } from "../../system/downloadStore";
 import { useLanguageStore } from "../../languageStore";
 import { useNotificationStore } from "../../notificationStore";
 import type { MmdSceneApi } from "./MmdCanvas";
+import type { MmdRendererBackend } from "./mmdStudioStore";
 import {
   deleteMmdProject,
   getMmdAutosave,
@@ -35,6 +36,7 @@ type UseMmdProjectControllerOptions = {
   seek: (time: number) => void;
   setTextureInfo: (value: string) => void;
   setSkyHdr: (file: File | null) => void;
+  ensureBackend: (backend: MmdRendererBackend, restoreCurrentScene?: boolean) => Promise<MmdSceneApi>;
   /** When false, autosave timer is paused (e.g. project home). Default true. */
   editorActive?: boolean;
 };
@@ -119,15 +121,6 @@ export type MmdProjectLoadProgress = {
   projectName: string;
 };
 
-async function waitForSceneApi(apiRef: MutableRefObject<MmdSceneApi | null>, timeoutMs = 12_000) {
-  const started = performance.now();
-  while (performance.now() - started < timeoutMs) {
-    if (apiRef.current) return apiRef.current;
-    await new Promise((resolve) => window.setTimeout(resolve, 40));
-  }
-  return apiRef.current;
-}
-
 export function useMmdProjectController({
   apiRef,
   audioFileRef,
@@ -137,6 +130,7 @@ export function useMmdProjectController({
   seek,
   setTextureInfo,
   setSkyHdr,
+  ensureBackend,
   editorActive = true,
 }: UseMmdProjectControllerOptions) {
   const t = useLanguageStore((state) => state.t);
@@ -302,6 +296,13 @@ export function useMmdProjectController({
   async function loadProjectRecord(record: MmdProjectRecord) {
     setProjectBusy(true);
     const displayName = record.isAutosave ? t("mmdProjectContinueAutosave") : record.name;
+    let transactionStarted = false;
+    const previousApi = apiRef.current;
+    const previousModels = previousApi?.exportProjectModels() ?? [];
+    const previousSelectedId = useMmdStudioStore.getState().selectedModelId;
+    const previousSettings = collectProjectSettings();
+    const previousAudio = audioFileRef.current;
+    const previousHdr = hdrFileRef.current;
     const setPhase = (
       phase: MmdProjectLoadProgress["phase"],
       current = 0,
@@ -312,40 +313,28 @@ export function useMmdProjectController({
     try {
       setPhase("prepare");
       useMmdStudioStore.getState().setStatus("loading", displayName);
-      const targetBackend = record.settings.backend;
-      const currentBackend = useMmdStudioStore.getState().backend;
-      if (targetBackend !== currentBackend) {
-        useMmdStudioStore.getState().setBackend(targetBackend);
-      }
-      // Canvas may still be mounting after leaving project home.
-      const api = await waitForSceneApi(apiRef, 15_000);
-      if (!api) throw new Error("Scene API unavailable");
-
-      applyProjectSettings(record.settings, { applyBackend: false });
-      setProjectName(record.isAutosave ? useMmdStudioStore.getState().projectName : record.name);
-      if (!record.isAutosave) setLastProjectId(record.id);
 
       const modelCount = Math.max(1, record.models.length);
       const hydrateModels: MmdHydrateModelInput[] = [];
+      const loadReferencedAsset = async (assetId: string | null, label: string) => {
+        if (!assetId) return null;
+        const file = await loadMmdProjectAsset(assetId);
+        if (!file) throw new Error(`Missing project asset: ${label}`);
+        return file;
+      };
       for (let index = 0; index < record.models.length; index += 1) {
         const model = record.models[index]!;
         setPhase("assets", index + 1, modelCount);
-        const modelFile = await loadMmdProjectAsset(model.modelAssetId);
-        if (!modelFile) continue;
+        const modelFile = await loadReferencedAsset(model.modelAssetId, model.name);
+        if (!modelFile) throw new Error(`Missing model asset: ${model.name}`);
         const companions: File[] = [];
         for (const cid of model.companionAssetIds) {
           const file = await loadMmdProjectAsset(cid);
           if (file) companions.push(file);
         }
-        const bodyMotionFile = model.bodyMotionAssetId
-          ? await loadMmdProjectAsset(model.bodyMotionAssetId)
-          : null;
-        const faceMotionFile = model.faceMotionAssetId
-          ? await loadMmdProjectAsset(model.faceMotionAssetId)
-          : null;
-        const cameraMotionFile = model.cameraMotionAssetId
-          ? await loadMmdProjectAsset(model.cameraMotionAssetId)
-          : null;
+        const bodyMotionFile = await loadReferencedAsset(model.bodyMotionAssetId, `${model.name} body motion`);
+        const faceMotionFile = await loadReferencedAsset(model.faceMotionAssetId, `${model.name} face motion`);
+        const cameraMotionFile = await loadReferencedAsset(model.cameraMotionAssetId, `${model.name} camera motion`);
         hydrateModels.push({
           id: model.id,
           name: model.name,
@@ -364,30 +353,36 @@ export function useMmdProjectController({
         });
       }
 
+      const audio = await loadReferencedAsset(record.audioAssetId, "audio");
+      const hdr = await loadReferencedAsset(record.hdrAssetId, "HDR");
+      transactionStarted = true;
+      const api = await ensureBackend(record.settings.backend, false);
+
       setPhase("hydrate", hydrateModels.length, hydrateModels.length || 1);
       await hydrateMmdModels(api, hydrateModels, {
         physics: record.settings.physicsEnabled,
         clearFirst: true,
       });
 
+      applyProjectSettings(record.settings, { applyBackend: false });
+
       setPhase("media");
-      if (record.audioAssetId) {
-        const audio = await loadMmdProjectAsset(record.audioAssetId);
-        if (audio) await handleAudio(audio);
+      if (audio) {
+        await handleAudio(audio);
       } else {
         clearAudio();
       }
 
-      if (record.hdrAssetId) {
-        const hdr = await loadMmdProjectAsset(record.hdrAssetId);
-        if (hdr) {
-          hdrFileRef.current = hdr;
-          setSkyHdr(hdr);
-        }
+      if (hdr) {
+        hdrFileRef.current = hdr;
+        setSkyHdr(hdr);
       } else {
         hdrFileRef.current = null;
         setSkyHdr(null);
       }
+
+      setProjectName(record.isAutosave ? useMmdStudioStore.getState().projectName : record.name);
+      if (!record.isAutosave) setLastProjectId(record.id);
 
       setPhase("done");
       seek(record.settings.currentTime);
@@ -402,6 +397,23 @@ export function useMmdProjectController({
         duration: 3500,
       });
     } catch (error) {
+      if (transactionStarted) {
+        try {
+          const rollbackApi = await ensureBackend(previousSettings.backend, false);
+          await rollbackApi.restoreScene(previousModels, {
+            physics: previousSettings.physicsEnabled,
+            selectedId: previousSelectedId,
+          });
+          applyProjectSettings(previousSettings, { applyBackend: false });
+          if (previousAudio) await handleAudio(previousAudio);
+          else clearAudio();
+          hdrFileRef.current = previousHdr;
+          setSkyHdr(previousHdr);
+          seek(previousSettings.currentTime);
+        } catch {
+          // Keep the original load error; renderer status exposes rollback failures.
+        }
+      }
       useMmdStudioStore.getState().setStatus(
         "error",
         error instanceof Error ? error.message : t("mmdProjectLoadFailed"),

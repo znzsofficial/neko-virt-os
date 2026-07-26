@@ -5,13 +5,12 @@ import { initialWindows } from "./initialWindows";
 import { useLanguageStore } from "./languageStore";
 import { useLauncherStore } from "./launcherStore";
 import { useOsUiStore } from "./osUiStore";
+import { DESKTOP_ICON_POSITIONS_KEY, DESKTOP_LAYOUT_MODE_KEY, normalizeDesktopLayoutMode } from "./system/desktopPrefs";
+import { requestSettingsSection } from "./appModules/settings/settingsNavigation";
 import type { DesktopLayoutMode, DesktopStore, WindowBounds, WindowState, WorkspaceId } from "./types";
 
 export const WINDOW_LAYOUT_STORAGE_KEY = "neko-virt-os.window-layout.v1";
 export const SNAP_THRESHOLD = 18;
-
-const DESKTOP_ICON_POSITIONS_KEY = "neko-virt-os.desktop-icons.v1";
-const DESKTOP_LAYOUT_MODE_KEY = "neko-virt-os.desktop-layout-mode.v1";
 
 function loadIconPositions(): Record<string, { x: number; y: number }> {
   try {
@@ -25,7 +24,7 @@ function loadIconPositions(): Record<string, { x: number; y: number }> {
 function loadDesktopLayoutMode(): DesktopLayoutMode {
   try {
     const raw = localStorage.getItem(DESKTOP_LAYOUT_MODE_KEY);
-    return raw === "free" || raw === "grid" ? raw : "grid";
+    return normalizeDesktopLayoutMode(raw);
   } catch {
     return "grid";
   }
@@ -40,6 +39,13 @@ export const useDesktopStore = create<DesktopStore>((set, get) => ({
   desktopLayoutMode: loadDesktopLayoutMode(),
   desktopIconPositions: loadIconPositions(),
   openApp: (appId) => {
+    if (appId === "mmd-vr") {
+      window.location.assign("./mmd-vr.html");
+      return null;
+    }
+    if (appId === "about") {
+      requestSettingsSection("about");
+    }
     // About is integrated into Settings.
     const resolvedId = appId === "about" ? "settings" : appId;
     const app = apps.find((item) => item.id === resolvedId);
@@ -334,7 +340,9 @@ function loadWindowSnapshot() {
 }
 
 function normalizeWindowState(windowState: WindowState): WindowState | null {
-  const app = apps.find((item) => item.id === windowState.appId);
+  const appId = windowState.appId === "about" ? "settings" : windowState.appId;
+  if (windowState.appId === "about") requestSettingsSection("about");
+  const app = apps.find((item) => item.id === appId);
   if (!app) return null;
   const t = useLanguageStore.getState().t;
   const normalized = snapWindowBounds({
@@ -346,6 +354,7 @@ function normalizeWindowState(windowState: WindowState): WindowState | null {
   const workspaceId = windowState.workspaceId === 1 || windowState.workspaceId === 2 ? windowState.workspaceId : 0;
   return {
     ...windowState,
+    appId,
     title: t(app.titleKey),
     icon: app.icon,
     width: normalized.width,

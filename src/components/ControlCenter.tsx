@@ -1,13 +1,11 @@
 import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useLanguageStore } from "../languageStore";
 import { useOsUiStore, type WorkspaceId } from "../osUiStore";
 import { readThemeSettings, updateThemeSettings } from "../system/theme";
 import type { ThemeSettings } from "../types";
 import { useDesktopStore } from "../windowStore";
-import { requestMmdVrEnter } from "../mmdVrShowcase/requestMmdVrEnter";
-import { useMmdVrStore } from "../mmdVrShowcase/mmdVrStore";
 import { requestVrDesktopEnter } from "../vrDesktop/requestVrEnter";
 import { refreshVrCapability, useVrDesktopStore } from "../vrDesktop/vrDesktopStore";
 import { useNotificationStore } from "../notificationStore";
@@ -27,13 +25,16 @@ export function ControlCenter() {
   const openApp = useDesktopStore((state) => state.openApp);
   const vrEnabled = useVrDesktopStore((state) => state.prefs.enabled);
   const vrPhase = useVrDesktopStore((state) => state.phase);
-  const mmdVrPhase = useMmdVrStore((state) => state.phase);
+  const vrCapability = useVrDesktopStore((state) => state.capability);
   const addNotification = useNotificationStore((state) => state.addNotification);
   const focusWindow = useDesktopStore((state) => state.focusWindow);
   const restoreWindow = useDesktopStore((state) => state.restoreWindow);
   const windows = useDesktopStore((state) => state.windows);
 
   const [theme, setTheme] = useState(() => readThemeSettings());
+  const vrUnavailableReasonId = useId();
+  const vrUnavailable = vrCapability === "unavailable" || vrCapability === "limited";
+  const vrUnavailableReason = vrCapability === "unavailable" ? t("settingsVrDesktopNeedHttps") : t("settingsVrDesktopNoXr");
 
   useEffect(() => {
     if (open) setTheme(readThemeSettings());
@@ -162,8 +163,9 @@ export function ControlCenter() {
           <button
             type="button"
             className="control-center-action tint-sky"
-            disabled={vrPhase === "entering" || vrPhase === "active"}
-            title={t("settingsVrDesktop")}
+            disabled={vrUnavailable || vrPhase === "entering" || vrPhase === "active"}
+            aria-describedby={vrUnavailable ? vrUnavailableReasonId : undefined}
+            title={vrUnavailable ? vrUnavailableReason : t("settingsVrDesktop")}
             onClick={() => {
               // requestSession must start on this stack (Quest user activation).
               const enter = requestVrDesktopEnter({ t, addNotification });
@@ -177,21 +179,18 @@ export function ControlCenter() {
               : t("settingsVrDesktop")}
           </button>
         ) : null}
+        {vrEnabled && vrUnavailable ? <span id={vrUnavailableReasonId} className="settings-visually-hidden">{vrUnavailableReason}</span> : null}
         <button
           type="button"
           className="control-center-action tint-mint"
-          disabled={mmdVrPhase === "entering" || mmdVrPhase === "active"}
           title={t("settingsMmdVrShowcase")}
           onClick={() => {
-            const enter = requestMmdVrEnter({ t, addNotification });
             setControlCenterOpen(false);
-            void enter;
+            window.location.assign("./mmd-vr.html");
           }}
         >
           <Icon icon="solar:clapperboard-edit-bold-duotone" width={16} height={16} />
-          {mmdVrPhase === "entering"
-            ? t("settingsMmdVrEntering")
-            : t("settingsMmdVrShowcase")}
+          {t("settingsMmdVrShowcase")}
         </button>
         <button
           type="button"

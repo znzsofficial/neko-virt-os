@@ -3,13 +3,15 @@ import {
   getMmdProject,
   loadMmdProjectAsset,
   saveMmdProject,
+  type MmdProjectModelMeta,
   type MmdProjectRecord,
   type SaveMmdProjectInput,
 } from "./mmdProjectDb";
 import { writeProjectCatalogEntry } from "./mmdProjectPrefs";
+import type { MmdMaterialOverride } from "./mmdStudioStore";
 
 export const MMD_PROJECT_PACKAGE_FORMAT = "neko-mmd-project";
-export const MMD_PROJECT_PACKAGE_VERSION = 1;
+export const MMD_PROJECT_PACKAGE_VERSION = 2;
 
 type PackageAsset = {
   key: string;
@@ -19,14 +21,24 @@ type PackageAsset = {
   relativePath?: string;
 };
 
+type PackageMaterialOverride = Omit<MmdMaterialOverride, "aoMapFile" | "emissionMapFile" | "maskMapFile"> & {
+  aoMapAssetKey?: string | null;
+  emissionMapAssetKey?: string | null;
+  maskMapAssetKey?: string | null;
+};
+
+type PackageProjectModel = Omit<MmdProjectModelMeta, "materialOverrides"> & {
+  materialOverrides: Record<string, PackageMaterialOverride>;
+};
+
 export type MmdProjectPackage = {
   format: typeof MMD_PROJECT_PACKAGE_FORMAT;
-  version: typeof MMD_PROJECT_PACKAGE_VERSION;
+  version: 1 | typeof MMD_PROJECT_PACKAGE_VERSION;
   exportedAt: number;
   project: {
     name: string;
     settings: MmdProjectRecord["settings"];
-    models: MmdProjectRecord["models"];
+    models: Array<MmdProjectModelMeta | PackageProjectModel>;
     audioName: string | null;
     hdrName: string | null;
     audioAssetKey: string | null;
@@ -58,10 +70,8 @@ export async function buildMmdProjectPackage(projectId: string): Promise<{ blob:
   if (!record || record.isAutosave) throw new Error("Project not found");
 
   const assets: PackageAsset[] = [];
-  const pushAsset = async (key: string, assetId: string | null | undefined) => {
-    if (!assetId) return;
-    const file = await loadMmdProjectAsset(assetId);
-    if (!file) return;
+  const pushFileAsset = async (key: string, file: File | null | undefined) => {
+    if (!file) return null;
     const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
     assets.push({
       key,
@@ -70,8 +80,14 @@ export async function buildMmdProjectPackage(projectId: string): Promise<{ blob:
       dataBase64: await blobToBase64(file),
       relativePath,
     });
+    return key;
+  };
+  const pushAsset = async (key: string, assetId: string | null | undefined) => {
+    if (!assetId) return null;
+    return pushFileAsset(key, await loadMmdProjectAsset(assetId));
   };
 
+  const packageModels: PackageProjectModel[] = [];
   for (const [index, model] of record.models.entries()) {
     await pushAsset(`model-${index}`, model.modelAssetId);
     for (const [cIndex, companionId] of model.companionAssetIds.entries()) {
@@ -80,6 +96,20 @@ export async function buildMmdProjectPackage(projectId: string): Promise<{ blob:
     await pushAsset(`model-${index}-body`, model.bodyMotionAssetId);
     await pushAsset(`model-${index}-face`, model.faceMotionAssetId);
     await pushAsset(`model-${index}-camera`, model.cameraMotionAssetId);
+    const materialOverrides: Record<string, PackageMaterialOverride> = {};
+    let materialIndex = 0;
+    for (const [name, override] of Object.entries(model.materialOverrides ?? {})) {
+      const { aoMapFile, emissionMapFile, maskMapFile, ...values } = override;
+      const prefix = `model-${index}-material-${materialIndex}`;
+      materialOverrides[name] = {
+        ...values,
+        aoMapAssetKey: await pushFileAsset(`${prefix}-ao`, aoMapFile),
+        emissionMapAssetKey: await pushFileAsset(`${prefix}-emission`, emissionMapFile),
+        maskMapAssetKey: await pushFileAsset(`${prefix}-mask`, maskMapFile),
+      };
+      materialIndex += 1;
+    }
+    packageModels.push({ ...model, materialOverrides });
   }
   await pushAsset("audio", record.audioAssetId);
   await pushAsset("hdr", record.hdrAssetId);
@@ -91,7 +121,7 @@ export async function buildMmdProjectPackage(projectId: string): Promise<{ blob:
     project: {
       name: record.name,
       settings: record.settings,
-      models: record.models,
+      models: packageModels,
       audioName: record.audioName,
       hdrName: record.hdrName,
       audioAssetKey: record.audioAssetId ? "audio" : null,
@@ -114,7 +144,7 @@ export async function importMmdProjectPackage(file: File): Promise<MmdProjectRec
   } catch {
     throw new Error("Invalid project package");
   }
-  if (pack.format !== MMD_PROJECT_PACKAGE_FORMAT || pack.version !== MMD_PROJECT_PACKAGE_VERSION) {
+  if (pack.format !== MMD_PROJECT_PACKAGE_FORMAT || (pack.version !== 1 && pack.version !== MMD_PROJECT_PACKAGE_VERSION)) {
     throw new Error("Unsupported project package version");
   }
   if (!pack.project?.settings || !Array.isArray(pack.project.models) || !Array.isArray(pack.assets)) {
@@ -133,6 +163,39 @@ export async function importMmdProjectPackage(file: File): Promise<MmdProjectRec
       return new Blob([bytes], { type: asset.mime || "application/octet-stream" });
     })();
     return fileWithRelativePath(blob, asset.name, asset.mime, asset.relativePath ?? asset.name);
+  };
+
+  const deserializeMaterialOverrides = (
+    overrides: Record<string, Partial<MmdMaterialOverride> & {
+      aoMapAssetKey?: string | null;
+      emissionMapAssetKey?: string | null;
+      maskMapAssetKey?: string | null;
+    }> | null | undefined,
+  ): Record<string, MmdMaterialOverride> => {
+    const resolveEnhancementFile = (key: string | null | undefined, label: string) => {
+      const resolved = resolveFile(key);
+      if (pack.version === 2 && key && !resolved) throw new Error(`Missing material asset: ${label}`);
+      return resolved;
+    };
+    const result: Record<string, MmdMaterialOverride> = {};
+    for (const [name, override] of Object.entries(overrides ?? {})) {
+      const {
+        aoMapFile: _legacyAo,
+        emissionMapFile: _legacyEmission,
+        maskMapFile: _legacyMask,
+        aoMapAssetKey,
+        emissionMapAssetKey,
+        maskMapAssetKey,
+        ...values
+      } = override;
+      result[name] = {
+        ...values,
+        aoMapFile: resolveEnhancementFile(aoMapAssetKey, `${name} AO`),
+        emissionMapFile: resolveEnhancementFile(emissionMapAssetKey, `${name} emission`),
+        maskMapFile: resolveEnhancementFile(maskMapAssetKey, `${name} mask`),
+      } as MmdMaterialOverride;
+    }
+    return result;
   };
 
   const models: SaveMmdProjectInput["models"] = pack.project.models.map((model, index) => {
@@ -162,7 +225,7 @@ export async function importMmdProjectPackage(file: File): Promise<MmdProjectRec
       morphWeights: model.morphWeights ?? {},
       morphFavorites: model.morphFavorites ?? [],
       materialVisible: model.materialVisible ?? {},
-      materialOverrides: model.materialOverrides ?? {},
+      materialOverrides: deserializeMaterialOverrides(model.materialOverrides),
       transform,
       modelFile,
       companionFiles: companionFiles.length ? companionFiles : [modelFile],

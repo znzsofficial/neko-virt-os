@@ -8,6 +8,11 @@ export type MmdVrAttachQuality = MmdVrRenderQuality | MmdVrQualityInput;
 /** Dedicated XR session for MMD showcase — never share with VR desktop. */
 const session = createProductXrSession<MmdVrAttachQuality>({
   resolveFrameRate: (quality) => getMmdVrRenderProfile(quality).frameRate,
+  configureRenderer: (gl, quality) => {
+    const profile = getMmdVrRenderProfile(quality);
+    gl.xr.setFramebufferScaleFactor(profile.framebufferScale);
+    gl.xr.setFoveation(profile.foveation);
+  },
 });
 
 export const mmdVrXrStore = session.xrStore;

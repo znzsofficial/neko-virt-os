@@ -7,6 +7,8 @@ import {
   type ImmersiveAntialiasPref,
   type ImmersiveDprPref,
   type ImmersiveFrameRatePref,
+  type ImmersiveFramebufferScalePref,
+  type ImmersiveFoveationPref,
   type ImmersiveRenderQuality,
 } from "../xr";
 import type {
@@ -40,6 +42,8 @@ export type VrRenderProfile = {
   frameRate: "high" | "mid" | "low" | false;
   /** Soft-edge vignette allowed (still gated by prefs.softEdges). */
   allowSoftEdges: boolean;
+  framebufferScale: number;
+  foveation: number;
 };
 
 const PROFILES: Record<VrRenderQuality, VrRenderProfile> = {
@@ -51,6 +55,8 @@ const PROFILES: Record<VrRenderQuality, VrRenderProfile> = {
     floorSegments: 48,
     frameRate: "high",
     allowSoftEdges: true,
+    framebufferScale: 1,
+    foveation: 0.25,
   },
   balanced: {
     quality: "balanced",
@@ -60,6 +66,8 @@ const PROFILES: Record<VrRenderQuality, VrRenderProfile> = {
     floorSegments: 32,
     frameRate: "mid",
     allowSoftEdges: true,
+    framebufferScale: 0.85,
+    foveation: 0.5,
   },
   low: {
     quality: "low",
@@ -69,6 +77,8 @@ const PROFILES: Record<VrRenderQuality, VrRenderProfile> = {
     floorSegments: 24,
     frameRate: "low",
     allowSoftEdges: false,
+    framebufferScale: 0.7,
+    foveation: 1,
   },
 };
 
@@ -78,9 +88,11 @@ const PANEL_SCALE_MAP: Record<Exclude<VrPanelScalePref, "auto">, number> = {
   high: 1,
 };
 
+const FLOOR_SEGMENTS_MAP = { low: 24, medium: 32, high: 48 } as const;
+
 export type VrQualityInput = Pick<
   VrDesktopPrefs,
-  "renderQuality" | "dprPref" | "panelScalePref" | "frameRatePref" | "antialiasPref"
+  "renderQuality" | "dprPref" | "panelScalePref" | "frameRatePref" | "antialiasPref" | "framebufferScalePref" | "foveationPref" | "floorDetailPref"
 >;
 
 export function getVrRenderProfile(
@@ -92,16 +104,21 @@ export function getVrRenderProfile(
 
   if (typeof qualityOrPrefs === "string") return base;
 
-  const { dprPref, panelScalePref, frameRatePref, antialiasPref } = qualityOrPrefs;
+  const { dprPref, panelScalePref, frameRatePref, antialiasPref, framebufferScalePref, foveationPref, floorDetailPref } = qualityOrPrefs;
 
   base = applyCommonQualityAxes(base, {
     dprPref: dprPref as ImmersiveDprPref,
     frameRatePref: frameRatePref as ImmersiveFrameRatePref,
     antialiasPref: antialiasPref as ImmersiveAntialiasPref,
+    framebufferScalePref: framebufferScalePref as ImmersiveFramebufferScalePref,
+    foveationPref: foveationPref as ImmersiveFoveationPref,
   });
 
   if (panelScalePref && panelScalePref !== "auto") {
     base.panelScale = PANEL_SCALE_MAP[panelScalePref] ?? base.panelScale;
+  }
+  if (floorDetailPref && floorDetailPref !== "auto") {
+    base.floorSegments = FLOOR_SEGMENTS_MAP[floorDetailPref] ?? base.floorSegments;
   }
 
   return base;
@@ -115,9 +132,9 @@ export function formatVrProfileSummary(
   const aa = formatOnOff(profile.antialias, language);
   const fps = formatFrameRateLabel(profile.frameRate);
   if (language === "zh") {
-    return `DPR ${dpr} · AA ${aa} · 面板 ${Math.round(profile.panelScale * 100)}% · 目标 ${fps}`;
+    return `DPR ${dpr} · XR ${Math.round(profile.framebufferScale * 100)}% · AA ${aa} · 面板 ${Math.round(profile.panelScale * 100)}% · 目标 ${fps}`;
   }
-  return `DPR ${dpr} · AA ${aa} · panels ${Math.round(profile.panelScale * 100)}% · target ${fps}`;
+  return `DPR ${dpr} · XR ${Math.round(profile.framebufferScale * 100)}% · AA ${aa} · panels ${Math.round(profile.panelScale * 100)}% · target ${fps}`;
 }
 
 // Re-export quality alias types for convenience (same as store).

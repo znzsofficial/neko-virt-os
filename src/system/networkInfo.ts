@@ -299,6 +299,7 @@ export async function fetchPublicIp(
         };
       }
     } catch {
+      if (signal?.aborted) throw new DOMException("Network diagnostics aborted", "AbortError");
       // try next
     }
   }
@@ -309,36 +310,54 @@ export async function fetchPublicIp(
  * Best-effort local / host candidates via WebRTC ICE.
  * Chrome often returns mDNS (.local) for host candidates instead of real LAN IPs.
  */
-export async function discoverLocalIps(timeoutMs = 4000): Promise<{
+export async function discoverLocalIps(
+  timeoutMs = 4000,
+  signal?: AbortSignal,
+  createPeerConnection: (configuration: RTCConfiguration) => RTCPeerConnection = (configuration) => new RTCPeerConnection(configuration),
+): Promise<{
   all: string[];
   lan: string[];
   mdns: string[];
   reflexive: string[];
   status: NetworkSnapshot["webrtcStatus"];
 }> {
-  if (typeof RTCPeerConnection === "undefined") {
-    return { all: [], lan: [], mdns: [], reflexive: [], status: "fail" };
-  }
-
   const hits: IceHit[] = [];
-  const pc = new RTCPeerConnection({
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" },
-      { urls: "stun:stun.cloudflare.com:3478" },
-    ],
-  });
-
+  let pc: RTCPeerConnection | null = null;
   try {
+    if (signal?.aborted) throw new DOMException("Network diagnostics aborted", "AbortError");
+    pc = createPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun.cloudflare.com:3478" },
+      ],
+    });
     pc.createDataChannel("neko-net");
 
     await new Promise<void>((resolve, reject) => {
-      const finish = () => resolve();
-      const timer = window.setTimeout(finish, timeoutMs);
+      let settled = false;
+      const cleanup = () => {
+        globalThis.clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+      };
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve();
+      };
+      const fail = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error);
+      };
+      const onAbort = () => fail(new DOMException("Network diagnostics aborted", "AbortError"));
+      const timer = globalThis.setTimeout(finish, timeoutMs);
+      signal?.addEventListener("abort", onAbort, { once: true });
 
-      pc.onicecandidate = (event) => {
+      pc!.onicecandidate = (event) => {
         if (!event.candidate) {
-          window.clearTimeout(timer);
           finish();
           return;
         }
@@ -352,31 +371,29 @@ export async function discoverLocalIps(timeoutMs = 4000): Promise<{
         );
       };
 
-      pc.onicegatheringstatechange = () => {
-        if (pc.iceGatheringState === "complete") {
-          window.clearTimeout(timer);
-          finish();
-        }
+      pc!.onicegatheringstatechange = () => {
+        if (pc!.iceGatheringState === "complete") finish();
       };
 
-      void pc
+      void pc!
         .createOffer({ offerToReceiveAudio: true })
-        .then((offer) => pc.setLocalDescription(offer))
-        .catch(reject);
+        .then((offer) => pc!.setLocalDescription(offer))
+        .catch(fail);
     });
 
     // SDP may contain candidates not delivered via the event in some engines
     hits.push(...parseSdpCandidates(pc.localDescription?.sdp));
-  } catch {
+  } catch (error) {
     try {
-      pc.close();
+      pc?.close();
     } catch {
       // ignore
     }
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
     return { all: [], lan: [], mdns: [], reflexive: [], status: "fail" };
   } finally {
     try {
-      pc.close();
+      pc?.close();
     } catch {
       // ignore
     }
@@ -426,8 +443,9 @@ export async function collectNetworkSnapshot(signal?: AbortSignal): Promise<Netw
   const basics = readNetworkBasics();
   const [publicResult, ice] = await Promise.all([
     basics.online ? fetchPublicIp(signal) : Promise.resolve({ ip: null, source: null, rttMs: null }),
-    discoverLocalIps(),
+    discoverLocalIps(4000, signal),
   ]);
+  if (signal?.aborted) throw new DOMException("Network diagnostics aborted", "AbortError");
 
   const publicIp = publicResult.ip;
   const localIps = ice.all.filter((ip) => ip !== publicIp);

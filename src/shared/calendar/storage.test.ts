@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getUpcomingEvents, readCalendarEvents, writeCalendarEvents } from "./storage";
+import { getNextUpcomingEvent, getUpcomingEvents, readCalendarEvents, writeCalendarEvents } from "./storage";
 
 function installMemoryLocalStorage() {
   const map = new Map<string, string>();
@@ -28,5 +28,16 @@ describe("calendar storage", () => {
     ]);
     expect(readCalendarEvents()).toHaveLength(2);
     expect(getUpcomingEvents(5).map((e) => e.id)).toEqual(["2"]);
+  });
+
+  it("skips timed events that already passed today", () => {
+    writeCalendarEvents([
+      { id: "past", date: "2026-07-27", title: "Morning", time: "09:00" },
+      { id: "future", date: "2026-07-27", title: "Evening", time: "18:00" },
+      { id: "tomorrow", date: "2026-07-28", title: "Tomorrow", time: "08:00" },
+    ]);
+
+    expect(getNextUpcomingEvent(new Date(2026, 6, 27, 17, 0))?.id).toBe("future");
+    expect(getNextUpcomingEvent(new Date(2026, 6, 27, 19, 0))?.id).toBe("tomorrow");
   });
 });

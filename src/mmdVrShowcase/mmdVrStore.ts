@@ -4,16 +4,25 @@ import {
   normalizeImmersiveAntialias,
   normalizeImmersiveDpr,
   normalizeImmersiveFrameRate,
+  normalizeImmersiveFramebufferScale,
+  normalizeImmersiveFoveation,
   normalizeImmersiveQuality,
   normalizeImmersiveToggle,
   type ImmersiveAntialiasPref,
   type ImmersiveDprPref,
   type ImmersiveFrameRatePref,
+  type ImmersiveFramebufferScalePref,
+  type ImmersiveFoveationPref,
   type ImmersiveRenderQuality,
   type ImmersiveTogglePref,
+  normalizeXrThemeColor,
+  type XrThemeColor,
 } from "../xr";
 import { endMmdVrAssetSession } from "./mmdVrAssets";
 import { resetMmdVrClock } from "./mmdVrClock";
+import { normalizeMmdVrHeightOffset, normalizeMmdVrModelScale } from "./mmdVrAdjustments";
+
+export { normalizeMmdVrHeightOffset, normalizeMmdVrModelScale } from "./mmdVrAdjustments";
 
 export type MmdVrRenderQuality = ImmersiveRenderQuality;
 export type MmdVrDprPref = ImmersiveDprPref;
@@ -22,6 +31,7 @@ export type MmdVrAntialiasPref = ImmersiveAntialiasPref;
 export type MmdVrTogglePref = ImmersiveTogglePref;
 export type MmdVrWalkSpeedPref = "auto" | "slow" | "normal" | "fast";
 export type MmdVrLightPreset = "stage" | "soft" | "contrast";
+export type MmdVrShadowResolutionPref = "auto" | "low" | "medium" | "high";
 
 export type MmdVrSessionPhase = "idle" | "entering" | "active" | "error";
 
@@ -29,6 +39,7 @@ export type MmdVrModelEntry = {
   id: string;
   name: string;
   visible: boolean;
+  scale: number;
 };
 
 export type MmdVrPrefs = {
@@ -42,7 +53,15 @@ export type MmdVrPrefs = {
   gridPref: MmdVrTogglePref;
   walkSpeedPref: MmdVrWalkSpeedPref;
   lightPreset: MmdVrLightPreset;
+  framebufferScalePref: ImmersiveFramebufferScalePref;
+  foveationPref: ImmersiveFoveationPref;
+  shadowResolutionPref: MmdVrShadowResolutionPref;
+  heightOffset: number;
+  themeColor: XrThemeColor;
 };
+
+export const MMD_VR_PREFS_KEY = "neko-virt-os.mmd-vr-showcase.v2";
+export const MMD_VR_PREFS_LEGACY_KEY = "neko-virt-os.mmd-vr-showcase.v1";
 
 type MmdVrStore = {
   prefs: MmdVrPrefs;
@@ -78,6 +97,9 @@ type MmdVrStore = {
   pendingGroundPlace: { x: number; z: number } | null;
   requestGroundPlace: (x: number, z: number) => void;
   takeGroundPlace: () => { x: number; z: number } | null;
+  pendingModelScales: { id: string; scale: number }[];
+  requestModelScale: (id: string, scale: number) => void;
+  takeModelScaleRequests: () => { id: string; scale: number }[];
   duration: number;
   setDuration: (n: number) => void;
   seekEpoch: number;
@@ -100,9 +122,34 @@ function normalizeLight(value: unknown): MmdVrLightPreset {
   return "stage";
 }
 
+function normalizeShadowResolution(value: unknown): MmdVrShadowResolutionPref {
+  if (value === "auto" || value === "low" || value === "medium" || value === "high") return value;
+  return "auto";
+}
+
+export function normalizeMmdVrPrefs(parsed: Partial<MmdVrPrefs> = {}): MmdVrPrefs {
+  return {
+    renderQuality: normalizeImmersiveQuality(parsed.renderQuality),
+    showFps: Boolean(parsed.showFps),
+    loop: parsed.loop !== false,
+    dprPref: normalizeImmersiveDpr(parsed.dprPref),
+    frameRatePref: normalizeImmersiveFrameRate(parsed.frameRatePref),
+    antialiasPref: normalizeImmersiveAntialias(parsed.antialiasPref),
+    shadowsPref: normalizeImmersiveToggle(parsed.shadowsPref),
+    gridPref: normalizeImmersiveToggle(parsed.gridPref),
+    walkSpeedPref: normalizeWalk(parsed.walkSpeedPref),
+    lightPreset: normalizeLight(parsed.lightPreset),
+    framebufferScalePref: normalizeImmersiveFramebufferScale(parsed.framebufferScalePref),
+    foveationPref: normalizeImmersiveFoveation(parsed.foveationPref),
+    shadowResolutionPref: normalizeShadowResolution(parsed.shadowResolutionPref),
+    heightOffset: normalizeMmdVrHeightOffset(parsed.heightOffset),
+    themeColor: normalizeXrThemeColor(parsed.themeColor),
+  };
+}
+
 const prefsStorage = createLocalPrefsStorage<MmdVrPrefs>({
-  key: "neko-virt-os.mmd-vr-showcase.v2",
-  legacyKey: "neko-virt-os.mmd-vr-showcase.v1",
+  key: MMD_VR_PREFS_KEY,
+  legacyKey: MMD_VR_PREFS_LEGACY_KEY,
   defaults: () => ({
     renderQuality: "balanced",
     showFps: false,
@@ -114,19 +161,13 @@ const prefsStorage = createLocalPrefsStorage<MmdVrPrefs>({
     gridPref: "auto",
     walkSpeedPref: "auto",
     lightPreset: "stage",
+    framebufferScalePref: "auto",
+    foveationPref: "auto",
+    shadowResolutionPref: "auto",
+    heightOffset: 0,
+    themeColor: "blue",
   }),
-  normalize: (parsed) => ({
-    renderQuality: normalizeImmersiveQuality(parsed.renderQuality),
-    showFps: Boolean(parsed.showFps),
-    loop: parsed.loop !== false,
-    dprPref: normalizeImmersiveDpr(parsed.dprPref),
-    frameRatePref: normalizeImmersiveFrameRate(parsed.frameRatePref),
-    antialiasPref: normalizeImmersiveAntialias(parsed.antialiasPref),
-    shadowsPref: normalizeImmersiveToggle(parsed.shadowsPref),
-    gridPref: normalizeImmersiveToggle(parsed.gridPref),
-    walkSpeedPref: normalizeWalk(parsed.walkSpeedPref),
-    lightPreset: normalizeLight(parsed.lightPreset),
-  }),
+  normalize: normalizeMmdVrPrefs,
 });
 
 function sessionReset() {
@@ -140,6 +181,7 @@ function sessionReset() {
     placeMode: false,
     placeModelId: null as string | null,
     pendingGroundPlace: null as { x: number; z: number } | null,
+    pendingModelScales: [] as { id: string; scale: number }[],
     duration: 0,
     seekEpoch: 0,
     seekSeconds: 0,
@@ -160,6 +202,11 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
     if (patch.gridPref != null) prefs.gridPref = normalizeImmersiveToggle(patch.gridPref);
     if (patch.walkSpeedPref != null) prefs.walkSpeedPref = normalizeWalk(patch.walkSpeedPref);
     if (patch.lightPreset != null) prefs.lightPreset = normalizeLight(patch.lightPreset);
+    if (patch.framebufferScalePref != null) prefs.framebufferScalePref = normalizeImmersiveFramebufferScale(patch.framebufferScalePref);
+    if (patch.foveationPref != null) prefs.foveationPref = normalizeImmersiveFoveation(patch.foveationPref);
+    if (patch.shadowResolutionPref != null) prefs.shadowResolutionPref = normalizeShadowResolution(patch.shadowResolutionPref);
+    if (patch.heightOffset != null) prefs.heightOffset = normalizeMmdVrHeightOffset(patch.heightOffset);
+    if (patch.themeColor != null) prefs.themeColor = normalizeXrThemeColor(patch.themeColor);
     prefsStorage.write(prefs);
     set({ prefs, loop: prefs.loop });
   },
@@ -251,6 +298,23 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
     if (!p) return null;
     set({ pendingGroundPlace: null });
     return p;
+  },
+  pendingModelScales: [],
+  requestModelScale: (id, scale) => {
+    const normalized = normalizeMmdVrModelScale(scale);
+    set((s) => ({
+      models: s.models.map((model) => model.id === id ? { ...model, scale: normalized } : model),
+      pendingModelScales: [
+        ...s.pendingModelScales.filter((request) => request.id !== id),
+        { id, scale: normalized },
+      ],
+    }));
+  },
+  takeModelScaleRequests: () => {
+    const requests = get().pendingModelScales;
+    if (!requests.length) return [];
+    set({ pendingModelScales: [] });
+    return requests;
   },
   duration: 0,
   setDuration: (duration) => set({ duration }),

@@ -105,7 +105,11 @@ export function extractMaterialNames(model: ThreeMmdModel) {
 
 export function disposeModelObject(entry: RuntimeEntry) {
   disposeEntryEnhancementTextures(entry);
-  entry.model.root.traverse((object) => {
+  disposeLoadedModelObject(entry.model);
+}
+
+export function disposeLoadedModelObject(model: ThreeMmdModel) {
+  model.root.traverse((object) => {
     const mesh = object as THREE.Mesh;
     if (mesh.geometry) mesh.geometry.dispose();
     const material = mesh.material;

@@ -13,6 +13,10 @@
   padding: 0;
   overflow: hidden;
 }
+.system-window[data-app-id="settings"] .window-content {
+  container-type: inline-size;
+  container-name: settings-window;
+}
 .settings-nav {
   display: flex;
   flex-direction: column;
@@ -228,6 +232,53 @@
   font-size: 12px;
   line-height: 1.4;
 }
+.settings-control-reason {
+  max-width: 58ch;
+  padding: 4px 0 0;
+}
+.vr-settings-app {
+  background:
+    radial-gradient(circle at 100% 0%, oklch(0.72 0.12 245 / 0.1), transparent 32%),
+    var(--os-panel);
+}
+.vr-settings-fine-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.vr-settings-fine-group {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+.vr-settings-fine-group > strong {
+  font-size: 12px;
+}
+.settings-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.settings-choice-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.settings-group-legend {
+  margin: 0 0 var(--os-spacing-xs);
+  padding: 0;
+  color: var(--os-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.settings-error-text {
+  color: var(--os-danger);
+}
 .settings-row-line strong {
   font-size: 13px;
   font-weight: 600;
@@ -254,6 +305,7 @@
 }
 .settings-choice-card,
 .settings-feature-card {
+  position: relative;
   display: grid;
   gap: 8px;
   place-items: start;
@@ -265,6 +317,24 @@
   padding: 14px;
   text-align: left;
   transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+.settings-choice-card > input,
+.settings-btn-pill > input,
+.settings-accent-swatch > input,
+.wallpaper-option > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.settings-choice-card:focus-within,
+.settings-btn-pill:focus-within,
+.settings-accent-swatch:focus-within,
+.wallpaper-option:focus-within,
+.settings-switch:focus-within {
+  outline: 2px solid var(--os-focus, var(--os-primary));
+  outline-offset: 2px;
 }
 .settings-choice-card:hover,
 .settings-feature-card:hover,
@@ -437,6 +507,7 @@
   white-space: nowrap;
 }
 .settings-switch {
+  position: relative;
   width: 46px;
   height: 28px;
   border: 0;
@@ -446,6 +517,18 @@
   padding: 3px;
   flex: 0 0 auto;
 }
+.settings-switch > input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.settings-switch > span {
+  display: block;
+}
 .settings-switch i {
   display: block;
   width: 22px;
@@ -454,6 +537,12 @@
   background: white;
   box-shadow: 0 2px 8px oklch(0.2 0.02 260 / 0.2);
   transition: transform 140ms ease;
+}
+.settings-switch.is-disabled,
+.settings-choice-card.is-disabled,
+.settings-btn-pill.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 .settings-switch.is-on {
   background: var(--os-primary);
@@ -804,6 +893,10 @@
   font-weight: 700;
 }
 .settings-btn-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 28px;
   border: 1px solid var(--os-border);
   border-radius: 99px;
@@ -814,6 +907,9 @@
   font-weight: 600;
   padding: 0 12px;
   transition: all 120ms ease;
+}
+.wallpaper-option {
+  cursor: pointer;
 }
 .settings-btn-pill:hover {
   border-color: var(--os-border-strong);
@@ -837,4 +933,53 @@
 }
 .settings-row.danger-row {
   border-color: oklch(0.58 0.15 25 / 0.42);
+}
+
+@container settings-window (max-width: 680px) {
+  .settings-shell {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+  .settings-nav-item {
+    justify-content: center;
+    min-height: 40px;
+    padding-inline: 8px;
+  }
+  .settings-nav-item > span {
+    display: none;
+  }
+  .settings-choice-grid.cols-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container settings-window (max-width: 480px) {
+  .settings-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .settings-nav {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 0;
+    border-bottom: 1px solid var(--os-border);
+  }
+  .settings-nav-item {
+    width: auto;
+    flex: 0 0 auto;
+  }
+  .settings-nav-item > span {
+    display: inline;
+  }
+  .settings-choice-grid,
+  .settings-choice-grid.cols-3,
+  .settings-split-row,
+  .settings-kv > div,
+  .vr-settings-fine-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-kv > div {
+    align-items: start;
+  }
 }

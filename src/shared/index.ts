@@ -71,6 +71,7 @@ export {
 
 export {
   getUpcomingEvents,
+  getNextUpcomingEvent,
   readCalendarEvents,
   writeCalendarEvents,
   CALENDAR_EVENTS_STORAGE_KEY,

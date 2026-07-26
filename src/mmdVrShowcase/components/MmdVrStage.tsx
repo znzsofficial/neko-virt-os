@@ -14,10 +14,10 @@ import {
 } from "../mmdVrClock";
 import { getMmdVrRenderProfile } from "../mmdVrQuality";
 import { useMmdVrStore, type MmdVrLightPreset } from "../mmdVrStore";
+import { getXrAccentTokens } from "../../xr";
 
 const STAGE_BG = "#0c1018";
 const FLOOR = "#1a2230";
-const FLOOR_RING = "#3d5a80";
 
 const LIGHT_PRESETS: Record<
   MmdVrLightPreset,
@@ -104,11 +104,14 @@ function StageFloor({
   segments,
   shadows,
   placeMode,
+  themeColor,
 }: {
   segments: number;
   shadows: boolean;
   placeMode: boolean;
+  themeColor: string;
 }) {
+  const accent = getXrAccentTokens(themeColor);
   return (
     <group>
       <mesh
@@ -131,12 +134,12 @@ function StageFloor({
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
         <ringGeometry args={[3.2, 3.32, Math.max(16, Math.floor(segments / 2))]} />
-        <meshBasicMaterial color={FLOOR_RING} transparent opacity={0.4} side={THREE.FrontSide} />
+        <meshBasicMaterial color={accent.gridMajor} transparent opacity={0.4} side={THREE.FrontSide} />
       </mesh>
       {placeMode ? (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.004, 0]} raycast={() => null}>
           <ringGeometry args={[7.6, 7.95, 48]} />
-          <meshBasicMaterial color="#6bb8ea" transparent opacity={0.35} side={THREE.DoubleSide} />
+          <meshBasicMaterial color={accent.marker} transparent opacity={0.35} side={THREE.DoubleSide} />
         </mesh>
       ) : null}
     </group>
@@ -170,6 +173,7 @@ export function MmdVrStageContent() {
   const stopPlayingQueuedRef = useRef(false);
   const lastSeekEpochRef = useRef(0);
   const lightingKeyRef = useRef("");
+  const lifecycleGenerationRef = useRef(0);
   const labelsRef = useRef({
     loading: "Loading…",
     failed: "Load failed",
@@ -202,18 +206,21 @@ export function MmdVrStageContent() {
     return handle;
   }, [scene]);
 
-  useEffect(
-    () => () => {
-      try {
-        runtime.dispose();
-      } catch {
-        // ignore
-      }
-      if (runtimeRef.current === runtime) runtimeRef.current = null;
-      loadedKeyRef.current = null;
-    },
-    [runtime],
-  );
+  useEffect(() => {
+    const generation = ++lifecycleGenerationRef.current;
+    return () => {
+      queueMicrotask(() => {
+        if (lifecycleGenerationRef.current !== generation) return;
+        try {
+          runtime.dispose();
+        } catch {
+          // ignore
+        }
+        if (runtimeRef.current === runtime) runtimeRef.current = null;
+        loadedKeyRef.current = null;
+      });
+    };
+  }, [runtime]);
 
   function applyLighting() {
     const sun = sunRef.current;
@@ -243,6 +250,7 @@ export function MmdVrStageContent() {
       id: m.id,
       name: m.name,
       visible: m.visible,
+      scale: m.transform.scale,
     }));
     setModels(list);
     setDuration(runtime.duration);
@@ -280,21 +288,36 @@ export function MmdVrStageContent() {
     const gen = ++loadGenRef.current;
     let cancelled = false;
     setStatusLine(labelsRef.current.loading);
-    void (async () => {
+    queueMicrotask(() => void (async () => {
+      if (cancelled || gen !== loadGenRef.current) return;
       try {
         let index = 0;
+        const failures: string[] = [];
         for (const slot of slots) {
           if (cancelled || gen !== loadGenRef.current) return;
           const offsetX = (index - (slots.length - 1) / 2) * 1.1;
-          await runtime.addModel(slot.modelFile, slot.companionFiles, {
-            physics: false,
-            transform: { positionX: offsetX },
-          });
-          if (slot.bodyMotionFile) {
-            await runtime.loadMotion(slot.bodyMotionFile, "body", runtime.selectedId);
-          }
-          if (slot.faceMotionFile) {
-            await runtime.loadMotion(slot.faceMotionFile, "face", runtime.selectedId);
+          try {
+            const report = await runtime.addModel(slot.modelFile, slot.companionFiles, {
+              physics: false,
+              transform: { positionX: offsetX },
+            });
+            if (slot.bodyMotionFile) {
+              try {
+                await runtime.loadMotion(slot.bodyMotionFile, "body", report.modelId);
+              } catch (error) {
+                console.warn(`[mmdVr] body motion failed for ${slot.modelFile.name}`, error);
+              }
+            }
+            if (slot.faceMotionFile) {
+              try {
+                await runtime.loadMotion(slot.faceMotionFile, "face", report.modelId);
+              } catch (error) {
+                console.warn(`[mmdVr] face motion failed for ${slot.modelFile.name}`, error);
+              }
+            }
+          } catch (error) {
+            failures.push(slot.modelFile.name);
+            console.error(`[mmdVr] model load failed: ${slot.modelFile.name}`, error);
           }
           index += 1;
         }
@@ -302,7 +325,7 @@ export function MmdVrStageContent() {
         loadedKeyRef.current = loadKey;
         timeRef.current = 0;
         syncModelList();
-        setStatusLine(null);
+        setStatusLine(failures.length ? `${labelsRef.current.failed}: ${failures.join(", ").slice(0, 36)}` : null);
         setMmdVrClockTime(0, true);
         if (runtime.duration > 0) setPlaying(true);
       } catch (err) {
@@ -312,7 +335,7 @@ export function MmdVrStageContent() {
         setStatusLine(`${labelsRef.current.failed}: ${msg.slice(0, 28)}`);
         syncModelList();
       }
-    })();
+    })());
 
     return () => {
       cancelled = true;
@@ -349,6 +372,14 @@ export function MmdVrStageContent() {
           store.setPlaceModelId(targetId);
         }
       }
+    }
+
+    const scaleRequests = store.takeModelScaleRequests();
+    if (scaleRequests.length) {
+      for (const request of scaleRequests) {
+        runtime.setModelTransform(request.id, { scale: request.scale });
+      }
+      syncModelList();
     }
 
     const rt = runtimeRef.current;
@@ -394,8 +425,8 @@ export function MmdVrStageContent() {
         position={lightCfg.sunPos}
         intensity={lightCfg.sun}
         castShadow={profile.shadows}
-        shadow-mapSize-width={profile.shadows ? 1024 : 256}
-        shadow-mapSize-height={profile.shadows ? 1024 : 256}
+        shadow-mapSize-width={profile.shadows ? profile.shadowMapSize : 256}
+        shadow-mapSize-height={profile.shadows ? profile.shadowMapSize : 256}
         shadow-camera-near={0.5}
         shadow-camera-far={24}
         shadow-camera-left={-6}
@@ -408,9 +439,13 @@ export function MmdVrStageContent() {
         segments={profile.floorSegments}
         shadows={profile.shadows}
         placeMode={placeMode}
+        themeColor={mmdPrefs.themeColor}
       />
       {profile.showGrid ? (
-        <gridHelper args={[12, 12, "#2a3548", "#1e2838"]} position={[0, 0.01, 0]} />
+        <gridHelper
+          args={[12, 12, getXrAccentTokens(mmdPrefs.themeColor).gridMajor, getXrAccentTokens(mmdPrefs.themeColor).gridMinor]}
+          position={[0, 0.01, 0]}
+        />
       ) : null}
     </>
   );

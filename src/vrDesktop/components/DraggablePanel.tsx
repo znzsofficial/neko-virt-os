@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
 import {
@@ -40,6 +40,8 @@ export function DraggablePanel({
   const setPosition = useVrLayoutStore((s) => s.setPosition);
   const groupRef = useRef<THREE.Group>(null);
   const dragRef = useRef<DragState | null>(null);
+  const [hovered, setHovered] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const tmp = useRef({
     hit: new THREE.Vector3(),
     next: new THREE.Vector3(),
@@ -65,6 +67,7 @@ export function DraggablePanel({
       moved: false,
       plane: tmp.plane.clone(),
     };
+    setDragging(true);
 
     try {
       (e.target as unknown as { setPointerCapture?: (id: number) => void }).setPointerCapture?.(
@@ -80,6 +83,10 @@ export function DraggablePanel({
     const group = groupRef.current;
     if (!drag || !group || drag.pointerId !== e.pointerId) return;
     e.stopPropagation();
+    if (disabled) {
+      finishDrag(e.pointerId);
+      return;
+    }
 
     // Prefer plane intersection so drag continues off the mesh edges.
     const hit = tmp.hit;
@@ -97,16 +104,23 @@ export function DraggablePanel({
     group.position.set(clamped[0], clamped[1], clamped[2]);
   }
 
-  function endDrag(e: ThreeEvent<PointerEvent>) {
+  function finishDrag(pointerId?: number) {
     const drag = dragRef.current;
     const group = groupRef.current;
-    if (!drag || drag.pointerId !== e.pointerId) return;
-    e.stopPropagation();
+    if (!drag || (pointerId != null && drag.pointerId !== pointerId)) return;
     dragRef.current = null;
+    setDragging(false);
 
     if (drag.moved && group) {
       setPosition(panelId, [group.position.x, group.position.y, group.position.z]);
     }
+  }
+
+  function endDrag(e: ThreeEvent<PointerEvent>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    e.stopPropagation();
+    finishDrag(e.pointerId);
 
     try {
       (e.target as unknown as { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(
@@ -116,6 +130,12 @@ export function DraggablePanel({
       // ignore
     }
   }
+
+  useEffect(() => {
+    if (disabled) finishDrag();
+  }, [disabled]);
+
+  useEffect(() => () => finishDrag(), []);
 
   const bezel = vrTheme.panelBezel;
   const depth = vrTheme.panelDepth;
@@ -129,29 +149,38 @@ export function DraggablePanel({
       {/* Drag handle = frame bezel (behind content) */}
       <mesh
         position={[0, 0, -depth / 2]}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => {
+          if (!dragRef.current) setHovered(false);
+        }}
         onPointerDown={beginDrag}
         onPointerMove={moveDrag}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
+        onLostPointerCapture={endDrag}
       >
         <boxGeometry args={[size.w + bezel * 2, size.h + bezel * 2, depth]} />
-        <meshBasicMaterial color={vrTheme.frame} fog={false} />
+        <meshBasicMaterial color={hovered ? vrTheme.borderStrong : vrTheme.frame} fog={false} />
       </mesh>
 
       {/* Top drag strip on the face (easier to grab without missing bezel) */}
       <mesh
         position={[0, size.h / 2 - 0.04, depth / 2 + 0.002]}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => {
+          if (!dragRef.current) setHovered(false);
+        }}
         onPointerDown={beginDrag}
         onPointerMove={moveDrag}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
+        onLostPointerCapture={endDrag}
       >
         <planeGeometry args={[size.w + bezel * 1.2, 0.08]} />
-        <meshBasicMaterial color={vrTheme.frameEdge} transparent opacity={0.55} fog={false} depthWrite={false} />
+        <meshBasicMaterial color={dragging ? vrTheme.primary : hovered ? vrTheme.borderStrong : vrTheme.frameEdge} transparent opacity={dragging ? 0.95 : hovered ? 0.8 : 0.55} fog={false} depthWrite={false} />
       </mesh>
 
       {children}
     </group>
   );
 }
-

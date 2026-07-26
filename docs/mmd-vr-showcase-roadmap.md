@@ -48,7 +48,7 @@
 |----|------|------|
 | 独立会话 / overlay | ✅ | `src/mmdVrShowcase/*` + `src/xr` |
 | 设置入口 + 画质细项 / FPS | ✅ | `SettingsApp` 开发者区 |
-| Studio「VR 展示」送模型 | ✅ | `MmdStudioApp` → pending assets |
+| 独立准备页导入模型 | ✅ | `mmd-vr.html` → pending assets |
 | 舞台 + WebGL runtime | ✅ | `MmdVrStage` + `createMmdRuntimeHandle` |
 | 播放 / 循环 / 重置视角 / 退出 | ✅ | `MmdVrHud` |
 | 进度条 seek | ✅ | `mmdVrClock` + HUD（热路径不写 React） |
@@ -157,7 +157,7 @@ src/mmdVrShowcase/
 | M4 | 行走 locomotion + 转向 | P0 | ✅ 平滑走 + snap 30° |
 | M5 | 画质三档（dpr / 阴影 / 网格） | P1 | ✅ prefs + `mmdVrQuality` |
 | M6 | 有限导入：第 2–3 模型或换动作（达上限提示） | P1 | 部分：Studio 最多送 3；XR 内导入未做 |
-| M7 | 2D 预选清单 → VR 读取（推荐路径） | P1 | ✅ Studio「VR 展示」 |
+| M7 | 2D 预选清单 → VR 读取（推荐路径） | P1 | ✅ 独立准备页 |
 | M8 | Quest 手测记录（机型 / 档 / 模型复杂度） | P0 | ⬜ 待真机 |
 
 ### v0.1 — 导入与清单打磨
@@ -178,7 +178,7 @@ src/mmdVrShowcase/
 | M21 | 简易进度条（时间或帧） | ✅ HUD 进度条可点 seek |
 | M22 | 灯光预设 2–3 套 | ✅ stage / soft / contrast |
 | M23 | 可选地面阴影（map，低成本） | ✅ 画质细项 shadows |
-| M24 | 与 Studio 资源握手（可选） | ✅ Studio「VR 展示」 |
+| M24 | 与 Studio 资源握手（可选） | ⛔ 已取消；保持页面/renderer 隔离 |
 | M12 | 模型列表显隐 | ✅ 最多 3 条 HUD 切换 |
 
 ### v1.1 — 轻量视觉效果（白名单）

@@ -1,8 +1,6 @@
 import { Icon } from "@iconify-icon/react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useLanguageStore } from "../../languageStore";
-import { requestMmdVrEnter } from "../../mmdVrShowcase/requestMmdVrEnter";
-import type { MmdVrAssetSlot } from "../../mmdVrShowcase/mmdVrAssets";
 import { useNotificationStore } from "../../notificationStore";
 import { useOsUiStore } from "../../osUiStore";
 import {
@@ -38,13 +36,17 @@ import { useMmdProjectController } from "./useMmdProjectController";
 import { useMmdRecordingController } from "./useMmdRecordingController";
 import type { MmdProjectRecord } from "./mmdProjectDb";
 
-async function waitForSceneApi(apiRef: { current: MmdSceneApi | null }, timeoutMs = 6000) {
+async function waitForSceneApi(
+  apiRef: { current: MmdSceneApi | null },
+  expectedBackend: MmdRendererBackend,
+  timeoutMs = 6000,
+) {
   const started = performance.now();
   while (performance.now() - started < timeoutMs) {
-    if (apiRef.current) return apiRef.current;
+    if (apiRef.current?.backend === expectedBackend) return apiRef.current;
     await new Promise((resolve) => window.setTimeout(resolve, 40));
   }
-  return apiRef.current;
+  return apiRef.current?.backend === expectedBackend ? apiRef.current : null;
 }
 
 export function MmdStudioApp({ windowId }: { windowId?: string } = {}) {
@@ -91,6 +93,7 @@ export function MmdStudioApp({ windowId }: { windowId?: string } = {}) {
   const [backendSwitching, setBackendSwitching] = useState(false);
   const [canvasMounted, setCanvasMounted] = useState(true);
   const backendSwitchTokenRef = useRef(0);
+  const backendSwitchingRef = useRef(false);
   const [modelPick, setModelPick] = useState<{
     models: File[];
     pack: File[];
@@ -279,16 +282,19 @@ export function MmdStudioApp({ windowId }: { windowId?: string } = {}) {
     if (audioRef.current) audioRef.current.currentTime = t;
   }
 
-  async function handleBackendChange(next: MmdRendererBackend) {
-    if (next === backend || backendSwitching) return;
-    if (next === "webgpu" && !webgpuAvailable) return;
+  async function ensureBackend(next: MmdRendererBackend, restoreCurrentScene = true): Promise<MmdSceneApi> {
+    if (next === "webgpu" && !webgpuAvailable) next = "webgl";
+    const currentApi = apiRef.current;
+    if (currentApi?.backend === next) return currentApi;
+    if (backendSwitchingRef.current) throw new Error("Renderer switch already in progress");
     const token = ++backendSwitchTokenRef.current;
     const prevApi = apiRef.current;
-    const snapshot: MmdProjectModelAssets[] = prevApi?.exportProjectModels() ?? [];
+    const snapshot: MmdProjectModelAssets[] = restoreCurrentScene ? prevApi?.exportProjectModels() ?? [] : [];
     const selectedId = useMmdStudioStore.getState().selectedModelId;
     const physics = useMmdStudioStore.getState().physicsEnabled;
     const time = useMmdStudioStore.getState().currentTime;
 
+    backendSwitchingRef.current = true;
     setBackendSwitching(true);
     setPlaying(false);
     try {
@@ -298,22 +304,49 @@ export function MmdStudioApp({ windowId }: { windowId?: string } = {}) {
       await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)));
       await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)));
       await new Promise((resolve) => window.setTimeout(resolve, 200));
-      if (token !== backendSwitchTokenRef.current) return;
+      if (token !== backendSwitchTokenRef.current) throw new DOMException("Renderer switch superseded", "AbortError");
 
       setBackend(next);
       await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)));
-      if (token !== backendSwitchTokenRef.current) return;
+      if (token !== backendSwitchTokenRef.current) throw new DOMException("Renderer switch superseded", "AbortError");
 
       setCanvasMounted(true);
-      const api = await waitForSceneApi(apiRef, 10_000);
-      if (token !== backendSwitchTokenRef.current) return;
+      const api = await waitForSceneApi(apiRef, next, 10_000);
+      if (token !== backendSwitchTokenRef.current) throw new DOMException("Renderer switch superseded", "AbortError");
       if (!api) throw new Error("Scene API unavailable after backend switch");
       if (snapshot.length) {
         await api.restoreScene(snapshot, { physics, selectedId });
-        if (token !== backendSwitchTokenRef.current) return;
+        if (token !== backendSwitchTokenRef.current) throw new DOMException("Renderer switch superseded", "AbortError");
         seek(time);
       }
+      return api;
     } catch (error) {
+      if (next === "webgpu") {
+        setBackend("webgl");
+        setCanvasMounted(true);
+        await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)));
+        const fallbackApi = await waitForSceneApi(apiRef, "webgl", 10_000);
+        if (!fallbackApi) throw error;
+        if (snapshot.length) {
+          await fallbackApi.restoreScene(snapshot, { physics, selectedId });
+          seek(time);
+        }
+        return fallbackApi;
+      }
+      throw error;
+    } finally {
+      if (token === backendSwitchTokenRef.current) {
+        backendSwitchingRef.current = false;
+        setBackendSwitching(false);
+      }
+    }
+  }
+
+  async function handleBackendChange(next: MmdRendererBackend) {
+    try {
+      await ensureBackend(next);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       addNotification({
         title: t("mmdError"),
         message: error instanceof Error ? error.message : String(error),
@@ -321,13 +354,6 @@ export function MmdStudioApp({ windowId }: { windowId?: string } = {}) {
         category: "media",
         appId: "mmd-studio",
       });
-      // Prefer recovering to WebGL if WebGPU path failed.
-      if (next === "webgpu") {
-        setBackend("webgl");
-        setCanvasMounted(true);
-      }
-    } finally {
-      if (token === backendSwitchTokenRef.current) setBackendSwitching(false);
     }
   }
 
@@ -361,6 +387,7 @@ export function MmdStudioApp({ windowId }: { windowId?: string } = {}) {
     seek,
     setTextureInfo,
     setSkyHdr,
+    ensureBackend,
     editorActive: view === "editor",
   });
 
@@ -469,29 +496,6 @@ export function MmdStudioApp({ windowId }: { windowId?: string } = {}) {
     } else {
       audio.pause();
     }
-  }
-
-  function enterMmdVrShowcase() {
-    const assets = apiRef.current?.exportProjectModels() ?? [];
-    if (!assets.length) {
-      addNotification({
-        title: t("settingsMmdVrShowcase"),
-        message: t("settingsMmdVrNoModel"),
-        type: "warning",
-        category: "media",
-        appId: "mmd-studio",
-      });
-      return;
-    }
-    setPlaying(false);
-    if (audioRef.current) audioRef.current.pause();
-    const slots: MmdVrAssetSlot[] = assets.slice(0, 3).map((model) => ({
-      modelFile: model.modelFile,
-      companionFiles: model.companionFiles?.length ? model.companionFiles : [model.modelFile],
-      bodyMotionFile: model.bodyMotionFile,
-      faceMotionFile: model.faceMotionFile,
-    }));
-    void requestMmdVrEnter({ t, addNotification, assets: slots, appId: "mmd-studio" });
   }
 
   async function onDrop(event: DragEvent<HTMLDivElement>) {
@@ -648,15 +652,6 @@ export function MmdStudioApp({ windowId }: { windowId?: string } = {}) {
             <button type="button" className="button-ghost" onClick={() => cameraMotionInputRef.current?.click()}>{t("mmdLoadCameraMotion")}</button>
             <button type="button" className="button-ghost" onClick={() => audioInputRef.current?.click()}>{t("mmdLoadAudio")}</button>
           </div>
-          <button
-            type="button"
-            className="button-primary"
-            title={t("settingsMmdVrSendFromStudio")}
-            onClick={enterMmdVrShowcase}
-          >
-            <Icon icon="solar:glasses-bold-duotone" width={16} height={16} />
-            {t("settingsMmdVrSendFromStudio")}
-          </button>
         </div>
         <div className="mmd-toolbar-group mmd-toolbar-meta">
           <label className="mmd-inline-field">

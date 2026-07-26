@@ -76,7 +76,7 @@ export function LauncherScreen({
         onPointerMove={(event) => {
           if (disabled) return;
           const hit = hitTest(event.uv);
-          const next = hit?.kind === "app" ? hit.id : null;
+          const next = hit?.kind === "app" ? hit.id : hit?.kind === "tab" ? `tab:${hit.page}` : null;
           if (next !== hoverIdRef.current) {
             hoverIdRef.current = next;
             repaintHover(next);

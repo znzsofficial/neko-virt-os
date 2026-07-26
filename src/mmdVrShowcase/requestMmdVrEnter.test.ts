@@ -4,6 +4,7 @@ import { beginMmdVrSessionFromClick } from "./mmdVrSession";
 import { useMmdVrStore } from "./mmdVrStore";
 import { requestMmdVrEnter } from "./requestMmdVrEnter";
 import { getXrDiagnostics, getXrSystem } from "../xr/xrDetect";
+import { endMmdVrAssetSession, getMmdVrSessionAssets } from "./mmdVrAssets";
 
 vi.mock("../xr/xrDetect", async () => {
   const actual = await vi.importActual<typeof import("../xr/xrDetect")>("../xr/xrDetect");
@@ -37,6 +38,7 @@ describe("requestMmdVrEnter", () => {
   const addNotification = vi.fn();
 
   beforeEach(() => {
+    endMmdVrAssetSession();
     addNotification.mockClear();
     vi.mocked(beginMmdVrSessionFromClick).mockClear();
     vi.mocked(beginMmdVrSessionFromClick).mockResolvedValue({ id: "mmd-s1" } as unknown as XRSession);
@@ -61,6 +63,11 @@ describe("requestMmdVrEnter", () => {
         gridPref: "auto",
         walkSpeedPref: "auto",
         lightPreset: "stage",
+        framebufferScalePref: "auto",
+        foveationPref: "auto",
+        shadowResolutionPref: "auto",
+        heightOffset: 0,
+        themeColor: "blue",
       },
       phase: "idle",
       errorMessage: null,
@@ -111,5 +118,28 @@ describe("requestMmdVrEnter", () => {
     expect(result).toBe("entered");
     expect(beginMmdVrSessionFromClick).toHaveBeenCalledOnce();
     expect(useMmdVrStore.getState().overlayOpen).toBe(true);
+  });
+
+  it("commits every model before the XR session resolves", async () => {
+    let resolveSession!: (session: XRSession) => void;
+    vi.mocked(beginMmdVrSessionFromClick).mockReturnValue(new Promise((resolve) => {
+      resolveSession = resolve;
+    }));
+    const assets = ["a.pmx", "b.pmx", "c.pmx"].map((name) => {
+      const file = new File([name], name);
+      return { modelFile: file, companionFiles: [file], bodyMotionFile: null };
+    });
+
+    const entering = requestMmdVrEnter({ t: t as never, addNotification, assets });
+
+    expect(useMmdVrStore.getState().overlayOpen).toBe(true);
+    expect(getMmdVrSessionAssets().map((slot) => slot.modelFile.name)).toEqual([
+      "a.pmx",
+      "b.pmx",
+      "c.pmx",
+    ]);
+
+    resolveSession({ id: "mmd-s1" } as unknown as XRSession);
+    await expect(entering).resolves.toBe("entered");
   });
 });

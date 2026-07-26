@@ -109,6 +109,10 @@
     overflow: auto;
   }
 
+  .system-window[data-app-id="vr-desktop"] .window-content {
+    overflow: hidden;
+  }
+
   .app-main,
   .settings-app:not(.settings-shell),
   .task-manager-main {

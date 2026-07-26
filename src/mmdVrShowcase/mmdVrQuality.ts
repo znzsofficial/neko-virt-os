@@ -6,6 +6,8 @@ import {
   type ImmersiveAntialiasPref,
   type ImmersiveDprPref,
   type ImmersiveFrameRatePref,
+  type ImmersiveFramebufferScalePref,
+  type ImmersiveFoveationPref,
 } from "../xr";
 import type { MmdVrPrefs, MmdVrRenderQuality } from "./mmdVrStore";
 
@@ -20,6 +22,9 @@ export type MmdVrRenderProfile = {
   shadows: boolean;
   showGrid: boolean;
   walkSpeed: number;
+  framebufferScale: number;
+  foveation: number;
+  shadowMapSize: number;
 };
 
 const PROFILES: Record<MmdVrRenderQuality, MmdVrRenderProfile> = {
@@ -32,6 +37,9 @@ const PROFILES: Record<MmdVrRenderQuality, MmdVrRenderProfile> = {
     shadows: true,
     showGrid: true,
     walkSpeed: 1.35,
+    framebufferScale: 1,
+    foveation: 0.25,
+    shadowMapSize: 2048,
   },
   balanced: {
     quality: "balanced",
@@ -42,6 +50,9 @@ const PROFILES: Record<MmdVrRenderQuality, MmdVrRenderProfile> = {
     shadows: false,
     showGrid: true,
     walkSpeed: 1.15,
+    framebufferScale: 0.85,
+    foveation: 0.5,
+    shadowMapSize: 1024,
   },
   low: {
     quality: "low",
@@ -52,6 +63,9 @@ const PROFILES: Record<MmdVrRenderQuality, MmdVrRenderProfile> = {
     shadows: false,
     showGrid: false,
     walkSpeed: 1.0,
+    framebufferScale: 0.7,
+    foveation: 1,
+    shadowMapSize: 512,
   },
 };
 
@@ -60,6 +74,8 @@ const WALK_MAP = {
   normal: 1.15,
   fast: 1.55,
 } as const;
+
+const SHADOW_MAP_SIZE = { low: 512, medium: 1024, high: 2048 } as const;
 
 export type MmdVrQualityInput = Pick<
   MmdVrPrefs,
@@ -70,6 +86,9 @@ export type MmdVrQualityInput = Pick<
   | "shadowsPref"
   | "gridPref"
   | "walkSpeedPref"
+  | "framebufferScalePref"
+  | "foveationPref"
+  | "shadowResolutionPref"
 >;
 
 export function getMmdVrRenderProfile(
@@ -81,13 +100,15 @@ export function getMmdVrRenderProfile(
 
   if (typeof qualityOrPrefs === "string") return base;
 
-  const { dprPref, frameRatePref, antialiasPref, shadowsPref, gridPref, walkSpeedPref } =
+  const { dprPref, frameRatePref, antialiasPref, shadowsPref, gridPref, walkSpeedPref, framebufferScalePref, foveationPref, shadowResolutionPref } =
     qualityOrPrefs;
 
   base = applyCommonQualityAxes(base, {
     dprPref: dprPref as ImmersiveDprPref,
     frameRatePref: frameRatePref as ImmersiveFrameRatePref,
     antialiasPref: antialiasPref as ImmersiveAntialiasPref,
+    framebufferScalePref: framebufferScalePref as ImmersiveFramebufferScalePref,
+    foveationPref: foveationPref as ImmersiveFoveationPref,
   });
 
   if (shadowsPref === "on") base.shadows = true;
@@ -96,6 +117,9 @@ export function getMmdVrRenderProfile(
   if (gridPref === "off") base.showGrid = false;
   if (walkSpeedPref && walkSpeedPref !== "auto") {
     base.walkSpeed = WALK_MAP[walkSpeedPref] ?? base.walkSpeed;
+  }
+  if (shadowResolutionPref && shadowResolutionPref !== "auto") {
+    base.shadowMapSize = SHADOW_MAP_SIZE[shadowResolutionPref] ?? base.shadowMapSize;
   }
 
   return base;
@@ -111,7 +135,7 @@ export function formatMmdVrProfileSummary(
   const gr = formatOnOff(profile.showGrid, language);
   const fps = formatFrameRateLabel(profile.frameRate);
   if (language === "zh") {
-    return `DPR ${dpr} · AA ${aa} · 阴影 ${sh} · 网格 ${gr} · 走速 ${profile.walkSpeed.toFixed(2)} · 目标 ${fps}`;
+    return `DPR ${dpr} · XR ${Math.round(profile.framebufferScale * 100)}% · AA ${aa} · 阴影 ${sh} · 网格 ${gr} · 走速 ${profile.walkSpeed.toFixed(2)} · 目标 ${fps}`;
   }
-  return `DPR ${dpr} · AA ${aa} · shadows ${sh} · grid ${gr} · walk ${profile.walkSpeed.toFixed(2)} · target ${fps}`;
+  return `DPR ${dpr} · XR ${Math.round(profile.framebufferScale * 100)}% · AA ${aa} · shadows ${sh} · grid ${gr} · walk ${profile.walkSpeed.toFixed(2)} · target ${fps}`;
 }

@@ -22,6 +22,7 @@ import {
   applyMorphOverrides,
   cloneTransform,
   DEFAULT_MODEL_TRANSFORM,
+  disposeLoadedModelObject,
   disposeModelObject,
   enableModelShadows,
   enforceModelCastOnlyShadows,
@@ -192,6 +193,10 @@ export type MmdRuntimeOptions = {
 };
 
 export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOptions = {}): MmdRuntimeHandle {
+  let disposed = false;
+  const assertActive = () => {
+    if (disposed) throw new DOMException("MMD runtime disposed", "AbortError");
+  };
   const entries = new Map<string, RuntimeEntryWithPhysics>();
   let selectedId: string | null = null;
   let physicsWanted = false;
@@ -350,9 +355,14 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
     transform: MmdModelTransform,
     preferredId?: string,
   ) {
+    assertActive();
     const textureMap = buildTextureMap(modelFile, companionFiles);
     // One Bullet world per model (library world holds a single uploaded model identity).
     const physicsBackend = withPhysics ? await createBulletPhysicsBackend() : null;
+    if (disposed) {
+      physicsBackend?.dispose?.();
+      assertActive();
+    }
     const runtimeOptions = withPhysics && physicsBackend
       ? {
           physics: "external" as const,
@@ -375,10 +385,15 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
         } catch {
           loadOpts = undefined;
         }
+        assertActive();
       }
       model = loadOpts
         ? await loader.loadModel(modelFile, loadOpts as Parameters<ThreeMmdLoader["loadModel"]>[1])
         : await loader.loadModel(modelFile);
+      if (disposed) {
+        disposeLoadedModelObject(model);
+        assertActive();
+      }
     } catch (error) {
       physicsBackend?.dispose?.();
       throw error;
@@ -825,6 +840,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       return tslPipeline != null;
     },
     dispose() {
+      disposed = true;
       for (const id of [...entries.keys()]) removeEntry(id);
       tslPipeline = null;
       lastPhysicsSeconds.clear();

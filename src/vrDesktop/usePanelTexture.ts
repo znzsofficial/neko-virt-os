@@ -21,23 +21,26 @@ export function usePanelTexture(
 ) {
   const language = useLanguageStore((s) => s.language);
   const panelScale = useVrDesktopStore((s) => getVrRenderProfile(s.prefs).panelScale);
-  const width = scalePanelSize(baseW, panelScale);
-  const height = scalePanelSize(baseH, panelScale);
+  const pixelWidth = scalePanelSize(baseW, panelScale);
+  const pixelHeight = scalePanelSize(baseH, panelScale);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const paintRef = useRef(paint);
   paintRef.current = paint;
 
   const texture = useMemo(() => {
     const map = createPanelTexture(
-      width,
-      height,
-      (p) => paintRef.current(p),
+      pixelWidth,
+      pixelHeight,
+      ({ ctx }) => {
+        ctx.setTransform(pixelWidth / baseW, 0, 0, pixelHeight / baseH, 0, 0);
+        paintRef.current({ ctx, width: baseW, height: baseH, language });
+      },
       language,
     );
     canvasRef.current = map.image as HTMLCanvasElement;
     return map;
     // rebuildKey forces remount when content catalog changes
-  }, [height, language, rebuildKey, width]);
+  }, [baseH, baseW, language, pixelHeight, pixelWidth, rebuildKey]);
 
   useEffect(
     () => () => {
@@ -53,11 +56,12 @@ export function usePanelTexture(
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       const fn = nextPaint ?? paintRef.current;
-      fn({ ctx, width, height, language });
+      ctx.setTransform(pixelWidth / baseW, 0, 0, pixelHeight / baseH, 0, 0);
+      fn({ ctx, width: baseW, height: baseH, language });
       texture.needsUpdate = true;
     },
-    [height, language, texture, width],
+    [baseH, baseW, language, pixelHeight, pixelWidth, texture],
   );
 
-  return { texture, width, height, language, canvasRef, repaint };
+  return { texture, width: baseW, height: baseH, language, canvasRef, repaint };
 }

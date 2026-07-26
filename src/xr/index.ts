@@ -24,6 +24,8 @@ export {
   normalizeImmersiveAntialias,
   normalizeImmersiveDpr,
   normalizeImmersiveFrameRate,
+  normalizeImmersiveFramebufferScale,
+  normalizeImmersiveFoveation,
   normalizeImmersiveQuality,
   normalizeImmersiveToggle,
   scalePanelSize,
@@ -33,10 +35,20 @@ export {
   type ImmersiveDprPref,
   type ImmersiveFrameRate,
   type ImmersiveFrameRatePref,
+  type ImmersiveFramebufferScalePref,
+  type ImmersiveFoveationPref,
   type ImmersiveRenderQuality,
   type ImmersiveTogglePref,
 } from "./qualityAxes";
 export { createXrSceneMountGuard, type XrSceneLifecycleOpts } from "./useXrSceneLifecycle";
+export {
+  XR_THEME_COLORS,
+  getXrAccentTokens,
+  hexToRgba,
+  normalizeXrThemeColor,
+  type XrAccentTokens,
+  type XrThemeColor,
+} from "./themeColor";
 export {
   buildQuestVrSessionInit,
   formatXrSessionError,

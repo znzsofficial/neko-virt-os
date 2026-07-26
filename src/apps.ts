@@ -165,6 +165,15 @@ export const apps = [
     defaultSize: { width: 820, height: 580 },
   },
   {
+    id: "vr-desktop",
+    title: "VR 桌面",
+    titleKey: "appVrDesktop",
+    icon: "solar:glasses-bold-duotone",
+    description: "配置并进入沉浸式桌面",
+    descriptionKey: "descVrDesktop",
+    defaultSize: { width: 760, height: 640 },
+  },
+  {
     id: "mmd-studio",
     title: "MMD 工作室",
     titleKey: "appMmdStudio",
@@ -172,6 +181,15 @@ export const apps = [
     description: "本地 MMD 预览与 WebM 导出",
     descriptionKey: "descMmdStudio",
     defaultSize: { width: 1280, height: 760 },
+  },
+  {
+    id: "mmd-vr",
+    title: "MMD VR",
+    titleKey: "appMmdVr",
+    icon: "solar:glasses-bold-duotone",
+    description: "独立的 MMD VR 导入与舞台准备",
+    descriptionKey: "descMmdVr",
+    defaultSize: { width: 980, height: 700 },
   },
   {
     id: "terminal",
