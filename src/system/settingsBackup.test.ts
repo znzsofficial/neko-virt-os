@@ -104,8 +104,11 @@ function createBackup(): SettingsBackup {
       framebufferScalePref: "1",
       foveationPref: "medium",
       shadowResolutionPref: "high",
-      heightOffset: 0.15,
+      heightOffset: 20,
+      viewDistance: 80,
       themeColor: "purple",
+      snapTurnDegrees: 45,
+      exposure: 1.2,
     },
   };
 }
@@ -122,6 +125,8 @@ describe("settings backup v2", () => {
     expect(storage.getItem(DESKTOP_LAYOUT_MODE_KEY)).toBe("free");
     expect(storage.getItem(VR_DESKTOP_PREFS_KEY)).toContain('"renderQuality":"high"');
     expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"shadowResolutionPref":"high"');
+    expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"heightOffset":20');
+    expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"snapTurnDegrees":45');
   });
 
   it("rejects malformed fields and unknown v2 keys", () => {
@@ -137,11 +142,18 @@ describe("settings backup v2", () => {
   it("defaults theme colors for backups created before color settings existed", () => {
     const backup = createBackup();
     const { themeColor: _desktopTheme, ...vrDesktopPrefs } = backup.vrDesktopPrefs;
-    const { themeColor: _mmdTheme, ...mmdVrPrefs } = backup.mmdVrPrefs;
+    const {
+      themeColor: _mmdTheme,
+      snapTurnDegrees: _snapTurnDegrees,
+      exposure: _exposure,
+      ...mmdVrPrefs
+    } = backup.mmdVrPrefs;
     const parsed = parseSettingsBackup(JSON.stringify({ ...backup, vrDesktopPrefs, mmdVrPrefs }), createStorage());
 
     expect(parsed.vrDesktopPrefs.themeColor).toBe("blue");
     expect(parsed.mmdVrPrefs.themeColor).toBe("blue");
+    expect(parsed.mmdVrPrefs.snapTurnDegrees).toBe(30);
+    expect(parsed.mmdVrPrefs.exposure).toBe(1);
   });
 
   it("migrates v1 by merging missing fields from current preferences", () => {

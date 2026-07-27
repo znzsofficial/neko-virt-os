@@ -15,6 +15,8 @@ import {
 import { getMmdVrRenderProfile } from "../mmdVrQuality";
 import { useMmdVrStore, type MmdVrLightPreset } from "../mmdVrStore";
 import { getXrAccentTokens } from "../../xr";
+import { prepareMmdVrModel } from "../prepareMmdVrModel";
+import { getMmdVrControllerColliderMatrices } from "../mmdVrControllerColliders";
 
 const STAGE_BG = "#0c1018";
 const FLOOR = "#1a2230";
@@ -23,8 +25,12 @@ const LIGHT_PRESETS: Record<
   MmdVrLightPreset,
   {
     ambient: number;
+    ambientColor: string;
     sun: number;
+    sunColor: string;
     hemi: number;
+    hemiSky: string;
+    hemiGround: string;
     sunPos: [number, number, number];
     fogFar: number;
     envIntensity: number;
@@ -34,8 +40,12 @@ const LIGHT_PRESETS: Record<
 > = {
   stage: {
     ambient: 0.55,
+    ambientColor: "#dce7ff",
     sun: 1.05,
+    sunColor: "#fff4e8",
     hemi: 0.35,
+    hemiSky: "#b8c8e0",
+    hemiGround: "#1a2230",
     sunPos: [3.2, 6.5, 2.4],
     fogFar: 22,
     envIntensity: 0.35,
@@ -44,8 +54,12 @@ const LIGHT_PRESETS: Record<
   },
   soft: {
     ambient: 0.75,
+    ambientColor: "#f4efff",
     sun: 0.55,
+    sunColor: "#fff5f0",
     hemi: 0.55,
+    hemiSky: "#cedcf2",
+    hemiGround: "#26313f",
     sunPos: [1.5, 5.5, 3.5],
     fogFar: 26,
     envIntensity: 0.5,
@@ -54,13 +68,59 @@ const LIGHT_PRESETS: Record<
   },
   contrast: {
     ambient: 0.28,
+    ambientColor: "#c8d5ef",
     sun: 1.45,
+    sunColor: "#fff1df",
     hemi: 0.2,
+    hemiSky: "#9eb4d5",
+    hemiGround: "#090d14",
     sunPos: [4.5, 7, 1.2],
     fogFar: 18,
     envIntensity: 0.2,
     skyZenith: "#0a1018",
     skyHorizon: "#05080c",
+  },
+  daylight: {
+    ambient: 0.62,
+    ambientColor: "#e8f2ff",
+    sun: 1.18,
+    sunColor: "#fffdf4",
+    hemi: 0.52,
+    hemiSky: "#b9dcf5",
+    hemiGround: "#40515a",
+    sunPos: [-3.5, 7.5, 4.5],
+    fogFar: 30,
+    envIntensity: 0.48,
+    skyZenith: "#447ca8",
+    skyHorizon: "#a7c5d2",
+  },
+  warm: {
+    ambient: 0.42,
+    ambientColor: "#ffd8c2",
+    sun: 1.22,
+    sunColor: "#ffb782",
+    hemi: 0.3,
+    hemiSky: "#856f8f",
+    hemiGround: "#342a32",
+    sunPos: [4.8, 4.2, 3.6],
+    fogFar: 23,
+    envIntensity: 0.32,
+    skyZenith: "#35344f",
+    skyHorizon: "#8b5361",
+  },
+  rim: {
+    ambient: 0.3,
+    ambientColor: "#d9e5ff",
+    sun: 1.35,
+    sunColor: "#8fe9ff",
+    hemi: 0.28,
+    hemiSky: "#86bcd1",
+    hemiGround: "#151a26",
+    sunPos: [-1.8, 5.2, -4.5],
+    fogFar: 25,
+    envIntensity: 0.25,
+    skyZenith: "#182b3d",
+    skyHorizon: "#243047",
   },
 };
 
@@ -113,7 +173,7 @@ function StageFloor({
 }) {
   const accent = getXrAccentTokens(themeColor);
   return (
-    <group>
+    <group position={[0, -0.02, 0]}>
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, 0, 0]}
@@ -127,9 +187,9 @@ function StageFloor({
       >
         <circleGeometry args={[8, segments]} />
         {shadows ? (
-          <meshStandardMaterial color={FLOOR} roughness={0.92} metalness={0.05} />
+          <meshStandardMaterial color={FLOOR} roughness={0.92} metalness={0.05} depthWrite={false} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         ) : (
-          <meshBasicMaterial color={FLOOR} />
+          <meshBasicMaterial color={FLOOR} depthWrite={false} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         )}
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
@@ -150,11 +210,12 @@ function StageFloor({
  * Owns MMD runtime (WebGL only), loads session assets once, advances timeline.
  */
 export function MmdVrStageContent() {
-  const { scene, camera, size } = useThree();
+  const { scene, camera, size, gl } = useThree();
   const mmdPrefs = useMmdVrStore((s) => s.prefs);
   const profile = getMmdVrRenderProfile(mmdPrefs);
   const lightPreset = mmdPrefs.lightPreset;
   const lightCfg = LIGHT_PRESETS[lightPreset] ?? LIGHT_PRESETS.stage;
+  const viewDistance = mmdPrefs.viewDistance;
   const setPlaying = useMmdVrStore((s) => s.setPlaying);
   const setModels = useMmdVrStore((s) => s.setModels);
   const setDuration = useMmdVrStore((s) => s.setDuration);
@@ -165,6 +226,9 @@ export function MmdVrStageContent() {
 
   const runtimeRef = useRef<MmdRuntimeHandle | null>(null);
   const timeRef = useRef(0);
+  const physicsOnlyTimeRef = useRef(0);
+  const physicsContactPollRef = useRef(0);
+  const lastPhysicsResetEpochRef = useRef(0);
   const playingRef = useRef(false);
   const loopRef = useRef(false);
   const loadGenRef = useRef(0);
@@ -180,6 +244,9 @@ export function MmdVrStageContent() {
     empty: "No model",
   });
   const placeMode = useMmdVrStore((s) => s.placeMode);
+  const physicsEnabled = useMmdVrStore((s) => s.physicsEnabled);
+  const physicsBusy = useMmdVrStore((s) => s.physicsBusy);
+  const setPhysicsBusy = useMmdVrStore((s) => s.setPhysicsBusy);
 
   // Keep labels current without re-running the load effect on language change.
   useEffect(() => {
@@ -201,10 +268,35 @@ export function MmdVrStageContent() {
   }, []);
 
   const runtime = useMemo(() => {
-    const handle = createMmdRuntimeHandle(scene, { webGpu: false });
+    const handle = createMmdRuntimeHandle(scene, {
+      webGpu: false,
+      controllerColliders: getMmdVrControllerColliderMatrices,
+      controllerCollidersEnabled: () => useMmdVrStore.getState().physicsControllerCollisions,
+      controllerColliderRadius: () => useMmdVrStore.getState().physicsColliderRadius,
+      physicsQuality: () => useMmdVrStore.getState().physicsQuality,
+      prepareModel: prepareMmdVrModel,
+    });
     runtimeRef.current = handle;
     return handle;
   }, [scene]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPhysicsBusy(true);
+    void runtime.setPhysicsEnabled(physicsEnabled).then(() => {
+      if (!cancelled) {
+        syncModelList();
+      }
+    }).catch((error) => {
+      console.error("[mmdVr] physics toggle failed", error);
+      if (!cancelled) useMmdVrStore.getState().setPhysicsEnabled(false);
+    }).finally(() => {
+      if (!cancelled) setPhysicsBusy(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [physicsEnabled, runtime, setPhysicsBusy]);
 
   useEffect(() => {
     const generation = ++lifecycleGenerationRef.current;
@@ -231,6 +323,7 @@ export function MmdVrStageContent() {
     const cfg = LIGHT_PRESETS[useMmdVrStore.getState().prefs.lightPreset] ?? LIGHT_PRESETS.stage;
     sun.position.set(...cfg.sunPos);
     sun.intensity = cfg.sun;
+    sun.color.set(cfg.sunColor);
     sun.castShadow = getMmdVrRenderProfile(useMmdVrStore.getState().prefs).shadows;
     runtime.setLighting({
       envIntensity: cfg.envIntensity,
@@ -245,12 +338,24 @@ export function MmdVrStageContent() {
     applyLighting();
   }, [runtime, lightPreset, profile.shadows]);
 
+  useLayoutEffect(() => {
+    if (!(camera instanceof THREE.PerspectiveCamera)) return;
+    camera.far = viewDistance;
+    camera.updateProjectionMatrix();
+  }, [camera, viewDistance]);
+
+  useLayoutEffect(() => {
+    gl.toneMapping = THREE.LinearToneMapping;
+    gl.toneMappingExposure = mmdPrefs.exposure;
+  }, [gl, mmdPrefs.exposure]);
+
   function syncModelList() {
     const list = runtime.listModels().map((m) => ({
       id: m.id,
       name: m.name,
       visible: m.visible,
       scale: m.transform.scale,
+      rotationY: m.transform.rotationY,
     }));
     setModels(list);
     setDuration(runtime.duration);
@@ -346,6 +451,12 @@ export function MmdVrStageContent() {
     applyLighting();
 
     const store = useMmdVrStore.getState();
+    let modelTransformChanged = false;
+    const removals = store.takeModelRemovals();
+    if (removals.length) {
+      for (const id of removals) runtime.removeModel(id);
+      syncModelList();
+    }
     const toggles = store.takeVisibilityToggles();
     if (toggles.length) {
       for (const id of toggles) {
@@ -355,7 +466,7 @@ export function MmdVrStageContent() {
       syncModelList();
     }
 
-    const place = store.takeGroundPlace();
+    const place = store.physicsBusy ? null : store.takeGroundPlace();
     if (place) {
       const models = runtime.listModels();
       const targetId =
@@ -368,18 +479,46 @@ export function MmdVrStageContent() {
           positionY: 0,
           positionZ: place.z,
         });
+        modelTransformChanged = true;
         if (store.placeModelId !== targetId) {
           store.setPlaceModelId(targetId);
         }
       }
     }
 
-    const scaleRequests = store.takeModelScaleRequests();
-    if (scaleRequests.length) {
-      for (const request of scaleRequests) {
-        runtime.setModelTransform(request.id, { scale: request.scale });
+    const transformRequests = store.physicsBusy ? [] : store.takeModelTransformRequests();
+    if (transformRequests.length) {
+      const models = runtime.listModels();
+      for (const request of transformRequests) {
+        if (request.reset) {
+          const index = models.findIndex((model) => model.id === request.id);
+          const positionX = index >= 0 ? (index - (models.length - 1) / 2) * 1.1 : 0;
+          runtime.setModelTransform(request.id, {
+            positionX,
+            positionY: 0,
+            positionZ: 0,
+            rotationX: 0,
+            rotationY: 0,
+            rotationZ: 0,
+            scale: 1,
+          });
+          continue;
+        }
+        runtime.setModelTransform(request.id, {
+          ...(request.scale == null ? {} : { scale: request.scale }),
+          ...(request.rotationY == null ? {} : { rotationY: request.rotationY }),
+        });
       }
       syncModelList();
+      modelTransformChanged = true;
+    }
+
+    if (modelTransformChanged && store.physicsEnabled && !store.physicsBusy) {
+      runtime.resetPhysics(timeRef.current);
+    }
+    if (store.physicsResetEpoch !== lastPhysicsResetEpochRef.current) {
+      lastPhysicsResetEpochRef.current = store.physicsResetEpoch;
+      if (store.physicsEnabled && !store.physicsBusy) runtime.resetPhysics(timeRef.current);
     }
 
     const rt = runtimeRef.current;
@@ -403,6 +542,11 @@ export function MmdVrStageContent() {
         }
       }
     }
+    if (store.physicsEnabled && !store.physicsBusy && duration <= 0) {
+      physicsOnlyTimeRef.current += delta;
+    } else if (!store.physicsEnabled) {
+      physicsOnlyTimeRef.current = 0;
+    }
     setMmdVrClockTime(timeRef.current);
 
     const perspective = camera as THREE.PerspectiveCamera;
@@ -411,18 +555,44 @@ export function MmdVrStageContent() {
       perspective.aspect = aspect;
       perspective.updateProjectionMatrix();
     }
-    rt.update(timeRef.current, false, perspective, aspect, false);
+    const evaluationTime = duration > 0 ? timeRef.current : physicsOnlyTimeRef.current;
+    rt.update(evaluationTime, physicsEnabled && !physicsBusy, perspective, aspect, false);
+    physicsContactPollRef.current += delta;
+    if (physicsContactPollRef.current >= 0.1) {
+      physicsContactPollRef.current = 0;
+      if (!store.physicsDebugEnabled && !store.physicsHapticsEnabled) return;
+      const contactCount = store.physicsEnabled && !store.physicsBusy ? rt.getControllerContactCount() : 0;
+      if (contactCount !== store.physicsContactCount) store.setPhysicsContactCount(contactCount);
+      if (store.physicsHapticsEnabled) {
+        const controllerCounts: [number, number] = store.physicsEnabled && !store.physicsBusy
+          ? [rt.getControllerContactCount(0), rt.getControllerContactCount(1)]
+          : [0, 0];
+        if (controllerCounts[0] !== store.physicsControllerContactCounts[0]
+          || controllerCounts[1] !== store.physicsControllerContactCounts[1]) {
+          store.setPhysicsControllerContactCounts(controllerCounts);
+        }
+      }
+      if (!store.physicsDebugEnabled) return;
+      const dynamicBodyCount = store.physicsEnabled && !store.physicsBusy ? rt.getDynamicRigidBodyCount() : 0;
+      if (dynamicBodyCount !== store.physicsDynamicBodyCount) store.setPhysicsDynamicBodyCount(dynamicBodyCount);
+      const rigidBodyCount = store.physicsEnabled && !store.physicsBusy ? rt.getRigidBodyCount() : 0;
+      const stepCount = store.physicsEnabled && !store.physicsBusy ? rt.getPhysicsStepCount() : 0;
+      if (rigidBodyCount !== store.physicsRigidBodyCount || stepCount !== store.physicsStepCount) {
+        store.setPhysicsRuntimeStats(rigidBodyCount, stepCount);
+      }
+    }
   });
 
   return (
     <>
       <color attach="background" args={[STAGE_BG]} />
-      <fog attach="fog" args={[STAGE_BG, 10, lightCfg.fogFar]} />
+      <fog attach="fog" args={[STAGE_BG, Math.min(10, viewDistance * 0.45), viewDistance]} />
       <StageSky zenith={lightCfg.skyZenith} horizon={lightCfg.skyHorizon} />
-      <ambientLight intensity={lightCfg.ambient} />
+      <ambientLight color={lightCfg.ambientColor} intensity={lightCfg.ambient} />
       <directionalLight
         ref={sunRef}
         position={lightCfg.sunPos}
+        color={lightCfg.sunColor}
         intensity={lightCfg.sun}
         castShadow={profile.shadows}
         shadow-mapSize-width={profile.shadows ? profile.shadowMapSize : 256}
@@ -434,7 +604,7 @@ export function MmdVrStageContent() {
         shadow-camera-top={6}
         shadow-camera-bottom={-6}
       />
-      <hemisphereLight args={["#b8c8e0", "#1a2230", lightCfg.hemi]} />
+      <hemisphereLight args={[lightCfg.hemiSky, lightCfg.hemiGround, lightCfg.hemi]} />
       <StageFloor
         segments={profile.floorSegments}
         shadows={profile.shadows}

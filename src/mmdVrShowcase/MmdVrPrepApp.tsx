@@ -259,32 +259,6 @@ export function MmdVrPrepApp() {
                 />
               </div>
               <div className="mmd-vr-prep-config-row">
-                <span>{t("settingsVrDesktopFramebufferScale")}</span>
-                <OptionGroup
-                  value={prefs.framebufferScalePref}
-                  options={[
-                    { id: "auto", label: t("settingsVrDesktopQualityAuto") },
-                    { id: "0.7", label: "70%" },
-                    { id: "0.85", label: "85%" },
-                    { id: "1", label: "100%" },
-                  ]}
-                  onChange={(framebufferScalePref) => setPrefs({ framebufferScalePref })}
-                />
-              </div>
-              <div className="mmd-vr-prep-config-row">
-                <span>{t("settingsVrDesktopFoveation")}</span>
-                <OptionGroup
-                  value={prefs.foveationPref}
-                  options={[
-                    { id: "auto", label: t("settingsVrDesktopQualityAuto") },
-                    { id: "off", label: t("settingsVrDesktopAaOff") },
-                    { id: "medium", label: t("settingsVrDesktopPanelScaleMedium") },
-                    { id: "high", label: t("settingsVrDesktopPanelScaleHigh") },
-                  ]}
-                  onChange={(foveationPref) => setPrefs({ foveationPref })}
-                />
-              </div>
-              <div className="mmd-vr-prep-config-row">
                 <span>{t("settingsVrDesktopFrameRate")}</span>
                 <OptionGroup
                   value={prefs.frameRatePref}

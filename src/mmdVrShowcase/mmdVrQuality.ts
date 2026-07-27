@@ -135,7 +135,7 @@ export function formatMmdVrProfileSummary(
   const gr = formatOnOff(profile.showGrid, language);
   const fps = formatFrameRateLabel(profile.frameRate);
   if (language === "zh") {
-    return `DPR ${dpr} · XR ${Math.round(profile.framebufferScale * 100)}% · AA ${aa} · 阴影 ${sh} · 网格 ${gr} · 走速 ${profile.walkSpeed.toFixed(2)} · 目标 ${fps}`;
+    return `DPR ${dpr} · AA ${aa} · 阴影 ${sh} · 网格 ${gr} · 走速 ${profile.walkSpeed.toFixed(2)} · 目标 ${fps}`;
   }
-  return `DPR ${dpr} · XR ${Math.round(profile.framebufferScale * 100)}% · AA ${aa} · shadows ${sh} · grid ${gr} · walk ${profile.walkSpeed.toFixed(2)} · target ${fps}`;
+  return `DPR ${dpr} · AA ${aa} · shadows ${sh} · grid ${gr} · walk ${profile.walkSpeed.toFixed(2)} · target ${fps}`;
 }

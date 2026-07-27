@@ -1,4 +1,5 @@
 import type { WebGLRenderer } from "three";
+import type { XRStoreOptions } from "@react-three/xr";
 import { createAppXrStore, type AppXrStore } from "./createAppXrStore";
 import { createPendingSessionSlot, type PendingSessionSlot } from "./pendingSessionSlot";
 import type { ImmersiveFrameRate } from "./qualityAxes";
@@ -21,8 +22,9 @@ export type ProductXrSession<Q> = {
 export function createProductXrSession<Q>(opts: {
   resolveFrameRate: (quality: Q) => ImmersiveFrameRate;
   configureRenderer?: (gl: WebGLRenderer, quality: Q) => void;
+  controller?: XRStoreOptions["controller"];
 }): ProductXrSession<Q> {
-  const xrStore = createAppXrStore();
+  const xrStore = createAppXrStore({ controller: opts.controller });
   const slot = createPendingSessionSlot();
 
   function applyFrameRate(quality: Q) {

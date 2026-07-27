@@ -1,9 +1,16 @@
-import { useXRControllerLocomotion, XROrigin } from "@react-three/xr";
+import { useFrame } from "@react-three/fiber";
+import { useXRControllerLocomotion, useXRInputSourceState, XROrigin } from "@react-three/xr";
 import { useEffect, useRef, useState } from "react";
 import type * as THREE from "three";
+import {
+  MMD_VR_HEIGHT_OFFSET_MAX,
+  MMD_VR_HEIGHT_OFFSET_MIN,
+  normalizeMmdVrHeightOffset,
+} from "../mmdVrAdjustments";
 import { getMmdVrRenderProfile } from "../mmdVrQuality";
 import { useMmdVrStore } from "../mmdVrStore";
 import { MmdVrControlBar } from "./MmdVrHud";
+import { MmdVrControllerColliders } from "./MmdVrControllerColliders";
 
 /**
  * Smooth walk + snap turn. viewEpoch zeros origin (reset view).
@@ -24,14 +31,40 @@ export function MmdVrPlayerRig({
   lightStageLabel,
   lightSoftLabel,
   lightContrastLabel,
+  lightDaylightLabel,
+  lightWarmLabel,
+  lightRimLabel,
   shadowsLabel,
   gridLabel,
   scaleLabel,
+  rotateLeftLabel,
+  rotateRightLabel,
   heightLabel,
+  viewDistanceLabel,
   resetValueLabel,
   panelHideLabel,
   panelShowLabel,
   panelDragLabel,
+  fpsOnLabel,
+  fpsOffLabel,
+  physicsOnLabel,
+  physicsOffLabel,
+  physicsDebugOnLabel,
+  physicsDebugOffLabel,
+  physicsSettingsLabel,
+  physicsCollisionOnLabel,
+  physicsCollisionOffLabel,
+  physicsRadiusLabel,
+  physicsQualityLabels,
+  physicsHapticsOnLabel,
+  physicsHapticsOffLabel,
+  resetPhysicsLabel,
+  snapTurnLabel,
+  exposureLabel,
+  removeLabel,
+  themeLabels,
+  walkLabels,
+  walkSpeedLabel,
   onExit,
   busy,
 }: {
@@ -50,14 +83,40 @@ export function MmdVrPlayerRig({
   lightStageLabel: string;
   lightSoftLabel: string;
   lightContrastLabel: string;
+  lightDaylightLabel: string;
+  lightWarmLabel: string;
+  lightRimLabel: string;
   shadowsLabel: string;
   gridLabel: string;
   scaleLabel: string;
+  rotateLeftLabel: string;
+  rotateRightLabel: string;
   heightLabel: string;
+  viewDistanceLabel: string;
   resetValueLabel: string;
   panelHideLabel: string;
   panelShowLabel: string;
   panelDragLabel: string;
+  fpsOnLabel: string;
+  fpsOffLabel: string;
+  physicsOnLabel: string;
+  physicsOffLabel: string;
+  physicsDebugOnLabel: string;
+  physicsDebugOffLabel: string;
+  physicsSettingsLabel: string;
+  physicsCollisionOnLabel: string;
+  physicsCollisionOffLabel: string;
+  physicsRadiusLabel: string;
+  physicsQualityLabels: [string, string, string];
+  physicsHapticsOnLabel: string;
+  physicsHapticsOffLabel: string;
+  resetPhysicsLabel: string;
+  snapTurnLabel: string;
+  exposureLabel: string;
+  removeLabel: string;
+  themeLabels: [string, string, string, string, string];
+  walkLabels: [string, string, string];
+  walkSpeedLabel: string;
   onExit: () => void;
   busy: boolean;
 }) {
@@ -67,11 +126,13 @@ export function MmdVrPlayerRig({
   const speed = getMmdVrRenderProfile(mmdPrefs).walkSpeed;
   const heightOffset = mmdPrefs.heightOffset;
   const [panelDragging, setPanelDragging] = useState(false);
+  const rightController = useXRInputSourceState("controller", "right");
+  const stickHeightRef = useRef({ value: heightOffset, elapsed: 0, active: false });
 
   useXRControllerLocomotion(
     originRef,
     { speed: panelDragging ? 0 : speed },
-    { type: "snap", degrees: 30, deadZone: 0.65 },
+    { type: "snap", degrees: mmdPrefs.snapTurnDegrees, deadZone: 0.65 },
   );
 
   useEffect(() => {
@@ -83,11 +144,39 @@ export function MmdVrPlayerRig({
 
   useEffect(() => {
     const g = originRef.current;
-    if (g) g.position.y = heightOffset;
+    if (g && !stickHeightRef.current.active) g.position.y = heightOffset;
   }, [heightOffset]);
+
+  useFrame((_, delta) => {
+    const stick = rightController?.gamepad["xr-standard-thumbstick"];
+    const axis = stick?.yAxis ?? 0;
+    if (panelDragging || Math.abs(axis) < 0.18) {
+      if (stickHeightRef.current.active) {
+        stickHeightRef.current.active = false;
+        useMmdVrStore.getState().setPrefs({ heightOffset: stickHeightRef.current.value });
+      } else {
+        stickHeightRef.current.value = useMmdVrStore.getState().prefs.heightOffset;
+      }
+      stickHeightRef.current.elapsed = 0;
+      return;
+    }
+    stickHeightRef.current.active = true;
+    const shaped = (Math.abs(axis) - 0.18) / 0.82 * Math.sign(axis);
+    const speed = 0.5 + Math.abs(shaped) * 4.5;
+    stickHeightRef.current.value = Math.min(
+      MMD_VR_HEIGHT_OFFSET_MAX,
+      Math.max(MMD_VR_HEIGHT_OFFSET_MIN, stickHeightRef.current.value - shaped * delta * speed),
+    );
+    if (originRef.current) originRef.current.position.y = stickHeightRef.current.value;
+    stickHeightRef.current.elapsed += delta;
+    if (stickHeightRef.current.elapsed < 0.1) return;
+    stickHeightRef.current.elapsed = 0;
+    useMmdVrStore.getState().setHeightOffsetTransient(stickHeightRef.current.value);
+  });
 
   return (
     <XROrigin ref={originRef}>
+      <MmdVrControllerColliders />
       <MmdVrControlBar
         playLabel={playLabel}
         pauseLabel={pauseLabel}
@@ -104,14 +193,40 @@ export function MmdVrPlayerRig({
         lightStageLabel={lightStageLabel}
         lightSoftLabel={lightSoftLabel}
         lightContrastLabel={lightContrastLabel}
+        lightDaylightLabel={lightDaylightLabel}
+        lightWarmLabel={lightWarmLabel}
+        lightRimLabel={lightRimLabel}
         shadowsLabel={shadowsLabel}
         gridLabel={gridLabel}
         scaleLabel={scaleLabel}
+        rotateLeftLabel={rotateLeftLabel}
+        rotateRightLabel={rotateRightLabel}
         heightLabel={heightLabel}
+        viewDistanceLabel={viewDistanceLabel}
         resetValueLabel={resetValueLabel}
         panelHideLabel={panelHideLabel}
         panelShowLabel={panelShowLabel}
         panelDragLabel={panelDragLabel}
+        fpsOnLabel={fpsOnLabel}
+        fpsOffLabel={fpsOffLabel}
+        physicsOnLabel={physicsOnLabel}
+        physicsOffLabel={physicsOffLabel}
+        physicsDebugOnLabel={physicsDebugOnLabel}
+        physicsDebugOffLabel={physicsDebugOffLabel}
+        physicsSettingsLabel={physicsSettingsLabel}
+        physicsCollisionOnLabel={physicsCollisionOnLabel}
+        physicsCollisionOffLabel={physicsCollisionOffLabel}
+        physicsRadiusLabel={physicsRadiusLabel}
+        physicsQualityLabels={physicsQualityLabels}
+        physicsHapticsOnLabel={physicsHapticsOnLabel}
+        physicsHapticsOffLabel={physicsHapticsOffLabel}
+        resetPhysicsLabel={resetPhysicsLabel}
+        snapTurnLabel={snapTurnLabel}
+        exposureLabel={exposureLabel}
+        removeLabel={removeLabel}
+        themeLabels={themeLabels}
+        walkLabels={walkLabels}
+        walkSpeedLabel={walkSpeedLabel}
         onDragChange={setPanelDragging}
         onExit={onExit}
         busy={busy}

@@ -3,11 +3,14 @@ import {
   createMmdTextureMapFromFiles,
   syncMmdSpecularDirection,
   ThreeMmdLoader,
+  type MmdAnimation,
+  type ThreeMmdModel,
   type TextureMap,
 } from "@yohawing/three-mmd-loader";
 import type { MmdPhysicsBackend } from "@yohawing/three-mmd-loader/physics";
+import { DefaultMmdRuntime } from "@yohawing/three-mmd-loader/runtime";
 import * as THREE from "three";
-import { createBulletPhysicsBackend } from "./mmdPhysics";
+import { createBulletPhysicsBackend, type MmdPhysicsQuality } from "./mmdPhysics";
 import {
   applyMaterialOverrides,
   applyMaterialVisibility,
@@ -104,6 +107,10 @@ export type MmdRuntimeHandle = {
   setPhysicsEnabled: (enabled: boolean) => Promise<void>;
   /** Re-seed soft-body pose from current animation (fix floating / stuck cloth). */
   resetPhysics: (seconds?: number) => void;
+  getControllerContactCount: (controllerIndex?: number) => number;
+  getRigidBodyCount: () => number;
+  getDynamicRigidBodyCount: () => number;
+  getPhysicsStepCount: () => number;
   update: (seconds: number, physics: boolean, camera: THREE.PerspectiveCamera, aspect: number, useMotionCamera: boolean) => void;
   /** Bind/unbind official MMD TSL pipeline (WebGPU). Re-attaches eligible models. */
   bindTslPipeline: (pipeline: import("./mmdTslPipeline").MmdTslPipeline | null) => void;
@@ -121,6 +128,26 @@ type RuntimeEntryWithPhysics = RuntimeEntry & {
 };
 
 let nextModelSeq = 1;
+
+const STATIC_PHYSICS_BINDING_ANIMATION: MmdAnimation = {
+  kind: "vmd",
+  bytes: new Uint8Array(0),
+  metadata: {
+    modelName: "",
+    counts: { bones: 0, morphs: 0, cameras: 0, lights: 0, selfShadows: 0, properties: 0 },
+    maxFrame: 0,
+  },
+  boneTracks: {},
+  morphTracks: {},
+  cameraFrames: [],
+  lightFrames: [],
+  selfShadowFrames: [],
+  propertyFrames: [],
+};
+
+export function bindStaticMmdPhysicsRuntime(model: Pick<ThreeMmdModel, "setAnimation">) {
+  model.setAnimation(STATIC_PHYSICS_BINDING_ANIMATION);
+}
 
 function buildTextureMap(modelFile: File, companionFiles: readonly File[] = []): TextureMap {
   const allFiles = companionFiles.length ? companionFiles : [modelFile];
@@ -190,6 +217,11 @@ export type MmdRuntimeOptions = {
    * Falls back to MeshStandard strip if pipeline is unavailable.
    */
   webGpu?: boolean;
+  controllerColliders?: () => readonly THREE.Matrix4[];
+  controllerCollidersEnabled?: () => boolean;
+  controllerColliderRadius?: () => number;
+  physicsQuality?: () => MmdPhysicsQuality;
+  prepareModel?: (root: THREE.Object3D) => void;
 };
 
 export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOptions = {}): MmdRuntimeHandle {
@@ -200,6 +232,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
   const entries = new Map<string, RuntimeEntryWithPhysics>();
   let selectedId: string | null = null;
   let physicsWanted = false;
+  let physicsTransition: Promise<void> = Promise.resolve();
   /** Last evaluated timeline seconds per model (for seek / physics continuity). */
   const lastPhysicsSeconds = new Map<string, number>();
   let duration = 0;
@@ -212,6 +245,11 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
   const lightColor = new THREE.Color(1, 1, 1);
   let lightIntensity = 1;
   const webGpuMode = Boolean(options.webGpu);
+  const controllerColliders = options.controllerColliders;
+  const controllerCollidersEnabled = options.controllerCollidersEnabled;
+  const controllerColliderRadius = options.controllerColliderRadius;
+  const physicsQuality = options.physicsQuality;
+  const prepareModel = options.prepareModel;
   let tslPipeline: import("./mmdTslPipeline").MmdTslPipeline | null = null;
 
   function lightingContext() {
@@ -357,8 +395,56 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
   ) {
     assertActive();
     const textureMap = buildTextureMap(modelFile, companionFiles);
+    let colliderRoot: THREE.Object3D | null = null;
+    const colliderMatrices = [
+      new Float32Array(16),
+      new Float32Array(16),
+    ];
+    const unitRoot = new THREE.Matrix4();
+    const inverseVisualRoot = new THREE.Matrix4();
+    const mappedController = new THREE.Matrix4();
+    const visualRoot = new THREE.Matrix4();
+    const visualScale = new THREE.Vector3();
+    const colliderProvider = controllerColliders
+      ? () => {
+          const root = colliderRoot;
+          const worldMatrices = controllerColliders();
+          if (!root || worldMatrices.length !== colliderMatrices.length) return [];
+          root.updateWorldMatrix(true, false);
+          unitRoot.copy(root.matrixWorld);
+          const scale = Math.min(10, Math.max(0.01, Number(root.userData.mmdVisualScale) || 1));
+          visualRoot.copy(unitRoot).scale(visualScale.setScalar(scale));
+          inverseVisualRoot.copy(visualRoot).invert();
+          for (let index = 0; index < colliderMatrices.length; index += 1) {
+            if (controllerCollidersEnabled?.() === false) {
+              mappedController.makeTranslation(0, -1_000, 0);
+            } else {
+              mappedController.multiplyMatrices(unitRoot, inverseVisualRoot).multiply(worldMatrices[index]);
+            }
+            const source = mappedController.elements;
+            const target = colliderMatrices[index];
+            for (let column = 0; column < 4; column += 1) {
+              for (let row = 0; row < 4; row += 1) {
+                const rowSign = row === 2 ? -1 : 1;
+                const columnSign = column === 2 ? -1 : 1;
+                target[column * 4 + row] = rowSign * source[column * 4 + row] * columnSign;
+              }
+            }
+          }
+          return colliderMatrices;
+        }
+      : undefined;
     // One Bullet world per model (library world holds a single uploaded model identity).
-    const physicsBackend = withPhysics ? await createBulletPhysicsBackend() : null;
+    const physicsBackend = withPhysics
+      ? await createBulletPhysicsBackend({
+          controllerColliders: colliderProvider,
+          controllerRadius: () => {
+            const scale = Math.min(10, Math.max(0.01, Number(colliderRoot?.userData.mmdVisualScale) || transform.scale));
+            return (controllerColliderRadius?.() ?? 0.08) / scale;
+          },
+          quality: physicsQuality,
+        })
+      : null;
     if (disposed) {
       physicsBackend?.dispose?.();
       assertActive();
@@ -373,6 +459,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
     const loader = new ThreeMmdLoader({
       textureMap,
       runtime: runtimeOptions,
+      ...(withPhysics ? { runtimeFactory: () => new DefaultMmdRuntime(runtimeOptions) } : {}),
     });
     let model;
     try {
@@ -390,6 +477,9 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       model = loadOpts
         ? await loader.loadModel(modelFile, loadOpts as Parameters<ThreeMmdLoader["loadModel"]>[1])
         : await loader.loadModel(modelFile);
+      if (withPhysics) bindStaticMmdPhysicsRuntime(model);
+      colliderRoot = model.root;
+      prepareModel?.(model.root);
       if (disposed) {
         disposeLoadedModelObject(model);
         assertActive();
@@ -479,6 +569,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       tslAttached,
       tslPending,
     };
+    model.root.userData.mmdVisualScale = entry.transform.scale;
     // Tag root + meshes so post FX (DOF lock / selective bloom) can target a model id.
     model.root.userData.mmdModelId = id;
     model.root.traverse((object) => {
@@ -528,32 +619,51 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       transform: cloneTransform(entry.transform),
     }));
     const previousSelected = selectedId;
+    const previousPhysics = [...entries.values()].every((entry) => entry.physicsBackend != null);
+
+    async function restoreSnapshots(physics: boolean) {
+      for (const snap of snapshots) {
+        const { entry } = await createEntry(snap.modelFile, snap.companionFiles, physics, snap.transform, snap.id);
+        entry.bodyAnimation = snap.bodyAnimation;
+        entry.faceAnimation = snap.faceAnimation;
+        entry.cameraAnimation = snap.cameraAnimation;
+        entry.bodyMotionName = snap.bodyMotionName;
+        entry.faceMotionName = snap.faceMotionName;
+        entry.cameraMotionName = snap.cameraMotionName;
+        entry.bodyMotionFile = snap.bodyMotionFile;
+        entry.faceMotionFile = snap.faceMotionFile;
+        entry.cameraMotionFile = snap.cameraMotionFile;
+        entry.visible = snap.visible;
+        entry.morphWeights = snap.morphWeights;
+        entry.materialVisible = { ...entry.materialVisible, ...snap.materialVisible };
+        entry.materialOverrides = { ...entry.materialOverrides, ...snap.materialOverrides };
+        recomputeEntryAnimation(entry);
+        applyMaterialVisibility(entry);
+        applyMaterialOverrides(entry, lightingContext());
+        refreshMaterialTextures(entry);
+      }
+      selectedId = previousSelected && entries.has(previousSelected)
+        ? previousSelected
+        : entries.keys().next().value ?? null;
+      recomputeGlobal();
+    }
+
     for (const id of [...entries.keys()]) removeEntry(id);
     lastPhysicsSeconds.clear();
-    for (const snap of snapshots) {
-      const { entry } = await createEntry(snap.modelFile, snap.companionFiles, withPhysics, snap.transform, snap.id);
-      entry.bodyAnimation = snap.bodyAnimation;
-      entry.faceAnimation = snap.faceAnimation;
-      entry.cameraAnimation = snap.cameraAnimation;
-      entry.bodyMotionName = snap.bodyMotionName;
-      entry.faceMotionName = snap.faceMotionName;
-      entry.cameraMotionName = snap.cameraMotionName;
-      entry.bodyMotionFile = snap.bodyMotionFile;
-      entry.faceMotionFile = snap.faceMotionFile;
-      entry.cameraMotionFile = snap.cameraMotionFile;
-      entry.visible = snap.visible;
-      entry.morphWeights = snap.morphWeights;
-      entry.materialVisible = { ...entry.materialVisible, ...snap.materialVisible };
-      entry.materialOverrides = { ...entry.materialOverrides, ...snap.materialOverrides };
-      recomputeEntryAnimation(entry);
-      applyMaterialVisibility(entry);
-      applyMaterialOverrides(entry, lightingContext());
-      refreshMaterialTextures(entry);
+    try {
+      await restoreSnapshots(withPhysics);
+    } catch (error) {
+      for (const id of [...entries.keys()]) removeEntry(id);
+      lastPhysicsSeconds.clear();
+      try {
+        await restoreSnapshots(previousPhysics);
+      } catch (restoreError) {
+        for (const id of [...entries.keys()]) removeEntry(id);
+        lastPhysicsSeconds.clear();
+        throw new AggregateError([error, restoreError], "Failed to rebuild and restore MMD models");
+      }
+      throw error;
     }
-    selectedId = previousSelected && entries.has(previousSelected)
-      ? previousSelected
-      : entries.keys().next().value ?? null;
-    recomputeGlobal();
   }
 
   return {
@@ -643,6 +753,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
         ...entry.transform,
         ...patch,
       };
+      entry.model.root.userData.mmdVisualScale = entry.transform.scale;
       if (!entry.gizmoLock) {
         syncEntryWorldMatrix(entry);
       } else {
@@ -721,17 +832,26 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       applyMaterialVisibility(entry);
     },
     async setPhysicsEnabled(enabled) {
-      if (physicsWanted === enabled && entries.size > 0) {
-        // Already in desired mode with models — still rebuild if any entry lacks backend.
-        const allOk = [...entries.values()].every((entry) =>
-          enabled ? entry.physicsBackend != null && !entry.physicsBackend.disposed : entry.physicsBackend == null,
-        );
-        if (allOk) return;
-      }
-      physicsWanted = enabled;
-      lastPhysicsSeconds.clear();
-      if (!entries.size) return;
-      await rebuildAllModels(enabled);
+      const transition = physicsTransition.then(async () => {
+        if (physicsWanted === enabled && entries.size > 0) {
+          const allOk = [...entries.values()].every((entry) =>
+            enabled ? entry.physicsBackend != null && !entry.physicsBackend.disposed : entry.physicsBackend == null,
+          );
+          if (allOk) return;
+        }
+        const previousPhysicsWanted = physicsWanted;
+        physicsWanted = enabled;
+        lastPhysicsSeconds.clear();
+        if (!entries.size) return;
+        try {
+          await rebuildAllModels(enabled);
+        } catch (error) {
+          physicsWanted = previousPhysicsWanted;
+          throw error;
+        }
+      });
+      physicsTransition = transition.catch(() => undefined);
+      await transition;
     },
     resetPhysics(seconds) {
       if (!physicsWanted) return;
@@ -761,6 +881,40 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
           }
         }
       }
+    },
+    getControllerContactCount(controllerIndex) {
+      let count = 0;
+      for (const entry of entries.values()) {
+        const backend = entry.physicsBackend as (MmdPhysicsBackend & {
+          debugControllerContactCount?: (controllerIndex?: number) => number;
+        }) | null;
+        count += backend?.debugControllerContactCount?.(controllerIndex) ?? 0;
+      }
+      return count;
+    },
+    getRigidBodyCount() {
+      let count = 0;
+      for (const entry of entries.values()) {
+        const backend = entry.physicsBackend as (MmdPhysicsBackend & { debugRigidBodyCount?: () => number }) | null;
+        count += backend?.debugRigidBodyCount?.() ?? 0;
+      }
+      return count;
+    },
+    getDynamicRigidBodyCount() {
+      let count = 0;
+      for (const entry of entries.values()) {
+        const backend = entry.physicsBackend as (MmdPhysicsBackend & { debugDynamicRigidBodyCount?: () => number }) | null;
+        count += backend?.debugDynamicRigidBodyCount?.() ?? 0;
+      }
+      return count;
+    },
+    getPhysicsStepCount() {
+      let count = 0;
+      for (const entry of entries.values()) {
+        const backend = entry.physicsBackend as (MmdPhysicsBackend & { debugStepCount?: () => number }) | null;
+        count += backend?.debugStepCount?.() ?? 0;
+      }
+      return count;
     },
     update(seconds, physics, camera, aspect, useMotionCamera) {
       let cameraApplied = false;

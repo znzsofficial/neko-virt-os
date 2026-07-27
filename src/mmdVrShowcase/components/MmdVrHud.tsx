@@ -1,17 +1,21 @@
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { createPanelTexture, paintSecondaryButton, roundRectPath } from "../../shared/panelTexture";
+import { createPanelTexture, roundRectPath } from "../../shared/panelTexture";
 import { getMmdVrClock } from "../mmdVrClock";
 import { getMmdVrRenderProfile } from "../mmdVrQuality";
 import { useMmdVrStore } from "../mmdVrStore";
 import {
   formatMmdVrModelScale,
-  MMD_VR_HEIGHT_OFFSET_STEP,
-  nextMmdVrModelScale,
-  previousMmdVrModelScale,
+  MMD_VR_HEIGHT_OFFSET_FINE_STEP,
+  mmdVrHeightOffsetToSlider,
+  mmdVrModelScaleToSlider,
+  mmdVrSliderToHeightOffset,
+  mmdVrSliderToModelScale,
+  mmdVrSliderToViewDistance,
+  mmdVrViewDistanceToSlider,
 } from "../mmdVrAdjustments";
-import { getXrAccentTokens, hexToRgba } from "../../xr";
+import { getXrAccentTokens, hexToRgba, XR_THEME_COLORS } from "../../xr";
 
 /** Match paintProgressBar track insets (px on 640-wide canvas). */
 const PROGRESS_PAD = 16;
@@ -28,7 +32,7 @@ export function clampMmdVrHudPosition(position: THREE.Vector3): [number, number,
 type HudDragState = {
   pointerId: number;
   offset: THREE.Vector3;
-  plane: THREE.Plane;
+  rayDistance: number;
 };
 
 function formatTime(sec: number) {
@@ -42,6 +46,31 @@ function shortName(name: string, max = 8) {
   const base = name.replace(/\.[^.]+$/, "");
   if (base.length <= max) return base;
   return `${base.slice(0, max - 1)}…`;
+}
+
+function createRoundedPlaneGeometry(width: number, height: number, radius: number) {
+  const halfW = width / 2;
+  const halfH = height / 2;
+  const r = Math.min(radius, halfW, halfH);
+  const shape = new THREE.Shape();
+  shape.moveTo(-halfW + r, -halfH);
+  shape.lineTo(halfW - r, -halfH);
+  shape.quadraticCurveTo(halfW, -halfH, halfW, -halfH + r);
+  shape.lineTo(halfW, halfH - r);
+  shape.quadraticCurveTo(halfW, halfH, halfW - r, halfH);
+  shape.lineTo(-halfW + r, halfH);
+  shape.quadraticCurveTo(-halfW, halfH, -halfW, halfH - r);
+  shape.lineTo(-halfW, -halfH + r);
+  shape.quadraticCurveTo(-halfW, -halfH, -halfW + r, -halfH);
+
+  const geometry = new THREE.ShapeGeometry(shape, 6);
+  const positions = geometry.getAttribute("position");
+  const uvs = geometry.getAttribute("uv");
+  for (let index = 0; index < positions.count; index += 1) {
+    uvs.setXY(index, positions.getX(index) / width + 0.5, positions.getY(index) / height + 0.5);
+  }
+  uvs.needsUpdate = true;
+  return geometry;
 }
 
 function HudButton({
@@ -65,35 +94,50 @@ function HudButton({
   const [pressed, setPressed] = useState(false);
   const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
   const accent = getXrAccentTokens(themeColor);
+  const geometry = useMemo(
+    () => createRoundedPlaneGeometry(size[0], size[1], Math.min(0.025, size[1] * 0.22)),
+    [size[0], size[1]],
+  );
+  const textureWidth = Math.max(256, Math.round(88 * size[0] / size[1]));
   const texture = useMemo(
     () =>
       createPanelTexture(
-        320,
+        textureWidth,
         88,
         ({ ctx, width, height }) => {
-          paintSecondaryButton({ ctx, width, height }, label);
-          if (active || danger) {
-            ctx.globalCompositeOperation = "source-atop";
-            ctx.fillStyle = active ? hexToRgba(accent.primary, 0.42) : "rgba(126, 32, 42, 0.34)";
-            ctx.fillRect(0, 0, width, height);
-            ctx.globalCompositeOperation = "source-over";
-          }
+          ctx.fillStyle = active
+            ? accent.border
+            : danger
+              ? "#9b5262"
+              : accent.border;
+          ctx.fillRect(0, 0, width, height);
+          roundRectPath(ctx, 6, 6, width - 12, height - 12, 15);
+          ctx.fillStyle = active
+            ? hexToRgba(accent.primary, 0.68)
+            : danger
+              ? "#532a34"
+              : accent.soft;
+          ctx.fill();
+          ctx.fillStyle = active ? accent.marker : danger ? "#e48296" : "rgba(255, 255, 255, 0.09)";
+          ctx.fillRect(18, 6, width - 36, 4);
+          ctx.fillStyle = "#f7f2f4";
+          ctx.font = "650 31px system-ui, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(label, width / 2, height / 2 + 1);
         },
         "en",
       ),
-    [accent.primary, active, danger, label],
+    [accent.border, accent.marker, accent.primary, active, danger, label, textureWidth],
   );
 
-  useEffect(
-    () => () => {
-      texture.dispose();
-    },
-    [texture],
-  );
+  useEffect(() => () => texture.dispose(), [texture]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
 
   return (
     <mesh
       position={position}
+      renderOrder={30}
       scale={pressed ? 0.97 : hovered ? 1.025 : 1}
       onPointerEnter={(e) => {
         e.stopPropagation();
@@ -119,15 +163,17 @@ function HudButton({
         onPress();
       }}
     >
-      <planeGeometry args={size} />
+      <primitive object={geometry} attach="geometry" />
       <meshBasicMaterial
         map={texture}
         toneMapped={false}
         transparent
         fog={false}
         opacity={disabled ? 0.45 : 1}
-        color={hovered && !disabled ? "#ffffff" : "#e9e1e4"}
+        color="#ffffff"
         side={THREE.FrontSide}
+        depthWrite={false}
+        depthTest={false}
       />
     </mesh>
   );
@@ -138,31 +184,38 @@ function PanelBackdrop() {
   const accent = getXrAccentTokens(themeColor);
   const texture = useMemo(
     () => createPanelTexture(1400, 620, ({ ctx, width, height }) => {
-      ctx.clearRect(0, 0, width, height);
       roundRectPath(ctx, 2, 2, width - 4, height - 4, 28);
-      ctx.fillStyle = "rgba(18, 15, 18, 0.94)";
+      ctx.fillStyle = accent.soft;
       ctx.fill();
-      ctx.strokeStyle = hexToRgba(accent.border, 0.58);
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = accent.border;
+      ctx.lineWidth = 5;
       ctx.stroke();
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.09)";
+      roundRectPath(ctx, 26, 22, width - 52, 92, 18);
+      ctx.fillStyle = hexToRgba(accent.primary, 0.16);
+      ctx.fill();
+      ctx.fillStyle = accent.primary;
+      ctx.fillRect(26, 109, width - 52, 5);
+      roundRectPath(ctx, 30, 154, width - 60, 155, 16);
+      ctx.fillStyle = hexToRgba(accent.primary, 0.08);
+      ctx.fill();
+      roundRectPath(ctx, 30, 340, width - 60, 238, 16);
+      ctx.fillStyle = hexToRgba(accent.primary, 0.1);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.075)";
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(38, 330);
-      ctx.lineTo(width - 38, 330);
       ctx.stroke();
     }, "en"),
-    [accent.border],
+    [accent.border, accent.primary, accent.soft],
   );
   useEffect(() => () => texture.dispose(), [texture]);
   return (
     <mesh
       position={[0.16, -0.08, -0.018]}
-      renderOrder={20}
+      renderOrder={10}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <planeGeometry args={[3.4, 1.16]} />
-      <meshBasicMaterial map={texture} toneMapped={false} transparent depthWrite={false} fog={false} />
+      <meshBasicMaterial map={texture} toneMapped={false} transparent depthWrite={false} depthTest={false} alphaTest={0.02} fog={false} />
     </mesh>
   );
 }
@@ -171,10 +224,12 @@ function DragHandle({
   label,
   onDragChange,
   onPositionChange,
+  position = [0.16, 0.56, 0.012],
 }: {
   label: string;
   onDragChange: (dragging: boolean) => void;
   onPositionChange: (position: [number, number, number]) => void;
+  position?: [number, number, number];
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const dragRef = useRef<HudDragState | null>(null);
@@ -185,7 +240,7 @@ function DragHandle({
     () => createPanelTexture(720, 72, ({ ctx, width, height }) => {
       ctx.clearRect(0, 0, width, height);
       roundRectPath(ctx, 1, 1, width - 2, height - 2, 18);
-      ctx.fillStyle = dragging ? hexToRgba(accent.primary, 0.82) : "rgba(38, 45, 58, 0.96)";
+      ctx.fillStyle = dragging ? hexToRgba(accent.primary, 0.82) : accent.soft;
       ctx.fill();
       ctx.fillStyle = "#f2eaed";
       ctx.font = "650 25px system-ui, sans-serif";
@@ -193,7 +248,7 @@ function DragHandle({
       ctx.textBaseline = "middle";
       ctx.fillText(`⋮⋮  ${label}`, width / 2, height / 2);
     }, "en"),
-    [accent.primary, dragging, label],
+    [accent.primary, accent.soft, dragging, label],
   );
 
   useEffect(() => () => texture.dispose(), [texture]);
@@ -213,13 +268,11 @@ function DragHandle({
     const parent = panel?.parent;
     if (!panel || !parent) return;
     e.stopPropagation();
-    const normal = new THREE.Vector3();
-    panel.getWorldDirection(normal);
     const localHit = parent.worldToLocal(e.point.clone());
     dragRef.current = {
       pointerId: e.pointerId,
       offset: panel.position.clone().sub(localHit),
-      plane: new THREE.Plane().setFromNormalAndCoplanarPoint(normal, e.point),
+      rayDistance: e.ray.origin.distanceTo(e.point),
     };
     setDragging(true);
     onDragChange(true);
@@ -236,8 +289,7 @@ function DragHandle({
     const parent = panel?.parent;
     if (!drag || !panel || !parent || drag.pointerId !== e.pointerId) return;
     e.stopPropagation();
-    const worldHit = new THREE.Vector3();
-    if (!e.ray.intersectPlane(drag.plane, worldHit)) return;
+    const worldHit = e.ray.at(drag.rayDistance, new THREE.Vector3());
     const local = parent.worldToLocal(worldHit).add(drag.offset);
     const next = clampMmdVrHudPosition(local);
     panel.position.set(...next);
@@ -256,7 +308,7 @@ function DragHandle({
   }
 
   return (
-    <group ref={groupRef} position={[0.16, 0.56, 0.012]}>
+    <group ref={groupRef} position={position}>
       <mesh
         onPointerDown={begin}
         onPointerMove={move}
@@ -265,38 +317,135 @@ function DragHandle({
         onLostPointerCapture={end}
       >
         <planeGeometry args={[0.92, 0.11]} />
-        <meshBasicMaterial map={texture} toneMapped={false} transparent depthWrite={false} fog={false} />
+        <meshBasicMaterial map={texture} toneMapped={false} transparent depthWrite={false} depthTest={false} fog={false} />
       </mesh>
     </group>
   );
 }
 
 function ValueLabel({ position, label, value }: { position: [number, number, number]; label: string; value: string }) {
+  const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
+  const accent = getXrAccentTokens(themeColor);
   const texture = useMemo(
     () => createPanelTexture(440, 88, ({ ctx, width, height }) => {
       ctx.clearRect(0, 0, width, height);
-      ctx.fillStyle = "#a99ca1";
-      ctx.font = "600 24px system-ui, sans-serif";
+      roundRectPath(ctx, 2, 2, width - 4, height - 4, 16);
+      ctx.fillStyle = accent.soft;
+      ctx.fill();
+      ctx.strokeStyle = accent.border;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#c8bcc1";
+      ctx.font = "600 23px system-ui, sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText(label, 8, height / 2);
+      ctx.fillText(label, 20, height / 2);
       ctx.fillStyle = "#f2eaed";
       ctx.font = "700 30px system-ui, sans-serif";
       ctx.textAlign = "right";
-      ctx.fillText(value, width - 8, height / 2);
+      ctx.fillText(value, width - 20, height / 2);
     }, "en"),
-    [label, value],
+    [accent.border, accent.soft, label, value],
   );
   useEffect(() => () => texture.dispose(), [texture]);
   return (
     <mesh position={position} renderOrder={30} raycast={() => null}>
       <planeGeometry args={[0.58, 0.11]} />
-      <meshBasicMaterial map={texture} toneMapped={false} transparent depthWrite={false} fog={false} />
+      <meshBasicMaterial map={texture} toneMapped={false} transparent depthWrite={false} depthTest={false} fog={false} />
     </mesh>
   );
 }
 
+function HudSlider({
+  position,
+  value,
+  onChange,
+  onInteractionChange,
+  width = 0.74,
+}: {
+  position: [number, number, number];
+  value: number;
+  onChange: (value: number) => void;
+  onInteractionChange: (active: boolean) => void;
+  width?: number;
+}) {
+  const pointerRef = useRef<number | null>(null);
+  const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
+  const accent = getXrAccentTokens(themeColor);
+  const ratio = Math.min(1, Math.max(0, value));
+
+  function update(event: ThreeEvent<PointerEvent>) {
+    if (!event.uv) return;
+    onChange(Math.min(1, Math.max(0, event.uv.x)));
+  }
+
+  function begin(event: ThreeEvent<PointerEvent>) {
+    event.stopPropagation();
+    pointerRef.current = event.pointerId;
+    onInteractionChange(true);
+    update(event);
+    try {
+      (event.target as unknown as { setPointerCapture?: (id: number) => void }).setPointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture is optional in WebXR implementations.
+    }
+  }
+
+  function move(event: ThreeEvent<PointerEvent>) {
+    if (pointerRef.current !== event.pointerId) return;
+    event.stopPropagation();
+    update(event);
+  }
+
+  function end(event: ThreeEvent<PointerEvent>) {
+    if (pointerRef.current !== event.pointerId) return;
+    event.stopPropagation();
+    pointerRef.current = null;
+    onInteractionChange(false);
+    try {
+      (event.target as unknown as { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture is optional in WebXR implementations.
+    }
+  }
+
+  useEffect(() => () => onInteractionChange(false), [onInteractionChange]);
+
+  return (
+    <group position={position}>
+      <mesh position={[0, 0, -0.004]} renderOrder={30} raycast={() => null}>
+        <planeGeometry args={[width, 0.035]} />
+        <meshBasicMaterial color="#4b4248" transparent opacity={1} toneMapped={false} depthWrite={false} depthTest={false} />
+      </mesh>
+      {ratio > 0 ? (
+        <mesh position={[-width / 2 + (width * ratio) / 2, 0, 0]} renderOrder={31} raycast={() => null}>
+          <planeGeometry args={[width * ratio, 0.035]} />
+          <meshBasicMaterial color={accent.primary} transparent opacity={1} toneMapped={false} depthWrite={false} depthTest={false} />
+        </mesh>
+      ) : null}
+      <mesh position={[-width / 2 + width * ratio, 0, 0.006]} renderOrder={32} raycast={() => null}>
+        <circleGeometry args={[0.055, 24]} />
+        <meshBasicMaterial color={accent.marker} transparent opacity={1} toneMapped={false} depthWrite={false} depthTest={false} />
+      </mesh>
+      <mesh
+        position={[0, 0, 0.012]}
+        renderOrder={33}
+        onPointerDown={begin}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerCancel={end}
+        onLostPointerCapture={end}
+      >
+        <planeGeometry args={[width + 0.12, 0.16]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} depthTest={false} />
+      </mesh>
+    </group>
+  );
+}
+
 function StatusPlane({ text }: { text: string }) {
+  const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
+  const accent = getXrAccentTokens(themeColor);
   const texture = useMemo(
     () =>
       createPanelTexture(
@@ -304,17 +453,22 @@ function StatusPlane({ text }: { text: string }) {
         96,
         ({ ctx, width, height }) => {
           ctx.clearRect(0, 0, width, height);
-          ctx.fillStyle = "rgba(12, 16, 24, 0.72)";
-          ctx.fillRect(0, 0, width, height);
-          ctx.fillStyle = "#e8eef8";
+          roundRectPath(ctx, 2, 2, width - 4, height - 4, 18);
+          ctx.fillStyle = accent.soft;
+          ctx.fill();
+          ctx.fillStyle = accent.marker;
+          ctx.beginPath();
+          ctx.arc(34, height / 2, 8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#f0e9ec";
           ctx.font = "600 26px system-ui, sans-serif";
-          ctx.textAlign = "center";
+          ctx.textAlign = "left";
           ctx.textBaseline = "middle";
-          ctx.fillText(text.slice(0, 48), width / 2, height / 2);
+          ctx.fillText(text.slice(0, 48), 58, height / 2);
         },
         "en",
       ),
-    [text],
+    [accent.marker, accent.soft, text],
   );
 
   useEffect(
@@ -325,9 +479,9 @@ function StatusPlane({ text }: { text: string }) {
   );
 
   return (
-    <mesh position={[0, 0.42, 0]}>
+    <mesh position={[0, 0.42, 0]} renderOrder={30}>
       <planeGeometry args={[1.05, 0.12]} />
-      <meshBasicMaterial map={texture} toneMapped={false} transparent fog={false} depthWrite={false} />
+      <meshBasicMaterial map={texture} toneMapped={false} transparent fog={false} depthWrite={false} depthTest={false} />
     </mesh>
   );
 }
@@ -346,9 +500,10 @@ function ProgressBar() {
         72,
         ({ ctx, width, height }) => {
           ctx.clearRect(0, 0, width, height);
-          ctx.fillStyle = "rgba(12, 16, 24, 0.75)";
-          ctx.fillRect(0, 0, width, height);
-          ctx.fillStyle = "rgba(255,255,255,0.12)";
+          roundRectPath(ctx, 0, 0, width, height, 16);
+          ctx.fillStyle = accent.soft;
+          ctx.fill();
+          ctx.fillStyle = "rgba(255,255,255,0.16)";
           ctx.fillRect(PROGRESS_PAD, height / 2 - 6, width - PROGRESS_PAD * 2, 12);
           ctx.fillStyle = "#c8d4e8";
           ctx.font = "600 22px system-ui, sans-serif";
@@ -358,7 +513,7 @@ function ProgressBar() {
         },
         "en",
       ),
-    [accent.primary],
+    [accent.primary, accent.soft],
   );
 
   const lastPaintVersionRef = useRef(-1);
@@ -385,9 +540,10 @@ function ProgressBar() {
     const trackW = w - PROGRESS_PAD * 2;
     const ratio = Math.min(1, Math.max(0, clock.time / clock.duration));
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = "rgba(12, 16, 24, 0.75)";
-    ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    roundRectPath(ctx, 0, 0, w, h, 16);
+    ctx.fillStyle = accent.soft;
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.16)";
     ctx.fillRect(PROGRESS_PAD, h / 2 - 6, trackW, 12);
     ctx.fillStyle = accent.primary;
     ctx.fillRect(PROGRESS_PAD, h / 2 - 6, trackW * ratio, 12);
@@ -404,6 +560,7 @@ function ProgressBar() {
   return (
     <mesh
       position={[0, 0.22, 0]}
+      renderOrder={30}
       onPointerDown={(e) => {
         e.stopPropagation();
         const uv = e.uv;
@@ -418,7 +575,7 @@ function ProgressBar() {
       }}
     >
       <planeGeometry args={[1.05, 0.1]} />
-      <meshBasicMaterial map={texture} toneMapped={false} transparent fog={false} depthWrite={false} />
+      <meshBasicMaterial map={texture} toneMapped={false} transparent fog={false} depthWrite={false} depthTest={false} />
     </mesh>
   );
 }
@@ -427,21 +584,30 @@ function ModelPanelBackdrop() {
   const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
   const accent = getXrAccentTokens(themeColor);
   const texture = useMemo(
-    () => createPanelTexture(720, 360, ({ ctx, width, height }) => {
-      ctx.clearRect(0, 0, width, height);
+    () => createPanelTexture(720, 620, ({ ctx, width, height }) => {
       roundRectPath(ctx, 2, 2, width - 4, height - 4, 24);
-      ctx.fillStyle = "rgba(15, 20, 30, 0.95)";
+      ctx.fillStyle = accent.soft;
       ctx.fill();
-      ctx.strokeStyle = hexToRgba(accent.border, 0.72);
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = accent.border;
+      ctx.lineWidth = 5;
+      ctx.stroke();
+      ctx.fillStyle = accent.primary;
+      ctx.fillRect(24, 21, width - 48, 6);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(28, 142);
+      ctx.lineTo(width - 28, 142);
+      ctx.moveTo(28, 326);
+      ctx.lineTo(width - 28, 326);
       ctx.stroke();
     }, "en"),
-    [accent.border],
+    [accent.border, accent.primary, accent.soft],
   );
   useEffect(() => () => texture.dispose(), [texture]);
   return (
-    <mesh position={[0, 0, -0.015]} renderOrder={20} onPointerDown={(event) => event.stopPropagation()}>
-      <planeGeometry args={[1.02, 0.52]} />
+    <mesh position={[0, 0, -0.015]} renderOrder={10} onPointerDown={(event) => event.stopPropagation()}>
+      <planeGeometry args={[1.02, 0.88]} />
       <meshBasicMaterial map={texture} toneMapped={false} transparent depthWrite={false} depthTest={false} fog={false} />
     </mesh>
   );
@@ -456,6 +622,10 @@ function ModelPanel({
   placeOffLabel,
   scaleLabel,
   resetValueLabel,
+  rotateLeftLabel,
+  rotateRightLabel,
+  removeLabel,
+  onInteractionChange,
 }: {
   modelId: string;
   position: [number, number, number];
@@ -465,6 +635,10 @@ function ModelPanel({
   placeOffLabel: string;
   scaleLabel: string;
   resetValueLabel: string;
+  rotateLeftLabel: string;
+  rotateRightLabel: string;
+  removeLabel: string;
+  onInteractionChange: (active: boolean) => void;
 }) {
   const model = useMmdVrStore((s) => s.models.find((entry) => entry.id === modelId));
   const placeMode = useMmdVrStore((s) => s.placeMode);
@@ -473,6 +647,9 @@ function ModelPanel({
   const setPlaceModelId = useMmdVrStore((s) => s.setPlaceModelId);
   const setPlaceMode = useMmdVrStore((s) => s.setPlaceMode);
   const requestModelScale = useMmdVrStore((s) => s.requestModelScale);
+  const requestModelRotation = useMmdVrStore((s) => s.requestModelRotation);
+  const requestModelReset = useMmdVrStore((s) => s.requestModelReset);
+  const enqueueModelRemoval = useMmdVrStore((s) => s.enqueueModelRemoval);
 
   if (!model) return null;
   const placementActive = placeMode && placeModelId === model.id;
@@ -481,15 +658,15 @@ function ModelPanel({
   return (
     <group position={position}>
       <ModelPanelBackdrop />
-      <ValueLabel position={[0, 0.17, 0]} label={shortName(model.name, 14)} value={model.visible ? "●" : "○"} />
+      <ValueLabel position={[0, 0.34, 0]} label={shortName(model.name, 14)} value={model.visible ? "●" : "○"} />
       <HudButton
-        position={[-0.25, 0.03, 0]}
+        position={[-0.25, 0.19, 0]}
         label={model.visible ? hideLabel : showLabel}
         size={[0.42, 0.11]}
         onPress={() => enqueueVisibilityToggle(model.id)}
       />
       <HudButton
-        position={[0.25, 0.03, 0]}
+        position={[0.25, 0.19, 0]}
         label={placementActive ? placeOnLabel : placeOffLabel}
         active={placementActive}
         size={[0.42, 0.11]}
@@ -502,20 +679,27 @@ function ModelPanel({
           }
         }}
       />
-      <ValueLabel position={[-0.28, -0.12, 0]} label={scaleLabel} value={formatMmdVrModelScale(model.scale)} />
-      <HudButton position={[0.08, -0.12, 0]} label="−" size={[0.2, 0.11]} onPress={() => setScale(previousMmdVrModelScale(model.scale))} />
-      <HudButton position={[0.28, -0.12, 0]} label={resetValueLabel} size={[0.22, 0.11]} onPress={() => setScale(1)} />
-      <HudButton position={[0.48, -0.12, 0]} label="+" size={[0.2, 0.11]} onPress={() => setScale(nextMmdVrModelScale(model.scale))} />
+      <ValueLabel position={[0, 0.02, 0]} label={scaleLabel} value={formatMmdVrModelScale(model.scale)} />
+      <HudSlider
+        position={[0, -0.12, 0]}
+        value={mmdVrModelScaleToSlider(model.scale)}
+        onChange={(value) => setScale(mmdVrSliderToModelScale(value))}
+        onInteractionChange={onInteractionChange}
+      />
+      <HudButton position={[-0.34, -0.31, 0]} label={rotateLeftLabel} size={[0.24, 0.1]} onPress={() => requestModelRotation(model.id, model.rotationY - 15)} />
+      <HudButton position={[-0.06, -0.31, 0]} label={resetValueLabel} size={[0.22, 0.1]} onPress={() => requestModelReset(model.id)} />
+      <HudButton position={[0.2, -0.31, 0]} label={rotateRightLabel} size={[0.26, 0.1]} onPress={() => requestModelRotation(model.id, model.rotationY + 15)} />
+      <HudButton position={[0.42, -0.31, 0]} label={removeLabel} size={[0.16, 0.1]} danger onPress={() => enqueueModelRemoval(model.id)} />
     </group>
   );
 }
 
-function ModelPanels(props: Pick<Parameters<typeof ModelPanel>[0], "hideLabel" | "showLabel" | "placeOnLabel" | "placeOffLabel" | "scaleLabel" | "resetValueLabel">) {
-  const models = useMmdVrStore((s) => s.models.slice(0, 3));
+function ModelPanels(props: Pick<Parameters<typeof ModelPanel>[0], "hideLabel" | "showLabel" | "placeOnLabel" | "placeOffLabel" | "scaleLabel" | "resetValueLabel" | "rotateLeftLabel" | "rotateRightLabel" | "removeLabel" | "onInteractionChange">) {
+  const models = useMmdVrStore((s) => s.models);
   const spacing = 1.1;
   return (
-    <group position={[0.16, -0.68, 0]}>
-      {models.map((model, index) => (
+    <group position={[0.16, -1.14, 0.02]}>
+      {models.slice(0, 3).map((model, index) => (
         <ModelPanel
           key={model.id}
           {...props}
@@ -523,6 +707,85 @@ function ModelPanels(props: Pick<Parameters<typeof ModelPanel>[0], "hideLabel" |
           position={[(index - (models.length - 1) / 2) * spacing, 0, 0]}
         />
       ))}
+    </group>
+  );
+}
+
+function PhysicsSettingsPanel({
+  collisionOnLabel,
+  collisionOffLabel,
+  radiusLabel,
+  qualityLabels,
+  hapticsOnLabel,
+  hapticsOffLabel,
+  resetPhysicsLabel,
+  snapTurnLabel,
+  exposureLabel,
+}: {
+  collisionOnLabel: string;
+  collisionOffLabel: string;
+  radiusLabel: string;
+  qualityLabels: [string, string, string];
+  hapticsOnLabel: string;
+  hapticsOffLabel: string;
+  resetPhysicsLabel: string;
+  snapTurnLabel: string;
+  exposureLabel: string;
+}) {
+  const physicsEnabled = useMmdVrStore((s) => s.physicsEnabled);
+  const physicsBusy = useMmdVrStore((s) => s.physicsBusy);
+  const prefs = useMmdVrStore((s) => s.prefs);
+  const collisions = useMmdVrStore((s) => s.physicsControllerCollisions);
+  const radius = useMmdVrStore((s) => s.physicsColliderRadius);
+  const quality = useMmdVrStore((s) => s.physicsQuality);
+  const haptics = useMmdVrStore((s) => s.physicsHapticsEnabled);
+  const setCollisions = useMmdVrStore((s) => s.setPhysicsControllerCollisions);
+  const cycleRadius = useMmdVrStore((s) => s.cyclePhysicsColliderRadius);
+  const cycleQuality = useMmdVrStore((s) => s.cyclePhysicsQuality);
+  const setHaptics = useMmdVrStore((s) => s.setPhysicsHapticsEnabled);
+  const requestReset = useMmdVrStore((s) => s.requestPhysicsReset);
+  const setPrefs = useMmdVrStore((s) => s.setPrefs);
+  const qualityLabel = quality === "low" ? qualityLabels[0] : quality === "high" ? qualityLabels[2] : qualityLabels[1];
+  const physicsControlsDisabled = !physicsEnabled || physicsBusy;
+
+  return (
+    <group position={[0.16, -1.05, 0.02]}>
+      <group scale={[2.35, 0.72, 1]}>
+        <ModelPanelBackdrop />
+      </group>
+      <HudButton
+        position={[-0.76, 0.14, 0]}
+        label={collisions ? collisionOnLabel : collisionOffLabel}
+        size={[0.52, 0.11]}
+        active={collisions}
+        disabled={physicsControlsDisabled}
+        onPress={() => setCollisions(!useMmdVrStore.getState().physicsControllerCollisions)}
+      />
+      <HudButton position={[-0.2, 0.14, 0]} label={`${radiusLabel}:${Math.round(radius * 100)}cm`} size={[0.52, 0.11]} disabled={physicsControlsDisabled} onPress={cycleRadius} />
+      <HudButton position={[0.38, 0.14, 0]} label={qualityLabel} size={[0.52, 0.11]} disabled={physicsControlsDisabled} onPress={cycleQuality} />
+      <HudButton
+        position={[0.94, 0.14, 0]}
+        label={haptics ? hapticsOnLabel : hapticsOffLabel}
+        size={[0.52, 0.11]}
+        active={haptics}
+        disabled={physicsControlsDisabled}
+        onPress={() => setHaptics(!useMmdVrStore.getState().physicsHapticsEnabled)}
+      />
+      <HudButton position={[-0.58, -0.1, 0]} label={resetPhysicsLabel} size={[0.52, 0.11]} disabled={physicsControlsDisabled} onPress={requestReset} />
+      <HudButton
+        position={[0, -0.1, 0]}
+        label={`${snapTurnLabel}:${prefs.snapTurnDegrees}°`}
+        size={[0.52, 0.11]}
+        onPress={() => setPrefs({
+          snapTurnDegrees: prefs.snapTurnDegrees === 15 ? 30 : prefs.snapTurnDegrees === 30 ? 45 : 15,
+        })}
+      />
+      <HudButton
+        position={[0.58, -0.1, 0]}
+        label={`${exposureLabel}:${prefs.exposure.toFixed(1)}`}
+        size={[0.52, 0.11]}
+        onPress={() => setPrefs({ exposure: prefs.exposure >= 1.3 ? 0.7 : prefs.exposure + 0.1 })}
+      />
     </group>
   );
 }
@@ -587,7 +850,7 @@ function FpsBadge() {
   return (
     <mesh position={[-0.72, 0.42, 0]} renderOrder={30}>
       <planeGeometry args={[0.16, 0.07]} />
-      <meshBasicMaterial map={texture} toneMapped={false} transparent depthWrite={false} fog={false} />
+      <meshBasicMaterial map={texture} toneMapped={false} transparent depthWrite={false} depthTest={false} fog={false} />
     </mesh>
   );
 }
@@ -609,14 +872,40 @@ export function MmdVrControlBar({
   lightStageLabel,
   lightSoftLabel,
   lightContrastLabel,
+  lightDaylightLabel,
+  lightWarmLabel,
+  lightRimLabel,
   shadowsLabel,
   gridLabel,
   scaleLabel,
+  rotateLeftLabel,
+  rotateRightLabel,
   heightLabel,
+  viewDistanceLabel,
   resetValueLabel,
   panelHideLabel,
   panelShowLabel,
   panelDragLabel,
+  fpsOnLabel,
+  fpsOffLabel,
+  physicsOnLabel,
+  physicsOffLabel,
+  physicsDebugOnLabel,
+  physicsDebugOffLabel,
+  physicsSettingsLabel,
+  physicsCollisionOnLabel,
+  physicsCollisionOffLabel,
+  physicsRadiusLabel,
+  physicsQualityLabels,
+  physicsHapticsOnLabel,
+  physicsHapticsOffLabel,
+  resetPhysicsLabel,
+  snapTurnLabel,
+  exposureLabel,
+  removeLabel,
+  themeLabels,
+  walkLabels,
+  walkSpeedLabel,
   onDragChange,
   onExit,
   busy,
@@ -636,14 +925,40 @@ export function MmdVrControlBar({
   lightStageLabel: string;
   lightSoftLabel: string;
   lightContrastLabel: string;
+  lightDaylightLabel: string;
+  lightWarmLabel: string;
+  lightRimLabel: string;
   shadowsLabel: string;
   gridLabel: string;
   scaleLabel: string;
+  rotateLeftLabel: string;
+  rotateRightLabel: string;
   heightLabel: string;
+  viewDistanceLabel: string;
   resetValueLabel: string;
   panelHideLabel: string;
   panelShowLabel: string;
   panelDragLabel: string;
+  fpsOnLabel: string;
+  fpsOffLabel: string;
+  physicsOnLabel: string;
+  physicsOffLabel: string;
+  physicsDebugOnLabel: string;
+  physicsDebugOffLabel: string;
+  physicsSettingsLabel: string;
+  physicsCollisionOnLabel: string;
+  physicsCollisionOffLabel: string;
+  physicsRadiusLabel: string;
+  physicsQualityLabels: [string, string, string];
+  physicsHapticsOnLabel: string;
+  physicsHapticsOffLabel: string;
+  resetPhysicsLabel: string;
+  snapTurnLabel: string;
+  exposureLabel: string;
+  removeLabel: string;
+  themeLabels: [string, string, string, string, string];
+  walkLabels: [string, string, string];
+  walkSpeedLabel: string;
   onDragChange: (dragging: boolean) => void;
   onExit: () => void;
   busy: boolean;
@@ -662,9 +977,22 @@ export function MmdVrControlBar({
   const resetView = useMmdVrStore((s) => s.resetView);
   const cycleLightPreset = useMmdVrStore((s) => s.cycleLightPreset);
   const setPrefs = useMmdVrStore((s) => s.setPrefs);
+  const physicsEnabled = useMmdVrStore((s) => s.physicsEnabled);
+  const physicsDebugEnabled = useMmdVrStore((s) => s.physicsDebugEnabled);
+  const physicsBusy = useMmdVrStore((s) => s.physicsBusy);
+  const physicsContactCount = useMmdVrStore((s) => s.physicsContactCount);
+  const physicsDynamicBodyCount = useMmdVrStore((s) => s.physicsDynamicBodyCount);
+  const physicsRigidBodyCount = useMmdVrStore((s) => s.physicsRigidBodyCount);
+  const physicsStepCount = useMmdVrStore((s) => s.physicsStepCount);
+  const setPhysicsEnabled = useMmdVrStore((s) => s.setPhysicsEnabled);
+  const setPhysicsDebugEnabled = useMmdVrStore((s) => s.setPhysicsDebugEnabled);
   const [panelVisible, setPanelVisible] = useState(true);
+  const [physicsPanelOpen, setPhysicsPanelOpen] = useState(false);
   const [panelPosition, setPanelPosition] = useState(PANEL_DEFAULT_POSITION);
   const heightOffset = prefs.heightOffset;
+  const viewDistance = prefs.viewDistance;
+  const walkIndex = prefs.walkSpeedPref === "slow" ? 0 : prefs.walkSpeedPref === "fast" ? 2 : 1;
+  const themeIndex = Math.max(0, XR_THEME_COLORS.indexOf(prefs.themeColor));
 
   const status =
     statusLine ??
@@ -674,16 +1002,30 @@ export function MmdVrControlBar({
       ? lightSoftLabel
       : lightPreset === "contrast"
         ? lightContrastLabel
-        : lightStageLabel;
+        : lightPreset === "daylight"
+          ? lightDaylightLabel
+          : lightPreset === "warm"
+            ? lightWarmLabel
+            : lightPreset === "rim"
+              ? lightRimLabel
+              : lightStageLabel;
 
   if (!panelVisible) {
     return (
-      <HudButton
-        position={[0, 0.88, -1.05]}
-        label={panelShowLabel}
-        size={[0.54, 0.13]}
-        onPress={() => setPanelVisible(true)}
-      />
+      <group position={panelPosition}>
+        <HudButton
+          position={[0, 0, 0]}
+          label={panelShowLabel}
+          size={[0.54, 0.13]}
+          onPress={() => setPanelVisible(true)}
+        />
+        <DragHandle
+          label={panelDragLabel}
+          position={[0, -0.14, 0.012]}
+          onDragChange={onDragChange}
+          onPositionChange={setPanelPosition}
+        />
+      </group>
     );
   }
 
@@ -739,18 +1081,97 @@ export function MmdVrControlBar({
       />
       <HudButton position={[1.07, 0.05, 0]} label={resetLabel} disabled={busy} onPress={() => resetView()} />
       <HudButton position={[1.43, 0.05, 0]} label={exitLabel} disabled={busy} danger onPress={onExit} />
-      <ValueLabel position={[-0.83, -0.21, 0]} label={heightLabel} value={`${heightOffset >= 0 ? "+" : ""}${heightOffset.toFixed(1)} m`} />
-      <HudButton position={[-0.43, -0.21, 0]} label="−" size={[0.24, 0.11]} onPress={() => setPrefs({ heightOffset: heightOffset - MMD_VR_HEIGHT_OFFSET_STEP })} />
-      <HudButton position={[-0.15, -0.21, 0]} label={resetValueLabel} size={[0.3, 0.11]} onPress={() => setPrefs({ heightOffset: 0 })} />
-      <HudButton position={[0.17, -0.21, 0]} label="+" size={[0.24, 0.11]} onPress={() => setPrefs({ heightOffset: heightOffset + MMD_VR_HEIGHT_OFFSET_STEP })} />
-      <ModelPanels
-        hideLabel={hideLabel}
-        showLabel={showLabel}
-        placeOnLabel={placeOnLabel}
-        placeOffLabel={placeOffLabel}
-        scaleLabel={scaleLabel}
-        resetValueLabel={resetValueLabel}
+      <ValueLabel position={[-0.83, -0.21, 0]} label={heightLabel} value={`${heightOffset >= 0 ? "+" : ""}${heightOffset.toFixed(2)} m`} />
+      <HudSlider
+        position={[0.28, -0.2, 0]}
+        width={0.72}
+        value={mmdVrHeightOffsetToSlider(heightOffset)}
+        onChange={(value) => setPrefs({ heightOffset: mmdVrSliderToHeightOffset(value) })}
+        onInteractionChange={onDragChange}
       />
+      <HudButton position={[0.82, -0.21, 0]} label="−" size={[0.2, 0.1]} onPress={() => setPrefs({ heightOffset: heightOffset - MMD_VR_HEIGHT_OFFSET_FINE_STEP })} />
+      <HudButton position={[1.08, -0.21, 0]} label={resetValueLabel} size={[0.26, 0.1]} onPress={() => setPrefs({ heightOffset: 0 })} />
+      <HudButton position={[1.34, -0.21, 0]} label="+" size={[0.2, 0.1]} onPress={() => setPrefs({ heightOffset: heightOffset + MMD_VR_HEIGHT_OFFSET_FINE_STEP })} />
+      <ValueLabel position={[-1.05, -0.41, 0]} label={viewDistanceLabel} value={`${viewDistance} m`} />
+      <HudSlider
+        position={[-0.27, -0.41, 0]}
+        width={0.62}
+        value={mmdVrViewDistanceToSlider(viewDistance)}
+        onChange={(value) => setPrefs({ viewDistance: mmdVrSliderToViewDistance(value) })}
+        onInteractionChange={onDragChange}
+      />
+      <HudButton position={[0.25, -0.41, 0]} label={resetValueLabel} size={[0.26, 0.1]} onPress={() => setPrefs({ viewDistance: 40 })} />
+      <HudButton
+        position={[0.7, -0.41, 0]}
+        label={`${walkSpeedLabel}:${walkLabels[walkIndex]}`}
+        size={[0.58, 0.1]}
+        onPress={() => setPrefs({ walkSpeedPref: (["slow", "normal", "fast"] as const)[(walkIndex + 1) % 3] })}
+      />
+      <HudButton
+        position={[1.12, -0.41, 0]}
+        label={prefs.showFps ? fpsOnLabel : fpsOffLabel}
+        size={[0.44, 0.1]}
+        active={prefs.showFps}
+        onPress={() => setPrefs({ showFps: !useMmdVrStore.getState().prefs.showFps })}
+      />
+      <HudButton
+        position={[-0.82, -0.59, 0]}
+        label={themeLabels[themeIndex]}
+        size={[0.62, 0.1]}
+        onPress={() => setPrefs({ themeColor: XR_THEME_COLORS[(themeIndex + 1) % XR_THEME_COLORS.length] })}
+      />
+      <HudButton
+        position={[-0.16, -0.59, 0]}
+        label={physicsEnabled ? physicsOnLabel : physicsOffLabel}
+        size={[0.58, 0.1]}
+        disabled={busy || physicsBusy || modelCount === 0}
+        active={physicsEnabled}
+        onPress={() => setPhysicsEnabled(!useMmdVrStore.getState().physicsEnabled)}
+      />
+      <HudButton
+        position={[0.52, -0.59, 0]}
+        label={physicsDebugEnabled
+          ? `${physicsDebugOnLabel} R:${physicsRigidBodyCount} D:${physicsDynamicBodyCount} C:${physicsContactCount} S:${physicsStepCount > 0 ? "+" : "0"}`
+          : physicsDebugOffLabel}
+        size={[0.7, 0.1]}
+        disabled={busy || !physicsEnabled || physicsBusy || modelCount === 0}
+        active={physicsDebugEnabled}
+        onPress={() => setPhysicsDebugEnabled(!useMmdVrStore.getState().physicsDebugEnabled)}
+      />
+      <HudButton
+        position={[1.14, -0.59, 0]}
+        label={physicsSettingsLabel}
+        size={[0.46, 0.1]}
+        disabled={busy}
+        active={physicsPanelOpen}
+        onPress={() => setPhysicsPanelOpen((open) => !open)}
+      />
+      {physicsPanelOpen ? (
+        <PhysicsSettingsPanel
+          collisionOnLabel={physicsCollisionOnLabel}
+          collisionOffLabel={physicsCollisionOffLabel}
+          radiusLabel={physicsRadiusLabel}
+          qualityLabels={physicsQualityLabels}
+          hapticsOnLabel={physicsHapticsOnLabel}
+          hapticsOffLabel={physicsHapticsOffLabel}
+          resetPhysicsLabel={resetPhysicsLabel}
+          snapTurnLabel={snapTurnLabel}
+          exposureLabel={exposureLabel}
+        />
+      ) : (
+        <ModelPanels
+          hideLabel={hideLabel}
+          showLabel={showLabel}
+          placeOnLabel={placeOnLabel}
+          placeOffLabel={placeOffLabel}
+          scaleLabel={scaleLabel}
+          rotateLeftLabel={rotateLeftLabel}
+          rotateRightLabel={rotateRightLabel}
+          resetValueLabel={resetValueLabel}
+          removeLabel={removeLabel}
+          onInteractionChange={onDragChange}
+        />
+      )}
       <FpsBadge />
     </group>
   );

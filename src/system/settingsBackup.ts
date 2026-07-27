@@ -113,12 +113,15 @@ const mmdVrPrefsSchema = z.strictObject({
   shadowsPref: z.enum(["auto", "on", "off"]),
   gridPref: z.enum(["auto", "on", "off"]),
   walkSpeedPref: z.enum(["auto", "slow", "normal", "fast"]),
-  lightPreset: z.enum(["stage", "soft", "contrast"]),
+  lightPreset: z.enum(["stage", "soft", "contrast", "daylight", "warm", "rim"]),
   framebufferScalePref: z.enum(["auto", "0.7", "0.85", "1"]),
   foveationPref: z.enum(["auto", "off", "medium", "high"]),
   shadowResolutionPref: z.enum(["auto", "low", "medium", "high"]),
-  heightOffset: z.number().min(-1.5).max(1.5).default(0),
+  heightOffset: z.number().min(-2).max(20).default(0),
+  viewDistance: z.number().min(10).max(100).default(40),
   themeColor: z.enum(["blue", "cyan", "purple", "green", "red"]).default("blue"),
+  snapTurnDegrees: z.union([z.literal(15), z.literal(30), z.literal(45)]).default(30),
+  exposure: z.number().min(0.7).max(1.3).default(1),
 });
 
 const settingsBackupV2Schema = z.strictObject({

@@ -64,14 +64,13 @@ export function MmdVrScene() {
           powerPreference: "high-performance",
         }}
         shadows={profile.shadows}
-        camera={{ position: [0, 1.5, 2.8], fov: 70, near: 0.05, far: 40 }}
+        camera={{ position: [0, 1.5, 2.8], fov: 70, near: 0.05, far: mmdPrefs.viewDistance }}
         dpr={profile.dpr}
         frameloop="always"
       >
         <XR store={mmdVrXrStore}>
           <AttachPendingMmdVrSession />
           <MmdVrHeadsetHudGate onHideHud={setHideExitHud} />
-          <MmdVrStageContent />
           <MmdVrPlayerRig
             playLabel={t("settingsMmdVrPlay")}
             pauseLabel={t("settingsMmdVrPause")}
@@ -88,17 +87,58 @@ export function MmdVrScene() {
             lightStageLabel={t("settingsMmdVrLightStage")}
             lightSoftLabel={t("settingsMmdVrLightSoft")}
             lightContrastLabel={t("settingsMmdVrLightContrast")}
+            lightDaylightLabel={t("settingsMmdVrLightDaylight")}
+            lightWarmLabel={t("settingsMmdVrLightWarm")}
+            lightRimLabel={t("settingsMmdVrLightRim")}
             shadowsLabel={t("settingsMmdVrShadows")}
             gridLabel={t("settingsMmdVrGrid")}
             scaleLabel={t("settingsMmdVrModelScale")}
+            rotateLeftLabel={t("settingsMmdVrRotateLeft")}
+            rotateRightLabel={t("settingsMmdVrRotateRight")}
             heightLabel={t("settingsMmdVrUserHeight")}
+            viewDistanceLabel={t("settingsMmdVrViewDistance")}
             resetValueLabel={t("settingsMmdVrValueReset")}
             panelHideLabel={t("settingsMmdVrPanelHide")}
             panelShowLabel={t("settingsMmdVrPanelShow")}
             panelDragLabel={t("settingsMmdVrPanelDrag")}
+            fpsOnLabel={t("settingsMmdVrFpsOn")}
+            fpsOffLabel={t("settingsMmdVrFpsOff")}
+            physicsOnLabel={t("settingsMmdVrPhysicsOn")}
+            physicsOffLabel={t("settingsMmdVrPhysicsOff")}
+            physicsDebugOnLabel={t("settingsMmdVrPhysicsDebugOn")}
+            physicsDebugOffLabel={t("settingsMmdVrPhysicsDebugOff")}
+            physicsSettingsLabel={t("settingsMmdVrPhysicsSettings")}
+            physicsCollisionOnLabel={t("settingsMmdVrPhysicsCollisionOn")}
+            physicsCollisionOffLabel={t("settingsMmdVrPhysicsCollisionOff")}
+            physicsRadiusLabel={t("settingsMmdVrPhysicsRadius")}
+            physicsQualityLabels={[
+              t("settingsMmdVrPhysicsQualityLow"),
+              t("settingsMmdVrPhysicsQualityMedium"),
+              t("settingsMmdVrPhysicsQualityHigh"),
+            ]}
+            physicsHapticsOnLabel={t("settingsMmdVrPhysicsHapticsOn")}
+            physicsHapticsOffLabel={t("settingsMmdVrPhysicsHapticsOff")}
+            resetPhysicsLabel={t("settingsMmdVrPhysicsReset")}
+            snapTurnLabel={t("settingsMmdVrSnapTurn")}
+            exposureLabel={t("settingsMmdVrExposure")}
+            removeLabel={t("settingsMmdVrRemoveModel")}
+            themeLabels={[
+              t("settingsMmdVrThemeBlue"),
+              t("settingsMmdVrThemeCyan"),
+              t("settingsMmdVrThemePurple"),
+              t("settingsMmdVrThemeGreen"),
+              t("settingsMmdVrThemeRed"),
+            ]}
+            walkLabels={[
+              t("settingsMmdVrWalkSlow"),
+              t("settingsMmdVrWalkNormal"),
+              t("settingsMmdVrWalkFast"),
+            ]}
+            walkSpeedLabel={t("settingsMmdVrWalkSpeed")}
             onExit={exitVr}
             busy={exiting}
           />
+          <MmdVrStageContent />
           <MmdVrSessionSync />
         </XR>
       </Canvas>
