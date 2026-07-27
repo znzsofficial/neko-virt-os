@@ -13,6 +13,7 @@ export const OPEN_SOURCE_PACKAGES: readonly OpenSourcePackage[] = [
   { name: "@react-three/fiber", version: "9.6.1", license: "MIT" },
   { name: "@react-three/xr", version: "6.6.30", license: "MIT" },
   { name: "@react-three/drei", version: "10.7.7", license: "MIT" },
+  { name: "three-stdlib", version: "2.36.1", license: "MIT" },
   { name: "postprocessing", version: "6.39.3", license: "Zlib" },
   { name: "@yohawing/three-mmd-loader", version: "0.7.0", license: "MIT" },
   { name: "@fontsource-variable/noto-sans-sc", version: "5.3.0", license: "OFL-1.1", note: "Noto Sans SC by Google" },
