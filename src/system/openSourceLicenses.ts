@@ -15,6 +15,7 @@ export const OPEN_SOURCE_PACKAGES: readonly OpenSourcePackage[] = [
   { name: "@react-three/drei", version: "10.7.7", license: "MIT" },
   { name: "postprocessing", version: "6.39.3", license: "Zlib" },
   { name: "@yohawing/three-mmd-loader", version: "0.7.0", license: "MIT" },
+  { name: "@fontsource-variable/noto-sans-sc", version: "5.3.0", license: "OFL-1.1", note: "Noto Sans SC by Google" },
   { name: "mediabunny", version: "1.51.0", license: "MPL-2.0" },
   { name: "zustand", version: "5.0.14", license: "MIT" },
   { name: "dexie", version: "4.4.4", license: "Apache-2.0" },

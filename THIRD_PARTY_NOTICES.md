@@ -27,3 +27,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Noto Sans SC
+
+Noto Sans SC is provided by Google Inc. through `@fontsource-variable/noto-sans-sc` version 5.3.0 and is licensed under the SIL Open Font License, Version 1.1. The complete license text is included in [`licenses/Noto-Sans-SC-OFL-1.1.txt`](./licenses/Noto-Sans-SC-OFL-1.1.txt).

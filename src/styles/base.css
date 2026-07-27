@@ -60,6 +60,11 @@
   --z-launcher: 60;
   --z-taskbar: 70;
 }
+
+:root.font-noto-sans-sc {
+  --font-ui: "Noto Sans SC Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
 /* Dark mode overrides */
 [data-theme="dark"] {
   --os-neutral-color: 255;
