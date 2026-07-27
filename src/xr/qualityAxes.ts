@@ -7,7 +7,7 @@ export type ImmersiveAntialiasPref = "auto" | "on" | "off";
 export type ImmersiveTogglePref = "auto" | "on" | "off";
 export type ImmersiveFramebufferScalePref = "auto" | "0.7" | "0.85" | "1";
 export type ImmersiveFoveationPref = "auto" | "off" | "medium" | "high";
-export type ImmersiveFrameRate = "high" | "mid" | "low" | false;
+export type ImmersiveFrameRate = "high" | "mid" | "low" | false | ((supported: ArrayLike<number>) => number | false);
 
 export const IMMERSIVE_DPR_MAP: Record<
   Exclude<ImmersiveDprPref, "auto">,
@@ -74,6 +74,7 @@ export function formatDprLabel(dpr: number | [number, number]): string {
 }
 
 export function formatFrameRateLabel(frameRate: ImmersiveFrameRate): string {
+  if (typeof frameRate === "function") return "custom";
   if (frameRate === false) return "—";
   if (frameRate === "high") return "72+";
   if (frameRate === "mid") return "~60";

@@ -147,6 +147,11 @@ export function MmdVrPlayerRig({
     if (g && !stickHeightRef.current.active) g.position.y = heightOffset;
   }, [heightOffset]);
 
+  useEffect(() => () => {
+    if (!stickHeightRef.current.active) return;
+    useMmdVrStore.getState().setPrefs({ heightOffset: stickHeightRef.current.value });
+  }, []);
+
   useFrame((_, delta) => {
     const stick = rightController?.gamepad["xr-standard-thumbstick"];
     const axis = stick?.yAxis ?? 0;

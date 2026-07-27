@@ -21,6 +21,7 @@ import {
 import {
   MMD_VR_PREFS_KEY,
   MMD_VR_PREFS_LEGACY_KEY,
+  normalizeMmdVrFrameRate,
   normalizeMmdVrPrefs,
   type MmdVrPrefs,
 } from "../mmdVrShowcase/mmdVrStore";
@@ -108,7 +109,7 @@ const mmdVrPrefsSchema = z.strictObject({
   showFps: z.boolean(),
   loop: z.boolean(),
   dprPref: z.enum(["auto", "1", "1.25", "1.5"]),
-  frameRatePref: z.enum(["auto", "high", "mid", "low"]),
+  frameRatePref: z.enum(["auto", "72", "80", "90", "120", "high", "mid", "low"]).transform(normalizeMmdVrFrameRate),
   antialiasPref: z.enum(["auto", "on", "off"]),
   shadowsPref: z.enum(["auto", "on", "off"]),
   gridPref: z.enum(["auto", "on", "off"]),
@@ -122,6 +123,8 @@ const mmdVrPrefsSchema = z.strictObject({
   themeColor: z.enum(["blue", "cyan", "purple", "green", "red"]).default("blue"),
   snapTurnDegrees: z.union([z.literal(15), z.literal(30), z.literal(45)]).default(30),
   exposure: z.number().min(0.7).max(1.3).default(1),
+  advancedRenderOverrides: z.boolean().default(false),
+  detailedPhysicsDiagnostics: z.boolean().default(false),
 });
 
 const settingsBackupV2Schema = z.strictObject({

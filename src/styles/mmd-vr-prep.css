@@ -256,6 +256,26 @@
 .mmd-vr-prep-toggle input { width: 19px; height: 19px; accent-color: var(--os-primary); }
 .mmd-vr-prep-config-body > p { margin: 0; color: var(--os-muted); font-size: 11px; line-height: 1.5; }
 
+.mmd-vr-prep-advanced {
+  border-top: 1px solid var(--os-border);
+}
+
+.mmd-vr-prep-advanced > summary {
+  padding: 14px 0 0;
+  color: var(--os-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mmd-vr-prep-warning {
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--os-warning) !important;
+  background: color-mix(in oklch, var(--os-warning) 10%, transparent);
+  font-size: 12px !important;
+}
+
 .mmd-vr-prep-enter {
   min-height: 62px;
   padding: 0 22px;

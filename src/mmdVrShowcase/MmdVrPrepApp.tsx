@@ -42,6 +42,17 @@ function OptionGroup<T extends string>({
   );
 }
 
+type QuestPreset = "safe" | "balanced" | "clarity" | "custom";
+
+function getQuestPreset(prefs: ReturnType<typeof useMmdVrStore.getState>["prefs"]): QuestPreset {
+  if (!prefs.advancedRenderOverrides) return "custom";
+  if (prefs.dprPref !== "auto" || prefs.antialiasPref !== "auto") return "custom";
+  if (prefs.renderQuality === "low" && prefs.frameRatePref === "72" && prefs.framebufferScalePref === "0.7" && prefs.foveationPref === "high" && prefs.shadowsPref === "off") return "safe";
+  if (prefs.renderQuality === "balanced" && prefs.frameRatePref === "90" && prefs.framebufferScalePref === "0.85" && prefs.foveationPref === "medium" && prefs.shadowsPref === "off") return "balanced";
+  if (prefs.renderQuality === "high" && prefs.frameRatePref === "90" && prefs.framebufferScalePref === "1" && prefs.foveationPref === "medium" && prefs.shadowsPref === "off") return "clarity";
+  return "custom";
+}
+
 export function MmdVrPrepApp() {
   const t = useLanguageStore((state) => state.t);
   const language = useLanguageStore((state) => state.language);
@@ -57,6 +68,21 @@ export function MmdVrPrepApp() {
   const [bodyMotionPath, setBodyMotionPath] = useState("");
   const [faceMotionPath, setFaceMotionPath] = useState("");
   const [dragging, setDragging] = useState(false);
+  const questPreset = getQuestPreset(prefs);
+  const highLoadConfig = prefs.frameRatePref === "120"
+    || (prefs.advancedRenderOverrides && prefs.framebufferScalePref === "1" && prefs.foveationPref === "off");
+
+  function applyQuestPreset(preset: Exclude<QuestPreset, "custom">) {
+    if (preset === "safe") {
+      setPrefs({ renderQuality: "low", dprPref: "auto", frameRatePref: "72", antialiasPref: "auto", framebufferScalePref: "0.7", foveationPref: "high", shadowsPref: "off", advancedRenderOverrides: true });
+      return;
+    }
+    if (preset === "balanced") {
+      setPrefs({ renderQuality: "balanced", dprPref: "auto", frameRatePref: "90", antialiasPref: "auto", framebufferScalePref: "0.85", foveationPref: "medium", shadowsPref: "off", advancedRenderOverrides: true });
+      return;
+    }
+    setPrefs({ renderQuality: "high", dprPref: "auto", frameRatePref: "90", antialiasPref: "auto", framebufferScalePref: "1", foveationPref: "medium", shadowsPref: "off", advancedRenderOverrides: true });
+  }
 
   const models = useMemo(() => listMmdModels(files), [files]);
   const motions = useMemo(() => listMmdMotions(files), [files]);
@@ -217,6 +243,22 @@ export function MmdVrPrepApp() {
             </summary>
             <div className="mmd-vr-prep-config-body">
               <div className="mmd-vr-prep-config-row">
+                <span>{t("settingsMmdVrQuestPreset")}</span>
+                <OptionGroup
+                  value={questPreset}
+                  options={[
+                    { id: "safe", label: t("settingsMmdVrPresetSafe") },
+                    { id: "balanced", label: t("settingsMmdVrPresetBalanced") },
+                    { id: "clarity", label: t("settingsMmdVrPresetClarity") },
+                    { id: "custom", label: t("settingsMmdVrPresetCustom") },
+                  ]}
+                  onChange={(preset) => {
+                    if (preset === "custom") setPrefs({ advancedRenderOverrides: false });
+                    else applyQuestPreset(preset);
+                  }}
+                />
+              </div>
+              <div className="mmd-vr-prep-config-row">
                 <span>{t("settingsVrThemeColor")}</span>
                 <div className="mmd-vr-theme-swatches" role="group" aria-label={t("settingsVrThemeColor")}>
                   {XR_THEME_COLORS.map((color) => (
@@ -264,13 +306,41 @@ export function MmdVrPrepApp() {
                   value={prefs.frameRatePref}
                   options={[
                     { id: "auto", label: t("settingsVrDesktopQualityAuto") },
-                    { id: "high", label: t("settingsVrDesktopFrameRateHigh") },
-                    { id: "mid", label: t("settingsVrDesktopFrameRateMid") },
-                    { id: "low", label: t("settingsVrDesktopFrameRateLow") },
+                    { id: "72", label: "72 Hz" },
+                    { id: "80", label: "80 Hz" },
+                    { id: "90", label: "90 Hz" },
+                    { id: "120", label: "120 Hz" },
                   ]}
                   onChange={(frameRatePref) => setPrefs({ frameRatePref })}
                 />
               </div>
+              <details className="mmd-vr-prep-advanced">
+                <summary>{t("settingsMmdVrExperimentalRendering")}</summary>
+                <label className="mmd-vr-prep-toggle">
+                  <span>{t("settingsMmdVrEnableRenderOverrides")}</span>
+                  <input type="checkbox" checked={prefs.advancedRenderOverrides} onChange={(event) => setPrefs({ advancedRenderOverrides: event.target.checked })} />
+                </label>
+                <div className="mmd-vr-prep-config-row">
+                  <span>{t("settingsVrDesktopFramebufferScale")}</span>
+                  <OptionGroup
+                    value={prefs.framebufferScalePref}
+                    options={[{ id: "auto", label: t("settingsVrDesktopQualityAuto") }, { id: "0.7", label: "70%" }, { id: "0.85", label: "85%" }, { id: "1", label: "100%" }]}
+                    onChange={(framebufferScalePref) => setPrefs({ framebufferScalePref, advancedRenderOverrides: true })}
+                  />
+                </div>
+                <div className="mmd-vr-prep-config-row">
+                  <span>{t("settingsVrDesktopFoveation")}</span>
+                  <OptionGroup
+                    value={prefs.foveationPref}
+                    options={[
+                      { id: "high", label: t("settingsMmdVrFoveationPerformance") },
+                      { id: "medium", label: t("settingsMmdVrFoveationBalanced") },
+                      { id: "off", label: t("settingsMmdVrFoveationOff") },
+                    ]}
+                    onChange={(foveationPref) => setPrefs({ foveationPref, advancedRenderOverrides: true })}
+                  />
+                </div>
+              </details>
               <div className="mmd-vr-prep-config-row">
                 <span>{t("settingsVrDesktopAntialias")}</span>
                 <OptionGroup
@@ -341,6 +411,11 @@ export function MmdVrPrepApp() {
                   onChange={(event) => setPrefs({ showFps: event.target.checked })}
                 />
               </label>
+              <label className="mmd-vr-prep-toggle">
+                <span>{t("settingsMmdVrDetailedPhysicsDiagnostics")}</span>
+                <input type="checkbox" checked={prefs.detailedPhysicsDiagnostics} onChange={(event) => setPrefs({ detailedPhysicsDiagnostics: event.target.checked })} />
+              </label>
+              {highLoadConfig ? <p className="mmd-vr-prep-warning">{t("settingsMmdVrHighLoadWarning")}</p> : null}
               <p>{t("settingsVrDesktopQualityHint")}</p>
             </div>
           </details>

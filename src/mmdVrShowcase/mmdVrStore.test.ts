@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  normalizeMmdVrFrameRate,
   normalizeMmdVrHeightOffset,
   normalizeMmdVrModelScale,
   normalizeMmdVrPrefs,
@@ -39,6 +40,12 @@ describe("MMD VR adjustments", () => {
       snapTurnDegrees: 45,
       exposure: 1.3,
     });
+  });
+
+  it("migrates legacy frame-rate tiers to explicit Quest refresh rates", () => {
+    expect(normalizeMmdVrFrameRate("low")).toBe("72");
+    expect(normalizeMmdVrFrameRate("mid")).toBe("90");
+    expect(normalizeMmdVrFrameRate("high")).toBe("120");
   });
 
   it("uses useful nonlinear scale steps at very small and normal sizes", () => {
@@ -93,7 +100,7 @@ describe("MMD VR adjustments", () => {
     useMmdVrStore.getState().requestModelReset("model-1");
     useMmdVrStore.getState().requestModelRotation("model-1", 15);
     expect(useMmdVrStore.getState().takeModelTransformRequests()).toEqual([
-      { id: "model-1", rotationY: 15 },
+      { id: "model-1", reset: true, rotationY: 15 },
     ]);
   });
 

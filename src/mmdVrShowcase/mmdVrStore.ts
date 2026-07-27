@@ -3,14 +3,12 @@ import { createLocalPrefsStorage } from "../shared/localPrefs";
 import {
   normalizeImmersiveAntialias,
   normalizeImmersiveDpr,
-  normalizeImmersiveFrameRate,
   normalizeImmersiveFramebufferScale,
   normalizeImmersiveFoveation,
   normalizeImmersiveQuality,
   normalizeImmersiveToggle,
   type ImmersiveAntialiasPref,
   type ImmersiveDprPref,
-  type ImmersiveFrameRatePref,
   type ImmersiveFramebufferScalePref,
   type ImmersiveFoveationPref,
   type ImmersiveRenderQuality,
@@ -27,7 +25,7 @@ export { normalizeMmdVrHeightOffset, normalizeMmdVrModelScale } from "./mmdVrAdj
 
 export type MmdVrRenderQuality = ImmersiveRenderQuality;
 export type MmdVrDprPref = ImmersiveDprPref;
-export type MmdVrFrameRatePref = ImmersiveFrameRatePref;
+export type MmdVrFrameRatePref = "auto" | "72" | "80" | "90" | "120";
 export type MmdVrAntialiasPref = ImmersiveAntialiasPref;
 export type MmdVrTogglePref = ImmersiveTogglePref;
 export type MmdVrWalkSpeedPref = "auto" | "slow" | "normal" | "fast";
@@ -64,6 +62,8 @@ export type MmdVrPrefs = {
   viewDistance: number;
   snapTurnDegrees: MmdVrSnapTurnDegrees;
   exposure: number;
+  advancedRenderOverrides: boolean;
+  detailedPhysicsDiagnostics: boolean;
 };
 
 export const MMD_VR_PREFS_KEY = "neko-virt-os.mmd-vr-showcase.v2";
@@ -165,6 +165,14 @@ function normalizeShadowResolution(value: unknown): MmdVrShadowResolutionPref {
   return "auto";
 }
 
+export function normalizeMmdVrFrameRate(value: unknown): MmdVrFrameRatePref {
+  if (value === "auto" || value === "72" || value === "80" || value === "90" || value === "120") return value;
+  if (value === "low") return "72";
+  if (value === "mid") return "90";
+  if (value === "high") return "120";
+  return "auto";
+}
+
 export function normalizeMmdVrSnapTurnDegrees(value: unknown): MmdVrSnapTurnDegrees {
   return value === 15 || value === 45 ? value : 30;
 }
@@ -180,7 +188,7 @@ export function normalizeMmdVrPrefs(parsed: Partial<MmdVrPrefs> = {}): MmdVrPref
     showFps: Boolean(parsed.showFps),
     loop: parsed.loop !== false,
     dprPref: normalizeImmersiveDpr(parsed.dprPref),
-    frameRatePref: normalizeImmersiveFrameRate(parsed.frameRatePref),
+    frameRatePref: normalizeMmdVrFrameRate(parsed.frameRatePref),
     antialiasPref: normalizeImmersiveAntialias(parsed.antialiasPref),
     shadowsPref: normalizeImmersiveToggle(parsed.shadowsPref),
     gridPref: normalizeImmersiveToggle(parsed.gridPref),
@@ -194,6 +202,8 @@ export function normalizeMmdVrPrefs(parsed: Partial<MmdVrPrefs> = {}): MmdVrPref
     viewDistance: normalizeMmdVrViewDistance(parsed.viewDistance),
     snapTurnDegrees: normalizeMmdVrSnapTurnDegrees(parsed.snapTurnDegrees),
     exposure: normalizeMmdVrExposure(parsed.exposure),
+    advancedRenderOverrides: Boolean(parsed.advancedRenderOverrides),
+    detailedPhysicsDiagnostics: Boolean(parsed.detailedPhysicsDiagnostics),
   };
 }
 
@@ -219,6 +229,8 @@ const prefsStorage = createLocalPrefsStorage<MmdVrPrefs>({
     viewDistance: 40,
     snapTurnDegrees: 30,
     exposure: 1,
+    advancedRenderOverrides: false,
+    detailedPhysicsDiagnostics: false,
   }),
   normalize: normalizeMmdVrPrefs,
 });
@@ -263,7 +275,7 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
     const prefs = { ...get().prefs, ...patch };
     if (patch.renderQuality != null) prefs.renderQuality = normalizeImmersiveQuality(patch.renderQuality);
     if (patch.dprPref != null) prefs.dprPref = normalizeImmersiveDpr(patch.dprPref);
-    if (patch.frameRatePref != null) prefs.frameRatePref = normalizeImmersiveFrameRate(patch.frameRatePref);
+    if (patch.frameRatePref != null) prefs.frameRatePref = normalizeMmdVrFrameRate(patch.frameRatePref);
     if (patch.antialiasPref != null) prefs.antialiasPref = normalizeImmersiveAntialias(patch.antialiasPref);
     if (patch.shadowsPref != null) prefs.shadowsPref = normalizeImmersiveToggle(patch.shadowsPref);
     if (patch.gridPref != null) prefs.gridPref = normalizeImmersiveToggle(patch.gridPref);
@@ -277,6 +289,8 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
     if (patch.viewDistance != null) prefs.viewDistance = normalizeMmdVrViewDistance(patch.viewDistance);
     if (patch.snapTurnDegrees != null) prefs.snapTurnDegrees = normalizeMmdVrSnapTurnDegrees(patch.snapTurnDegrees);
     if (patch.exposure != null) prefs.exposure = normalizeMmdVrExposure(patch.exposure);
+    if (patch.advancedRenderOverrides != null) prefs.advancedRenderOverrides = Boolean(patch.advancedRenderOverrides);
+    if (patch.detailedPhysicsDiagnostics != null) prefs.detailedPhysicsDiagnostics = Boolean(patch.detailedPhysicsDiagnostics);
     prefsStorage.write(prefs);
     set({ prefs, loop: prefs.loop });
   },
@@ -290,7 +304,12 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
   setLastError: (lastError) => set({ lastError }),
   setPhase: (phase, errorMessage = null) => set({ phase, errorMessage }),
   overlayOpen: false,
-  openOverlay: () => set({ overlayOpen: true, errorMessage: null, lastError: null }),
+  openOverlay: () => set((state) => ({
+    overlayOpen: true,
+    errorMessage: null,
+    lastError: null,
+    physicsDebugEnabled: state.prefs.detailedPhysicsDiagnostics,
+  })),
   closeOverlay: () => {
     endMmdVrAssetSession();
     set({
@@ -436,7 +455,7 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
         models: s.models.map((model) => model.id === id ? { ...model, scale: normalized } : model),
         pendingModelTransforms: [
           ...s.pendingModelTransforms.filter((request) => request.id !== id),
-          previous?.reset ? { id, scale: normalized } : { ...previous, id, scale: normalized },
+          { ...previous, id, scale: normalized },
         ],
       };
     });
@@ -449,7 +468,7 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
         models: s.models.map((model) => model.id === id ? { ...model, rotationY: normalized } : model),
         pendingModelTransforms: [
           ...s.pendingModelTransforms.filter((request) => request.id !== id),
-          previous?.reset ? { id, rotationY: normalized } : { ...previous, id, rotationY: normalized },
+          { ...previous, id, rotationY: normalized },
         ],
       };
     });

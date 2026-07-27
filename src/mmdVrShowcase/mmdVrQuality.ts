@@ -5,11 +5,11 @@ import {
   formatOnOff,
   type ImmersiveAntialiasPref,
   type ImmersiveDprPref,
-  type ImmersiveFrameRatePref,
   type ImmersiveFramebufferScalePref,
   type ImmersiveFoveationPref,
+  type ImmersiveFrameRate,
 } from "../xr";
-import type { MmdVrPrefs, MmdVrRenderQuality } from "./mmdVrStore";
+import type { MmdVrFrameRatePref, MmdVrPrefs, MmdVrRenderQuality } from "./mmdVrStore";
 
 export type { MmdVrRenderQuality };
 
@@ -18,14 +18,31 @@ export type MmdVrRenderProfile = {
   dpr: number | [number, number];
   antialias: boolean;
   floorSegments: number;
-  frameRate: "high" | "mid" | "low" | false;
+  frameRate: ImmersiveFrameRate;
   shadows: boolean;
   showGrid: boolean;
   walkSpeed: number;
   framebufferScale: number;
   foveation: number;
   shadowMapSize: number;
+  targetFrameRateHz: number | null;
 };
+
+const FRAME_RATE_TARGETS: Record<Exclude<MmdVrFrameRatePref, "auto">, number> = {
+  "72": 72,
+  "80": 80,
+  "90": 90,
+  "120": 120,
+};
+
+export function resolveMmdVrFrameRate(pref: MmdVrFrameRatePref, fallback: MmdVrRenderProfile["frameRate"]) {
+  if (pref === "auto") return fallback;
+  const target = FRAME_RATE_TARGETS[pref];
+  return (supported: ArrayLike<number>) => {
+    const sorted = Array.from(supported).sort((a, b) => a - b);
+    return [...sorted].reverse().find((rate) => rate <= target) ?? sorted[0] ?? false;
+  };
+}
 
 const PROFILES: Record<MmdVrRenderQuality, MmdVrRenderProfile> = {
   high: {
@@ -40,6 +57,7 @@ const PROFILES: Record<MmdVrRenderQuality, MmdVrRenderProfile> = {
     framebufferScale: 1,
     foveation: 0.25,
     shadowMapSize: 2048,
+    targetFrameRateHz: null,
   },
   balanced: {
     quality: "balanced",
@@ -53,6 +71,7 @@ const PROFILES: Record<MmdVrRenderQuality, MmdVrRenderProfile> = {
     framebufferScale: 0.85,
     foveation: 0.5,
     shadowMapSize: 1024,
+    targetFrameRateHz: null,
   },
   low: {
     quality: "low",
@@ -66,6 +85,7 @@ const PROFILES: Record<MmdVrRenderQuality, MmdVrRenderProfile> = {
     framebufferScale: 0.7,
     foveation: 1,
     shadowMapSize: 512,
+    targetFrameRateHz: null,
   },
 };
 
@@ -89,6 +109,7 @@ export type MmdVrQualityInput = Pick<
   | "framebufferScalePref"
   | "foveationPref"
   | "shadowResolutionPref"
+  | "advancedRenderOverrides"
 >;
 
 export function getMmdVrRenderProfile(
@@ -105,11 +126,16 @@ export function getMmdVrRenderProfile(
 
   base = applyCommonQualityAxes(base, {
     dprPref: dprPref as ImmersiveDprPref,
-    frameRatePref: frameRatePref as ImmersiveFrameRatePref,
     antialiasPref: antialiasPref as ImmersiveAntialiasPref,
-    framebufferScalePref: framebufferScalePref as ImmersiveFramebufferScalePref,
-    foveationPref: foveationPref as ImmersiveFoveationPref,
+    framebufferScalePref: qualityOrPrefs.advancedRenderOverrides
+      ? framebufferScalePref as ImmersiveFramebufferScalePref
+      : "auto",
+    foveationPref: qualityOrPrefs.advancedRenderOverrides
+      ? foveationPref as ImmersiveFoveationPref
+      : "auto",
   });
+  base.frameRate = resolveMmdVrFrameRate(frameRatePref, base.frameRate) as MmdVrRenderProfile["frameRate"];
+  base.targetFrameRateHz = frameRatePref === "auto" ? null : FRAME_RATE_TARGETS[frameRatePref];
 
   if (shadowsPref === "on") base.shadows = true;
   if (shadowsPref === "off") base.shadows = false;
@@ -133,7 +159,7 @@ export function formatMmdVrProfileSummary(
   const aa = formatOnOff(profile.antialias, language);
   const sh = formatOnOff(profile.shadows, language);
   const gr = formatOnOff(profile.showGrid, language);
-  const fps = formatFrameRateLabel(profile.frameRate);
+  const fps = profile.targetFrameRateHz == null ? formatFrameRateLabel(profile.frameRate) : `${profile.targetFrameRateHz} Hz`;
   if (language === "zh") {
     return `DPR ${dpr} · AA ${aa} · 阴影 ${sh} · 网格 ${gr} · 走速 ${profile.walkSpeed.toFixed(2)} · 目标 ${fps}`;
   }

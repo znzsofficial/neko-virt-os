@@ -71,6 +71,8 @@ describe("requestMmdVrEnter", () => {
         themeColor: "blue",
         snapTurnDegrees: 30,
         exposure: 1,
+        advancedRenderOverrides: false,
+        detailedPhysicsDiagnostics: false,
       },
       phase: "idle",
       errorMessage: null,

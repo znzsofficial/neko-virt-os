@@ -95,7 +95,7 @@ function createBackup(): SettingsBackup {
       showFps: true,
       loop: false,
       dprPref: "1.25",
-      frameRatePref: "high",
+      frameRatePref: "120",
       antialiasPref: "on",
       shadowsPref: "on",
       gridPref: "off",
@@ -109,6 +109,8 @@ function createBackup(): SettingsBackup {
       themeColor: "purple",
       snapTurnDegrees: 45,
       exposure: 1.2,
+      advancedRenderOverrides: true,
+      detailedPhysicsDiagnostics: true,
     },
   };
 }
@@ -154,6 +156,24 @@ describe("settings backup v2", () => {
     expect(parsed.mmdVrPrefs.themeColor).toBe("blue");
     expect(parsed.mmdVrPrefs.snapTurnDegrees).toBe(30);
     expect(parsed.mmdVrPrefs.exposure).toBe(1);
+  });
+
+  it("migrates legacy MMD VR refresh tiers without changing VR Desktop preferences", () => {
+    const backup = createBackup();
+    const {
+      advancedRenderOverrides: _advancedRenderOverrides,
+      detailedPhysicsDiagnostics: _detailedPhysicsDiagnostics,
+      ...mmdVrPrefs
+    } = backup.mmdVrPrefs;
+    const parsed = parseSettingsBackup(JSON.stringify({
+      ...backup,
+      mmdVrPrefs: { ...mmdVrPrefs, frameRatePref: "mid" },
+    }), createStorage());
+
+    expect(parsed.mmdVrPrefs.frameRatePref).toBe("90");
+    expect(parsed.mmdVrPrefs.advancedRenderOverrides).toBe(false);
+    expect(parsed.mmdVrPrefs.detailedPhysicsDiagnostics).toBe(false);
+    expect(parsed.vrDesktopPrefs.frameRatePref).toBe("high");
   });
 
   it("migrates v1 by merging missing fields from current preferences", () => {

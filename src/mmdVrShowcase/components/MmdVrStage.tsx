@@ -345,7 +345,16 @@ export function MmdVrStageContent() {
   }, [camera, viewDistance]);
 
   useLayoutEffect(() => {
+    const previousToneMapping = gl.toneMapping;
+    const previousExposure = gl.toneMappingExposure;
     gl.toneMapping = THREE.LinearToneMapping;
+    return () => {
+      gl.toneMapping = previousToneMapping;
+      gl.toneMappingExposure = previousExposure;
+    };
+  }, [gl]);
+
+  useLayoutEffect(() => {
     gl.toneMappingExposure = mmdPrefs.exposure;
   }, [gl, mmdPrefs.exposure]);
 
@@ -410,6 +419,7 @@ export function MmdVrStageContent() {
               try {
                 await runtime.loadMotion(slot.bodyMotionFile, "body", report.modelId);
               } catch (error) {
+                failures.push(`${slot.modelFile.name} (${slot.bodyMotionFile.name})`);
                 console.warn(`[mmdVr] body motion failed for ${slot.modelFile.name}`, error);
               }
             }
@@ -417,6 +427,7 @@ export function MmdVrStageContent() {
               try {
                 await runtime.loadMotion(slot.faceMotionFile, "face", report.modelId);
               } catch (error) {
+                failures.push(`${slot.modelFile.name} (${slot.faceMotionFile.name})`);
                 console.warn(`[mmdVr] face motion failed for ${slot.modelFile.name}`, error);
               }
             }
@@ -452,12 +463,12 @@ export function MmdVrStageContent() {
 
     const store = useMmdVrStore.getState();
     let modelTransformChanged = false;
-    const removals = store.takeModelRemovals();
+    const removals = store.physicsBusy ? [] : store.takeModelRemovals();
     if (removals.length) {
       for (const id of removals) runtime.removeModel(id);
       syncModelList();
     }
-    const toggles = store.takeVisibilityToggles();
+    const toggles = store.physicsBusy ? [] : store.takeVisibilityToggles();
     if (toggles.length) {
       for (const id of toggles) {
         const entry = runtime.listModels().find((m) => m.id === id);
@@ -501,6 +512,8 @@ export function MmdVrStageContent() {
             rotationY: 0,
             rotationZ: 0,
             scale: 1,
+            ...(request.scale == null ? {} : { scale: request.scale }),
+            ...(request.rotationY == null ? {} : { rotationY: request.rotationY }),
           });
           continue;
         }

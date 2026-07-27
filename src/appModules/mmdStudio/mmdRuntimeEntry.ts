@@ -1,4 +1,5 @@
 import {
+  disposeMmdModel,
   type MmdAnimation,
   type ThreeMmdAnimation,
   type ThreeMmdModel,
@@ -109,13 +110,7 @@ export function disposeModelObject(entry: RuntimeEntry) {
 }
 
 export function disposeLoadedModelObject(model: ThreeMmdModel) {
-  model.root.traverse((object) => {
-    const mesh = object as THREE.Mesh;
-    if (mesh.geometry) mesh.geometry.dispose();
-    const material = mesh.material;
-    if (Array.isArray(material)) material.forEach((item) => item.dispose());
-    else if (material) material.dispose();
-  });
+  disposeMmdModel(model, { textures: "owned" });
 }
 
 function disableMmdSelfShadowUniforms(material: THREE.Material) {
