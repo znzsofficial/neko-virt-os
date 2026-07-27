@@ -116,8 +116,11 @@ export function MmdVrScene() {
               t("settingsMmdVrPhysicsQualityMedium"),
               t("settingsMmdVrPhysicsQualityHigh"),
             ]}
-            physicsHapticsOnLabel={t("settingsMmdVrPhysicsHapticsOn")}
-            physicsHapticsOffLabel={t("settingsMmdVrPhysicsHapticsOff")}
+            physicsHapticLevelLabels={[
+              t("settingsMmdVrPhysicsHapticsOff"),
+              t("settingsMmdVrPhysicsHapticsLow"),
+              t("settingsMmdVrPhysicsHapticsNormal"),
+            ]}
             resetPhysicsLabel={t("settingsMmdVrPhysicsReset")}
             snapTurnLabel={t("settingsMmdVrSnapTurn")}
             exposureLabel={t("settingsMmdVrExposure")}

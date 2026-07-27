@@ -145,6 +145,7 @@ describe("MMD VR adjustments", () => {
     useMmdVrStore.setState({
       physicsDebugEnabled: true,
       physicsContactCount: 2,
+      physicsControllerContactCounts: [1, 0],
       physicsDynamicBodyCount: 12,
       physicsRigidBodyCount: 20,
       physicsStepCount: 30,
@@ -155,6 +156,7 @@ describe("MMD VR adjustments", () => {
     expect(useMmdVrStore.getState()).toMatchObject({
       physicsDebugEnabled: false,
       physicsContactCount: 0,
+      physicsControllerContactCounts: [0, 0],
       physicsDynamicBodyCount: 0,
       physicsRigidBodyCount: 0,
       physicsStepCount: 0,
@@ -166,14 +168,15 @@ describe("MMD VR adjustments", () => {
     store.cyclePhysicsColliderRadius();
     useMmdVrStore.getState().cyclePhysicsQuality();
     useMmdVrStore.getState().setPhysicsControllerCollisions(false);
-    useMmdVrStore.getState().setPhysicsHapticsEnabled(true);
+    useMmdVrStore.getState().cyclePhysicsHapticLevel();
+    useMmdVrStore.getState().cyclePhysicsHapticLevel();
     useMmdVrStore.getState().requestPhysicsReset();
 
     expect(useMmdVrStore.getState()).toMatchObject({
       physicsColliderRadius: 0.12,
       physicsQuality: "high",
       physicsControllerCollisions: false,
-      physicsHapticsEnabled: true,
+      physicsHapticLevel: "normal",
       physicsResetEpoch: 1,
     });
 
@@ -183,7 +186,7 @@ describe("MMD VR adjustments", () => {
       physicsColliderRadius: 0.08,
       physicsQuality: "medium",
       physicsControllerCollisions: true,
-      physicsHapticsEnabled: false,
+      physicsHapticLevel: "off",
       physicsResetEpoch: 0,
     });
   });

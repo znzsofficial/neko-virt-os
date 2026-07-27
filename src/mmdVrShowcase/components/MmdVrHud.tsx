@@ -716,8 +716,7 @@ function PhysicsSettingsPanel({
   collisionOffLabel,
   radiusLabel,
   qualityLabels,
-  hapticsOnLabel,
-  hapticsOffLabel,
+  hapticLevelLabels,
   resetPhysicsLabel,
   snapTurnLabel,
   exposureLabel,
@@ -726,8 +725,7 @@ function PhysicsSettingsPanel({
   collisionOffLabel: string;
   radiusLabel: string;
   qualityLabels: [string, string, string];
-  hapticsOnLabel: string;
-  hapticsOffLabel: string;
+  hapticLevelLabels: [string, string, string];
   resetPhysicsLabel: string;
   snapTurnLabel: string;
   exposureLabel: string;
@@ -738,14 +736,15 @@ function PhysicsSettingsPanel({
   const collisions = useMmdVrStore((s) => s.physicsControllerCollisions);
   const radius = useMmdVrStore((s) => s.physicsColliderRadius);
   const quality = useMmdVrStore((s) => s.physicsQuality);
-  const haptics = useMmdVrStore((s) => s.physicsHapticsEnabled);
+  const hapticLevel = useMmdVrStore((s) => s.physicsHapticLevel);
   const setCollisions = useMmdVrStore((s) => s.setPhysicsControllerCollisions);
   const cycleRadius = useMmdVrStore((s) => s.cyclePhysicsColliderRadius);
   const cycleQuality = useMmdVrStore((s) => s.cyclePhysicsQuality);
-  const setHaptics = useMmdVrStore((s) => s.setPhysicsHapticsEnabled);
+  const cycleHapticLevel = useMmdVrStore((s) => s.cyclePhysicsHapticLevel);
   const requestReset = useMmdVrStore((s) => s.requestPhysicsReset);
   const setPrefs = useMmdVrStore((s) => s.setPrefs);
   const qualityLabel = quality === "low" ? qualityLabels[0] : quality === "high" ? qualityLabels[2] : qualityLabels[1];
+  const hapticLabel = hapticLevel === "off" ? hapticLevelLabels[0] : hapticLevel === "low" ? hapticLevelLabels[1] : hapticLevelLabels[2];
   const physicsControlsDisabled = !physicsEnabled || physicsBusy;
 
   return (
@@ -765,11 +764,11 @@ function PhysicsSettingsPanel({
       <HudButton position={[0.38, 0.14, 0]} label={qualityLabel} size={[0.52, 0.11]} disabled={physicsControlsDisabled} onPress={cycleQuality} />
       <HudButton
         position={[0.94, 0.14, 0]}
-        label={haptics ? hapticsOnLabel : hapticsOffLabel}
+        label={hapticLabel}
         size={[0.52, 0.11]}
-        active={haptics}
+        active={hapticLevel !== "off"}
         disabled={physicsControlsDisabled}
-        onPress={() => setHaptics(!useMmdVrStore.getState().physicsHapticsEnabled)}
+        onPress={cycleHapticLevel}
       />
       <HudButton position={[-0.58, -0.1, 0]} label={resetPhysicsLabel} size={[0.52, 0.11]} disabled={physicsControlsDisabled} onPress={requestReset} />
       <HudButton
@@ -897,8 +896,7 @@ export function MmdVrControlBar({
   physicsCollisionOffLabel,
   physicsRadiusLabel,
   physicsQualityLabels,
-  physicsHapticsOnLabel,
-  physicsHapticsOffLabel,
+  physicsHapticLevelLabels,
   resetPhysicsLabel,
   snapTurnLabel,
   exposureLabel,
@@ -950,8 +948,7 @@ export function MmdVrControlBar({
   physicsCollisionOffLabel: string;
   physicsRadiusLabel: string;
   physicsQualityLabels: [string, string, string];
-  physicsHapticsOnLabel: string;
-  physicsHapticsOffLabel: string;
+  physicsHapticLevelLabels: [string, string, string];
   resetPhysicsLabel: string;
   snapTurnLabel: string;
   exposureLabel: string;
@@ -1152,8 +1149,7 @@ export function MmdVrControlBar({
           collisionOffLabel={physicsCollisionOffLabel}
           radiusLabel={physicsRadiusLabel}
           qualityLabels={physicsQualityLabels}
-          hapticsOnLabel={physicsHapticsOnLabel}
-          hapticsOffLabel={physicsHapticsOffLabel}
+          hapticLevelLabels={physicsHapticLevelLabels}
           resetPhysicsLabel={resetPhysicsLabel}
           snapTurnLabel={snapTurnLabel}
           exposureLabel={exposureLabel}

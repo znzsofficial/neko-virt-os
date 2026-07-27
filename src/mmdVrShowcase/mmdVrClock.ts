@@ -17,6 +17,10 @@ const clock: MmdVrClockSnapshot = {
 
 let lastPaintBucket = -1;
 
+export function clampMmdVrSimulationDelta(delta: number): number {
+  return Math.min(1 / 20, Math.max(0, Number.isFinite(delta) ? delta : 0));
+}
+
 export function getMmdVrClock(): Readonly<MmdVrClockSnapshot> {
   return clock;
 }

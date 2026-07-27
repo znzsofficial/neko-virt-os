@@ -56,8 +56,7 @@ export function MmdVrPlayerRig({
   physicsCollisionOffLabel,
   physicsRadiusLabel,
   physicsQualityLabels,
-  physicsHapticsOnLabel,
-  physicsHapticsOffLabel,
+  physicsHapticLevelLabels,
   resetPhysicsLabel,
   snapTurnLabel,
   exposureLabel,
@@ -108,8 +107,7 @@ export function MmdVrPlayerRig({
   physicsCollisionOffLabel: string;
   physicsRadiusLabel: string;
   physicsQualityLabels: [string, string, string];
-  physicsHapticsOnLabel: string;
-  physicsHapticsOffLabel: string;
+  physicsHapticLevelLabels: [string, string, string];
   resetPhysicsLabel: string;
   snapTurnLabel: string;
   exposureLabel: string;
@@ -223,8 +221,7 @@ export function MmdVrPlayerRig({
         physicsCollisionOffLabel={physicsCollisionOffLabel}
         physicsRadiusLabel={physicsRadiusLabel}
         physicsQualityLabels={physicsQualityLabels}
-        physicsHapticsOnLabel={physicsHapticsOnLabel}
-        physicsHapticsOffLabel={physicsHapticsOffLabel}
+        physicsHapticLevelLabels={physicsHapticLevelLabels}
         resetPhysicsLabel={resetPhysicsLabel}
         snapTurnLabel={snapTurnLabel}
         exposureLabel={exposureLabel}

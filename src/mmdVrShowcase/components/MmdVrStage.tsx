@@ -8,6 +8,7 @@ import {
 import { useLanguageStore } from "../../languageStore";
 import { getMmdVrSessionAssets } from "../mmdVrAssets";
 import {
+  clampMmdVrSimulationDelta,
   resetMmdVrClock,
   setMmdVrClockDuration,
   setMmdVrClockTime,
@@ -17,6 +18,11 @@ import { useMmdVrStore, type MmdVrLightPreset } from "../mmdVrStore";
 import { getXrAccentTokens } from "../../xr";
 import { prepareMmdVrModel } from "../prepareMmdVrModel";
 import { getMmdVrControllerColliderMatrices } from "../mmdVrControllerColliders";
+import {
+  clearMmdVrHapticContacts,
+  MMD_VR_HAPTIC_POLL_INTERVAL,
+  setMmdVrHapticContacts,
+} from "../mmdVrHaptics";
 
 const STAGE_BG = "#0c1018";
 const FLOOR = "#1a2230";
@@ -228,6 +234,7 @@ export function MmdVrStageContent() {
   const timeRef = useRef(0);
   const physicsOnlyTimeRef = useRef(0);
   const physicsContactPollRef = useRef(0);
+  const hapticContactPollRef = useRef(0);
   const lastPhysicsResetEpochRef = useRef(0);
   const playingRef = useRef(false);
   const loopRef = useRef(false);
@@ -266,6 +273,8 @@ export function MmdVrStageContent() {
       loopRef.current = state.loop;
     });
   }, []);
+
+  useEffect(() => clearMmdVrHapticContacts, []);
 
   const runtime = useMemo(() => {
     const handle = createMmdRuntimeHandle(scene, {
@@ -537,8 +546,9 @@ export function MmdVrStageContent() {
     const rt = runtimeRef.current;
     if (!rt) return;
     const duration = rt.duration;
+    const simulationDelta = clampMmdVrSimulationDelta(delta);
     if (playingRef.current && duration > 0) {
-      timeRef.current += delta;
+      timeRef.current += simulationDelta;
       if (timeRef.current >= duration) {
         if (loopRef.current) {
           timeRef.current = 0;
@@ -556,7 +566,7 @@ export function MmdVrStageContent() {
       }
     }
     if (store.physicsEnabled && !store.physicsBusy && duration <= 0) {
-      physicsOnlyTimeRef.current += delta;
+      physicsOnlyTimeRef.current += simulationDelta;
     } else if (!store.physicsEnabled) {
       physicsOnlyTimeRef.current = 0;
     }
@@ -570,13 +580,28 @@ export function MmdVrStageContent() {
     }
     const evaluationTime = duration > 0 ? timeRef.current : physicsOnlyTimeRef.current;
     rt.update(evaluationTime, physicsEnabled && !physicsBusy, perspective, aspect, false);
+    hapticContactPollRef.current += delta;
+    if (hapticContactPollRef.current >= MMD_VR_HAPTIC_POLL_INTERVAL) {
+      hapticContactPollRef.current %= MMD_VR_HAPTIC_POLL_INTERVAL;
+      if (store.physicsEnabled
+        && !store.physicsBusy
+        && store.physicsControllerCollisions
+        && store.physicsHapticLevel !== "off") {
+        setMmdVrHapticContacts(
+          rt.getControllerContactCount(0) > 0,
+          rt.getControllerContactCount(1) > 0,
+        );
+      } else {
+        clearMmdVrHapticContacts();
+      }
+    }
     physicsContactPollRef.current += delta;
     if (physicsContactPollRef.current >= 0.1) {
       physicsContactPollRef.current = 0;
-      if (!store.physicsDebugEnabled && !store.physicsHapticsEnabled) return;
+      if (!store.physicsDebugEnabled) return;
       const contactCount = store.physicsEnabled && !store.physicsBusy ? rt.getControllerContactCount() : 0;
       if (contactCount !== store.physicsContactCount) store.setPhysicsContactCount(contactCount);
-      if (store.physicsHapticsEnabled) {
+      if (store.physicsDebugEnabled) {
         const controllerCounts: [number, number] = store.physicsEnabled && !store.physicsBusy
           ? [rt.getControllerContactCount(0), rt.getControllerContactCount(1)]
           : [0, 0];

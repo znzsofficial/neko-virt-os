@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  clampMmdVrSimulationDelta,
   getMmdVrClock,
   resetMmdVrClock,
   setMmdVrClockDuration,
@@ -24,6 +25,13 @@ describe("mmdVrClock", () => {
     setMmdVrClockDuration(12);
     expect(getMmdVrClock().duration).toBe(12);
     expect(getMmdVrClock().paintVersion).toBeGreaterThan(v0);
+  });
+
+  it("caps simulation time after an XR frame stall", () => {
+    expect(clampMmdVrSimulationDelta(1 / 90)).toBeCloseTo(1 / 90);
+    expect(clampMmdVrSimulationDelta(0.5)).toBe(1 / 20);
+    expect(clampMmdVrSimulationDelta(-1)).toBe(0);
+    expect(clampMmdVrSimulationDelta(Number.NaN)).toBe(0);
   });
 
   it("throttles paintVersion by time buckets unless forced", () => {

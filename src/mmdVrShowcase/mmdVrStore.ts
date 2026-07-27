@@ -19,6 +19,7 @@ import {
 import { endMmdVrAssetSession } from "./mmdVrAssets";
 import { resetMmdVrClock } from "./mmdVrClock";
 import type { MmdPhysicsQuality } from "../appModules/mmdStudio/mmdPhysics";
+import type { MmdVrHapticLevel } from "./mmdVrHaptics";
 import { normalizeMmdVrHeightOffset, normalizeMmdVrModelScale, normalizeMmdVrViewDistance } from "./mmdVrAdjustments";
 
 export { normalizeMmdVrHeightOffset, normalizeMmdVrModelScale } from "./mmdVrAdjustments";
@@ -99,8 +100,8 @@ type MmdVrStore = {
   cyclePhysicsColliderRadius: () => void;
   physicsQuality: MmdPhysicsQuality;
   cyclePhysicsQuality: () => void;
-  physicsHapticsEnabled: boolean;
-  setPhysicsHapticsEnabled: (enabled: boolean) => void;
+  physicsHapticLevel: MmdVrHapticLevel;
+  cyclePhysicsHapticLevel: () => void;
   physicsResetEpoch: number;
   requestPhysicsReset: () => void;
   physicsBusy: boolean;
@@ -245,7 +246,7 @@ function sessionReset() {
     physicsControllerCollisions: true,
     physicsColliderRadius: 0.08,
     physicsQuality: "medium" as MmdPhysicsQuality,
-    physicsHapticsEnabled: false,
+    physicsHapticLevel: "off" as MmdVrHapticLevel,
     physicsResetEpoch: 0,
     physicsBusy: false,
     physicsContactCount: 0,
@@ -347,7 +348,9 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
   statusLine: null,
   setStatusLine: (statusLine) => set({ statusLine }),
   physicsEnabled: false,
-  setPhysicsEnabled: (physicsEnabled) => set({ physicsEnabled }),
+  setPhysicsEnabled: (physicsEnabled) => set(physicsEnabled
+    ? { physicsEnabled }
+    : { physicsEnabled, physicsControllerContactCounts: [0, 0] }),
   physicsDebugEnabled: false,
   setPhysicsDebugEnabled: (physicsDebugEnabled) => set(physicsDebugEnabled
     ? { physicsDebugEnabled }
@@ -360,7 +363,9 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
         physicsStepCount: 0,
       }),
   physicsControllerCollisions: true,
-  setPhysicsControllerCollisions: (physicsControllerCollisions) => set({ physicsControllerCollisions }),
+  setPhysicsControllerCollisions: (physicsControllerCollisions) => set(physicsControllerCollisions
+    ? { physicsControllerCollisions }
+    : { physicsControllerCollisions, physicsControllerContactCounts: [0, 0] }),
   physicsColliderRadius: 0.08,
   cyclePhysicsColliderRadius: () => set((state) => {
     const radii = [0.04, 0.08, 0.12, 0.16];
@@ -371,10 +376,15 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
   cyclePhysicsQuality: () => set((state) => ({
     physicsQuality: state.physicsQuality === "low" ? "medium" : state.physicsQuality === "medium" ? "high" : "low",
   })),
-  physicsHapticsEnabled: false,
-  setPhysicsHapticsEnabled: (physicsHapticsEnabled) => set(physicsHapticsEnabled
-    ? { physicsHapticsEnabled }
-    : { physicsHapticsEnabled, physicsControllerContactCounts: [0, 0] }),
+  physicsHapticLevel: "off",
+  cyclePhysicsHapticLevel: () => set((state) => {
+    const physicsHapticLevel = state.physicsHapticLevel === "off"
+      ? "low"
+      : state.physicsHapticLevel === "low" ? "normal" : "off";
+    return physicsHapticLevel === "off"
+      ? { physicsHapticLevel, physicsControllerContactCounts: [0, 0] }
+      : { physicsHapticLevel };
+  }),
   physicsResetEpoch: 0,
   requestPhysicsReset: () => set((state) => ({ physicsResetEpoch: state.physicsResetEpoch + 1 })),
   physicsBusy: false,
