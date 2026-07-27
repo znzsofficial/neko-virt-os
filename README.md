@@ -54,7 +54,7 @@ NekoVirtOS combines a desktop-style local workspace with MMD production tools an
 
 Requirements:
 
-- Node.js `20.19.0`
+- Node.js `22.13.0` or newer
 - pnpm `11.17.0`
 
 ```sh
