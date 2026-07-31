@@ -34,9 +34,21 @@ export type MmdVrLightPreset = "stage" | "soft" | "contrast" | "daylight" | "war
 export type MmdVrShadowResolutionPref = "auto" | "low" | "medium" | "high";
 export type MmdVrSnapTurnDegrees = 15 | 30 | 45;
 
+export type MmdVrBoneFeedback = "soft" | "normal" | "hard";
+export type MmdVrColliderFriction = "low" | "medium" | "high";
+export type MmdVrColliderRestitution = "none" | "low" | "high";
+
 export type MmdVrSessionPhase = "idle" | "entering" | "active" | "error";
 
 export type MmdVrModelEntry = {
+  id: string;
+  name: string;
+  visible: boolean;
+  scale: number;
+  rotationY: number;
+};
+
+export type MmdVrObjectEntry = {
   id: string;
   name: string;
   visible: boolean;
@@ -65,6 +77,7 @@ export type MmdVrPrefs = {
   exposure: number;
   advancedRenderOverrides: boolean;
   detailedPhysicsDiagnostics: boolean;
+  panelFollowUser: boolean;
 };
 
 export const MMD_VR_PREFS_KEY = "neko-virt-os.mmd-vr-showcase.v2";
@@ -102,6 +115,12 @@ type MmdVrStore = {
   cyclePhysicsQuality: () => void;
   physicsHapticLevel: MmdVrHapticLevel;
   cyclePhysicsHapticLevel: () => void;
+  physicsBoneFeedback: MmdVrBoneFeedback;
+  cyclePhysicsBoneFeedback: () => void;
+  physicsColliderFriction: MmdVrColliderFriction;
+  cyclePhysicsColliderFriction: () => void;
+  physicsColliderRestitution: MmdVrColliderRestitution;
+  cyclePhysicsColliderRestitution: () => void;
   physicsResetEpoch: number;
   requestPhysicsReset: () => void;
   physicsBusy: boolean;
@@ -118,6 +137,8 @@ type MmdVrStore = {
   modelCount: number;
   models: MmdVrModelEntry[];
   setModels: (models: MmdVrModelEntry[]) => void;
+  objects: MmdVrObjectEntry[];
+  setObjects: (objects: MmdVrObjectEntry[]) => void;
   /** FIFO of model ids for stage to toggle visibility. */
   pendingVisibilityToggles: string[];
   enqueueVisibilityToggle: (id: string) => void;
@@ -205,6 +226,7 @@ export function normalizeMmdVrPrefs(parsed: Partial<MmdVrPrefs> = {}): MmdVrPref
     exposure: normalizeMmdVrExposure(parsed.exposure),
     advancedRenderOverrides: Boolean(parsed.advancedRenderOverrides),
     detailedPhysicsDiagnostics: Boolean(parsed.detailedPhysicsDiagnostics),
+    panelFollowUser: parsed.panelFollowUser !== false,
   };
 }
 
@@ -232,6 +254,7 @@ const prefsStorage = createLocalPrefsStorage<MmdVrPrefs>({
     exposure: 1,
     advancedRenderOverrides: false,
     detailedPhysicsDiagnostics: false,
+    panelFollowUser: true,
   }),
   normalize: normalizeMmdVrPrefs,
 });
@@ -247,6 +270,9 @@ function sessionReset() {
     physicsColliderRadius: 0.08,
     physicsQuality: "medium" as MmdPhysicsQuality,
     physicsHapticLevel: "off" as MmdVrHapticLevel,
+    physicsBoneFeedback: "normal" as MmdVrBoneFeedback,
+    physicsColliderFriction: "medium" as MmdVrColliderFriction,
+    physicsColliderRestitution: "none" as MmdVrColliderRestitution,
     physicsResetEpoch: 0,
     physicsBusy: false,
     physicsContactCount: 0,
@@ -256,6 +282,7 @@ function sessionReset() {
     physicsStepCount: 0,
     modelCount: 0,
     models: [] as MmdVrModelEntry[],
+    objects: [] as MmdVrObjectEntry[],
     pendingVisibilityToggles: [] as string[],
     pendingModelRemovals: [] as string[],
     placeMode: false,
@@ -292,6 +319,7 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
     if (patch.exposure != null) prefs.exposure = normalizeMmdVrExposure(patch.exposure);
     if (patch.advancedRenderOverrides != null) prefs.advancedRenderOverrides = Boolean(patch.advancedRenderOverrides);
     if (patch.detailedPhysicsDiagnostics != null) prefs.detailedPhysicsDiagnostics = Boolean(patch.detailedPhysicsDiagnostics);
+    if (patch.panelFollowUser != null) prefs.panelFollowUser = Boolean(patch.panelFollowUser);
     prefsStorage.write(prefs);
     set({ prefs, loop: prefs.loop });
   },
@@ -385,6 +413,24 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
       ? { physicsHapticLevel, physicsControllerContactCounts: [0, 0] }
       : { physicsHapticLevel };
   }),
+  physicsBoneFeedback: "normal",
+  cyclePhysicsBoneFeedback: () => set((state) => ({
+    physicsBoneFeedback: state.physicsBoneFeedback === "soft"
+      ? "normal"
+      : state.physicsBoneFeedback === "normal" ? "hard" : "soft",
+  })),
+  physicsColliderFriction: "medium",
+  cyclePhysicsColliderFriction: () => set((state) => ({
+    physicsColliderFriction: state.physicsColliderFriction === "low"
+      ? "medium"
+      : state.physicsColliderFriction === "medium" ? "high" : "low",
+  })),
+  physicsColliderRestitution: "none",
+  cyclePhysicsColliderRestitution: () => set((state) => ({
+    physicsColliderRestitution: state.physicsColliderRestitution === "none"
+      ? "low"
+      : state.physicsColliderRestitution === "low" ? "high" : "none",
+  })),
   physicsResetEpoch: 0,
   requestPhysicsReset: () => set((state) => ({ physicsResetEpoch: state.physicsResetEpoch + 1 })),
   physicsBusy: false,
@@ -405,9 +451,18 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
       models,
       modelCount: models.length,
       placeModelId:
-        s.placeModelId && models.some((m) => m.id === s.placeModelId)
+        s.placeModelId && (models.some((m) => m.id === s.placeModelId) || s.objects.some((o) => o.id === s.placeModelId))
           ? s.placeModelId
           : models[0]?.id ?? null,
+    })),
+  objects: [],
+  setObjects: (objects) =>
+    set((s) => ({
+      objects,
+      placeModelId:
+        s.placeModelId && (s.models.some((m) => m.id === s.placeModelId) || objects.some((o) => o.id === s.placeModelId))
+          ? s.placeModelId
+          : s.models[0]?.id ?? objects[0]?.id ?? null,
     })),
   pendingVisibilityToggles: [],
   enqueueVisibilityToggle: (id) =>
@@ -422,7 +477,7 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
   },
   pendingModelRemovals: [],
   enqueueModelRemoval: (id) => set((state) => ({
-    pendingModelRemovals: state.models.some((model) => model.id === id)
+    pendingModelRemovals: (state.models.some((model) => model.id === id) || state.objects.some((obj) => obj.id === id))
       ? [...new Set([...state.pendingModelRemovals, id])]
       : state.pendingModelRemovals,
   })),
@@ -435,10 +490,10 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
   placeMode: false,
   setPlaceMode: (placeMode) => {
     const models = get().models;
-    const nextId =
-      get().placeModelId && models.some((m) => m.id === get().placeModelId)
-        ? get().placeModelId
-        : models[0]?.id ?? null;
+    const objects = get().objects;
+    const currentId = get().placeModelId;
+    const currentValid = !!currentId && (models.some((m) => m.id === currentId) || objects.some((o) => o.id === currentId));
+    const nextId = currentValid ? currentId : models[0]?.id ?? objects[0]?.id ?? null;
     set({ placeMode, placeModelId: placeMode ? nextId : get().placeModelId });
   },
   placeModelId: null,
@@ -463,6 +518,7 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
       const previous = s.pendingModelTransforms.find((request) => request.id === id);
       return {
         models: s.models.map((model) => model.id === id ? { ...model, scale: normalized } : model),
+        objects: s.objects.map((obj) => obj.id === id ? { ...obj, scale: normalized } : obj),
         pendingModelTransforms: [
           ...s.pendingModelTransforms.filter((request) => request.id !== id),
           { ...previous, id, scale: normalized },
@@ -476,6 +532,7 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
       const previous = s.pendingModelTransforms.find((request) => request.id === id);
       return {
         models: s.models.map((model) => model.id === id ? { ...model, rotationY: normalized } : model),
+        objects: s.objects.map((obj) => obj.id === id ? { ...obj, rotationY: normalized } : obj),
         pendingModelTransforms: [
           ...s.pendingModelTransforms.filter((request) => request.id !== id),
           { ...previous, id, rotationY: normalized },
@@ -486,6 +543,7 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
   requestModelReset: (id) => {
     set((s) => ({
       models: s.models.map((model) => model.id === id ? { ...model, scale: 1, rotationY: 0 } : model),
+      objects: s.objects.map((obj) => obj.id === id ? { ...obj, scale: 1, rotationY: 0 } : obj),
       pendingModelTransforms: [
         ...s.pendingModelTransforms.filter((request) => request.id !== id),
         { id, reset: true },

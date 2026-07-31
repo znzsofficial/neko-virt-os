@@ -48,6 +48,10 @@ export function listMmdModels(files: readonly File[]) {
   return files.filter((file) => /\.(pmx|pmd)$/i.test(file.name)).sort((a, b) => relativePath(a).localeCompare(relativePath(b), "zh"));
 }
 
+export function listMmdObjects(files: readonly File[]) {
+  return files.filter((file) => /\.(gltf|glb)$/i.test(file.name)).sort((a, b) => relativePath(a).localeCompare(relativePath(b), "zh"));
+}
+
 export function listMmdMotions(files: readonly File[]) {
   return files.filter((file) => /\.(vmd|vpd)$/i.test(file.name)).sort((a, b) => relativePath(a).localeCompare(relativePath(b), "zh"));
 }
@@ -58,4 +62,9 @@ export function companionsForModel(model: File, files: readonly File[]) {
   const prefix = `${dir}/`;
   const matches = files.filter((file) => relativePath(file).startsWith(prefix));
   return matches.length > 1 ? matches : files.length ? [...files] : [model];
+}
+
+/** Same-dir companion grouping for glTF/GLB objects (bin / textures). */
+export function companionsForObject(object: File, files: readonly File[]) {
+  return companionsForModel(object, files);
 }

@@ -125,6 +125,7 @@ const mmdVrPrefsSchema = z.strictObject({
   exposure: z.number().min(0.7).max(1.3).default(1),
   advancedRenderOverrides: z.boolean().default(false),
   detailedPhysicsDiagnostics: z.boolean().default(false),
+  panelFollowUser: z.boolean().default(true),
 });
 
 const settingsBackupV2Schema = z.strictObject({

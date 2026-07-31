@@ -1,6 +1,6 @@
 # NekoVirtOS — 文档索引
 
-最后更新：2026-07-24
+最后更新：2026-07-31
 
 **当前重心：** [MMD VR 展示器](./mmd-vr-showcase-roadmap.md) · **VR 桌面：** [基线收尾 / 搁置](./vr-desktop-roadmap.md)
 
@@ -23,7 +23,7 @@
 | **src/i18n** | `zh.ts` / `en.ts` 文案字典 | `languageStore` 仅 store + `t()` |
 | **src/styles/** | 按域拆分 CSS（base/shell/apps/…） | 入口 `styles.css` 仅 `@import` |
 | MMD Studio | **WebGL** | WebGPU + 官方 `/webgpu` TSL |
-| **MMD VR 展示器** | **WebGL + WebXR**（独立会话） | **当前 VR 重心**；轻量视觉白名单 |
+| **MMD VR 展示器** | **WebGL + WebXR**（独立会话） | **当前 VR 重心**；物理/震动实验默认关 |
 | VR 桌面 | WebGL + WebXR（基线已交付） | **搁置**；仅维护；不与展示器同会话 |
 | 后处理 | WebGL-only（Studio） | VR 内无全量栈 |
 

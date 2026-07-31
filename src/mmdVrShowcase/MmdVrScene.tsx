@@ -101,6 +101,8 @@ export function MmdVrScene() {
             panelHideLabel={t("settingsMmdVrPanelHide")}
             panelShowLabel={t("settingsMmdVrPanelShow")}
             panelDragLabel={t("settingsMmdVrPanelDrag")}
+            panelFollowOnLabel={t("settingsMmdVrPanelFollowOn")}
+            panelFollowOffLabel={t("settingsMmdVrPanelFollowOff")}
             fpsOnLabel={t("settingsMmdVrFpsOn")}
             fpsOffLabel={t("settingsMmdVrFpsOff")}
             physicsOnLabel={t("settingsMmdVrPhysicsOn")}
@@ -120,6 +122,24 @@ export function MmdVrScene() {
               t("settingsMmdVrPhysicsHapticsOff"),
               t("settingsMmdVrPhysicsHapticsLow"),
               t("settingsMmdVrPhysicsHapticsNormal"),
+            ]}
+            physicsBoneFeedbackLabel={t("settingsMmdVrPhysicsBoneFeedback")}
+            physicsBoneFeedbackLabels={[
+              t("settingsMmdVrPhysicsBoneFeedbackSoft"),
+              t("settingsMmdVrPhysicsBoneFeedbackNormal"),
+              t("settingsMmdVrPhysicsBoneFeedbackHard"),
+            ]}
+            physicsColliderFrictionLabel={t("settingsMmdVrPhysicsColliderFriction")}
+            physicsColliderFrictionLabels={[
+              t("settingsMmdVrPhysicsColliderFrictionLow"),
+              t("settingsMmdVrPhysicsColliderFrictionMedium"),
+              t("settingsMmdVrPhysicsColliderFrictionHigh"),
+            ]}
+            physicsColliderRestitutionLabel={t("settingsMmdVrPhysicsColliderRestitution")}
+            physicsColliderRestitutionLabels={[
+              t("settingsMmdVrPhysicsColliderRestitutionNone"),
+              t("settingsMmdVrPhysicsColliderRestitutionLow"),
+              t("settingsMmdVrPhysicsColliderRestitutionHigh"),
             ]}
             resetPhysicsLabel={t("settingsMmdVrPhysicsReset")}
             snapTurnLabel={t("settingsMmdVrSnapTurn")}

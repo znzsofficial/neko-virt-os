@@ -73,6 +73,7 @@ describe("requestMmdVrEnter", () => {
         exposure: 1,
         advancedRenderOverrides: false,
         detailedPhysicsDiagnostics: false,
+        panelFollowUser: true,
       },
       phase: "idle",
       errorMessage: null,
@@ -132,13 +133,13 @@ describe("requestMmdVrEnter", () => {
     }));
     const assets = ["a.pmx", "b.pmx", "c.pmx"].map((name) => {
       const file = new File([name], name);
-      return { modelFile: file, companionFiles: [file], bodyMotionFile: null };
+      return { kind: "model" as const, modelFile: file, companionFiles: [file], bodyMotionFile: null };
     });
 
     const entering = requestMmdVrEnter({ t: t as never, addNotification, assets });
 
     expect(useMmdVrStore.getState().overlayOpen).toBe(true);
-    expect(getMmdVrSessionAssets().map((slot) => slot.modelFile.name)).toEqual([
+    expect(getMmdVrSessionAssets().map((slot) => slot.kind === "model" ? slot.modelFile.name : "")).toEqual([
       "a.pmx",
       "b.pmx",
       "c.pmx",

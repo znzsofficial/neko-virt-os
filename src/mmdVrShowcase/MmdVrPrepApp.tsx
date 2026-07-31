@@ -4,13 +4,15 @@ import { useLanguageStore } from "../languageStore";
 import {
   collectFilesFromDataTransfer,
   companionsForModel,
+  companionsForObject,
   listMmdModels,
   listMmdMotions,
+  listMmdObjects,
   relativePath,
 } from "../mmdImport/folderFiles";
 import { useNotificationStore } from "../notificationStore";
 import { MmdVrOverlay } from "./MmdVrOverlay";
-import { MMD_VR_MAX_MODELS, type MmdVrAssetSlot } from "./mmdVrAssets";
+import { MMD_VR_MAX_MODELS, MMD_VR_MAX_OBJECTS, type MmdVrAssetSlot } from "./mmdVrAssets";
 import { formatMmdVrProfileSummary, getMmdVrRenderProfile } from "./mmdVrQuality";
 import { requestMmdVrEnter } from "./requestMmdVrEnter";
 import { useMmdVrStore } from "./mmdVrStore";
@@ -44,6 +46,13 @@ function OptionGroup<T extends string>({
 
 type QuestPreset = "safe" | "balanced" | "clarity" | "custom";
 
+function mergeImportedFiles(prev: readonly File[], next: readonly File[]): File[] {
+  const byPath = new Map<string, File>();
+  for (const file of prev) byPath.set(relativePath(file), file);
+  for (const file of next) byPath.set(relativePath(file), file);
+  return [...byPath.values()];
+}
+
 function getQuestPreset(prefs: ReturnType<typeof useMmdVrStore.getState>["prefs"]): QuestPreset {
   if (!prefs.advancedRenderOverrides) return "custom";
   if (prefs.dprPref !== "auto" || prefs.antialiasPref !== "auto") return "custom";
@@ -65,6 +74,7 @@ export function MmdVrPrepApp() {
   const importGenerationRef = useRef(0);
   const [files, setFiles] = useState<File[]>([]);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
+  const [selectedObjectPaths, setSelectedObjectPaths] = useState<string[]>([]);
   const [bodyMotionPath, setBodyMotionPath] = useState("");
   const [faceMotionPath, setFaceMotionPath] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -86,9 +96,14 @@ export function MmdVrPrepApp() {
 
   const models = useMemo(() => listMmdModels(files), [files]);
   const motions = useMemo(() => listMmdMotions(files), [files]);
+  const objects = useMemo(() => listMmdObjects(files), [files]);
   const selectedModels = useMemo(
     () => models.filter((model) => selectedPaths.includes(relativePath(model))).slice(0, MMD_VR_MAX_MODELS),
     [models, selectedPaths],
+  );
+  const selectedObjects = useMemo(
+    () => objects.filter((object) => selectedObjectPaths.includes(relativePath(object))).slice(0, MMD_VR_MAX_OBJECTS),
+    [objects, selectedObjectPaths],
   );
 
   useEffect(() => {
@@ -99,11 +114,34 @@ export function MmdVrPrepApp() {
   }, []);
 
   function ingest(nextFiles: File[]) {
-    const nextModels = listMmdModels(nextFiles);
-    setFiles(nextFiles);
-    setSelectedPaths(nextModels.slice(0, MMD_VR_MAX_MODELS).map(relativePath));
-    setBodyMotionPath("");
-    setFaceMotionPath("");
+    // Accumulate across multiple folder picks / drops instead of replacing.
+    setFiles((prev) => mergeImportedFiles(prev, nextFiles));
+    setSelectedPaths((prevSel) => {
+      const remaining = MMD_VR_MAX_MODELS - prevSel.length;
+      if (remaining <= 0) return prevSel;
+      const additions = listMmdModels(nextFiles)
+        .map(relativePath)
+        .filter((path) => !prevSel.includes(path))
+        .slice(0, remaining);
+      return [...prevSel, ...additions];
+    });
+    setSelectedObjectPaths((prevSel) => {
+      const remaining = MMD_VR_MAX_OBJECTS - prevSel.length;
+      if (remaining <= 0) return prevSel;
+      const additions = listMmdObjects(nextFiles)
+        .map(relativePath)
+        .filter((path) => !prevSel.includes(path))
+        .slice(0, remaining);
+      return [...prevSel, ...additions];
+    });
+  }
+
+  function removeImportedFile(path: string) {
+    setFiles((prev) => prev.filter((file) => relativePath(file) !== path));
+    setSelectedPaths((prev) => prev.filter((item) => item !== path));
+    setSelectedObjectPaths((prev) => prev.filter((item) => item !== path));
+    setBodyMotionPath((prev) => (prev === path ? "" : prev));
+    setFaceMotionPath((prev) => (prev === path ? "" : prev));
   }
 
   function onFilesChange(event: ChangeEvent<HTMLInputElement>) {
@@ -128,15 +166,31 @@ export function MmdVrPrepApp() {
     });
   }
 
+  function toggleObject(path: string) {
+    setSelectedObjectPaths((current) => {
+      if (current.includes(path)) return current.filter((item) => item !== path);
+      if (current.length >= MMD_VR_MAX_OBJECTS) return current;
+      return [...current, path];
+    });
+  }
+
   function enterVr() {
     const bodyMotion = motions.find((file) => relativePath(file) === bodyMotionPath) ?? null;
     const faceMotion = motions.find((file) => relativePath(file) === faceMotionPath) ?? null;
-    const assets: MmdVrAssetSlot[] = selectedModels.map((modelFile) => ({
-      modelFile,
-      companionFiles: companionsForModel(modelFile, files),
-      bodyMotionFile: bodyMotion,
-      faceMotionFile: faceMotion,
-    }));
+    const assets: MmdVrAssetSlot[] = [
+      ...selectedModels.map((modelFile) => ({
+        kind: "model" as const,
+        modelFile,
+        companionFiles: companionsForModel(modelFile, files),
+        bodyMotionFile: bodyMotion,
+        faceMotionFile: faceMotion,
+      })),
+      ...selectedObjects.map((objectFile) => ({
+        kind: "object" as const,
+        objectFile,
+        companionFiles: companionsForObject(objectFile, files),
+      })),
+    ];
     void requestMmdVrEnter({ t, addNotification, assets });
   }
 
@@ -198,21 +252,55 @@ export function MmdVrPrepApp() {
                   const path = relativePath(model);
                   const selected = selectedPaths.includes(path);
                   return (
-                    <button
-                      key={path}
-                      type="button"
-                      className={selected ? "mmd-vr-prep-model is-selected" : "mmd-vr-prep-model"}
-                      onClick={() => toggleModel(path)}
-                    >
+                    <div key={path} className={selected ? "mmd-vr-prep-model is-selected" : "mmd-vr-prep-model"}>
                       <span>{String(index + 1).padStart(2, "0")}</span>
-                      <div><strong>{model.name}</strong><small>{path}</small></div>
+                      <button type="button" className="mmd-vr-prep-model-info" onClick={() => toggleModel(path)}>
+                        <strong>{model.name}</strong>
+                        <small>{path}</small>
+                      </button>
                       <Icon icon={selected ? "solar:check-circle-bold" : "solar:add-circle-linear"} width={20} height={20} />
-                    </button>
+                      <button type="button" className="mmd-vr-prep-icon-btn mmd-vr-prep-remove" aria-label={t("mmdVrPrepRemoveFile")} onClick={() => removeImportedFile(path)}>
+                        <Icon icon="solar:trash-bin-trash-linear" width={18} height={18} />
+                      </button>
+                    </div>
                   );
                 })}
               </div>
             ) : (
               <div className="mmd-vr-prep-empty">{files.length ? t("mmdVrPrepNoModels") : t("mmdVrPrepAwaiting")}</div>
+            )}
+          </section>
+
+          <section className="mmd-vr-prep-section">
+            <div className="mmd-vr-prep-section-head">
+              <div>
+                <strong>{t("mmdVrPrepObjects")}</strong>
+                <span>{t("mmdVrPrepObjectLimit").replace("{count}", String(MMD_VR_MAX_OBJECTS))}</span>
+              </div>
+              <b>{selectedObjects.length}/{MMD_VR_MAX_OBJECTS}</b>
+            </div>
+            {objects.length ? (
+              <div className="mmd-vr-prep-models">
+                {objects.map((object, index) => {
+                  const path = relativePath(object);
+                  const selected = selectedObjectPaths.includes(path);
+                  return (
+                    <div key={path} className={selected ? "mmd-vr-prep-model is-selected" : "mmd-vr-prep-model"}>
+                      <span>{String(index + 1).padStart(2, "0")}</span>
+                      <button type="button" className="mmd-vr-prep-model-info" onClick={() => toggleObject(path)}>
+                        <strong>{object.name}</strong>
+                        <small>{path}</small>
+                      </button>
+                      <Icon icon={selected ? "solar:check-circle-bold" : "solar:add-circle-linear"} width={20} height={20} />
+                      <button type="button" className="mmd-vr-prep-icon-btn mmd-vr-prep-remove" aria-label={t("mmdVrPrepRemoveFile")} onClick={() => removeImportedFile(path)}>
+                        <Icon icon="solar:trash-bin-trash-linear" width={18} height={18} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mmd-vr-prep-empty">{files.length ? t("mmdVrPrepNoObjects") : t("mmdVrPrepAwaiting")}</div>
             )}
           </section>
 
@@ -424,7 +512,7 @@ export function MmdVrPrepApp() {
           <button
             type="button"
             className="mmd-vr-prep-enter"
-            disabled={!selectedModels.length || phase === "entering" || phase === "active"}
+            disabled={(!selectedModels.length && !selectedObjects.length) || phase === "entering" || phase === "active"}
             onClick={enterVr}
           >
             <Icon icon="solar:glasses-bold-duotone" width={22} height={22} />

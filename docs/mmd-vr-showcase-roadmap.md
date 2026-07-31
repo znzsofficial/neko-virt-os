@@ -1,6 +1,6 @@
 # MMD VR 展示器 — 路线图
 
-最后更新：2026-07-27
+最后更新：2026-07-31
 
 > **当前产品重心**（VR 桌面已基线收尾并搁置，见 [vr-desktop-roadmap.md](./vr-desktop-roadmap.md)）
 
@@ -52,7 +52,7 @@
 | 舞台 + WebGL runtime | ✅ | `MmdVrStage` + `createMmdRuntimeHandle` |
 | 播放 / 循环 / 重置视角 / 退出 | ✅ | `MmdVrHud` |
 | 进度条 seek | ✅ | `mmdVrClock` + HUD（热路径不写 React） |
-| 灯光预设 6 套 | ✅ | stage / soft / daylight / warm / rim / contrast |
+| 灯光预设 6 套 | ✅ | stage / soft / daylight / warm / rim / contrast；天空 / 雾 / 地面随预设联动，色温统一，移除失效的 envIntensity |
 | 模型显隐（≤3） | ✅ | visibility 队列 |
 | 平滑行走 + snap 转向 | ✅ | `useXRControllerLocomotion` |
 | 与 VR 桌面互斥 | ✅ | `requestImmersiveEnter` |
@@ -64,6 +64,17 @@
 | 空态 / 错误态文案 (M14) | ✅ | emptyNoAssets / loadFailed |
 | 渐变天空穹顶 (V3) | ✅ | StageSky 随灯光预设 |
 | face 动作单轨 (M11) | ✅ | 准备页选择，加载后与 body 合并 |
+| Quest 预设三档 + 明确刷新率 72/80/90/120 | ✅ | `MmdVrPrepApp` 预设 + `mmdVrQuality` |
+| 实验渲染覆盖（framebuffer scale / foveation） | ✅ 默认关；高级区显式开启后生效 | `mmdVrSession` / 准备页 |
+| 旧偏好迁移（v1 key / 旧刷新率枚举 high-mid-low） | ✅ | `settingsBackup` + `mmdVrStore` |
+| Bullet 物理开关 + 控制器碰撞（X1） | ✅ 实验，默认关 | `MmdVrControllerColliders` |
+| 物理质量档 / 时间步钳制 / 震动三档 | ✅ | low/medium/high；50ms 钳制；off/low/normal |
+| 物理参数设置（跟随度 / 碰撞摩擦 / 碰撞弹性） | ✅ 会话级三档循环 | `mmdPhysics` boneFeedbackScale / collider friction / restitution |
+| 详细物理诊断 | ✅ | `physicsDebugEnabled` + HUD 叠加 |
+| 环境物件 glTF/GLB（A6） | ✅ | 轻量旁路，不进 mmdRuntime |
+| HUD 面板 billboard 跟随用户 | ✅ 默认开；`panelFollowUser` 持久化开关 | yaw-only，`MmdVrHud` useFrame |
+| 光照预设场景联动 | ✅ | 天空 / 雾 / 地面随预设统一色温 |
+| 多文件夹导入累加 + 手动删除 | ✅ | `MmdVrPrepApp` merge / remove |
 | XR 内导入 / 多动作列表 | ❌ | v0.1 余下 |
 | 角色 / 场景资产类型 | ❌ | v0.3；当前 PMX 使用同一模型槽位 |
 | 轻量视觉白名单其余 | 部分 | V1 exposure 已实现；其余 v1.1 |
@@ -180,11 +191,14 @@ src/mmdVrShowcase/
 
 | ID | 任务 | 状态 / 验收 |
 |----|------|-------------|
-| S1 | Quest 会话可靠进入 | ✅ 不在 renderer attach 阶段调用 framebuffer scale / foveation API |
+| S1 | Quest 会话可靠进入 | ✅ 默认不应用 framebuffer scale / foveation；仅实验渲染覆盖显式开启时在会话配置阶段应用 |
 | S2 | 角色材质正确性 | ✅ 不强制 DoubleSide；只禁用动画模型视锥剔除 |
 | S3 | 双眼 HUD 与滑条 | 部分：透明排序已修；待 Quest 复测可见性与可读性 |
 | S4 | 真机性能矩阵 | ⬜ 记录设备、系统、模型复杂度、1/2/3 模型和高/均衡/低档 FPS |
-| S5 | 设置真实性 | ✅ 准备页不再展示当前会话不会应用的 framebuffer scale / foveation 控件 |
+| S5 | 设置真实性 | ✅ 默认隐藏 framebuffer scale / foveation 控件；「实验渲染覆盖」显式开启后展示并生效，避免暴露无效设置 |
+| S6 | 物理时间步稳定 | ✅ 模拟增量钳制 50ms（`clampMmdVrSimulationDelta`，与 Studio 一致）；固定步进累加器入 X6 |
+| S7 | 物理质量档与诊断 | ✅ 会话内 低/中/高（默认中）+ HUD 碰撞诊断；自适应策略入 X9 |
+| S8 | 碰撞震动反馈 | ✅ 三档 off/low/normal（默认 off）+ 冷却/防抖 + 速度映射；冲量与连续反馈入 X10–X13 |
 
 ### v1 — 观看体验
 
@@ -192,7 +206,7 @@ src/mmdVrShowcase/
 |----|------|------|
 | M20 | 固定观赏点 / 重置视角 | ✅ 重置视角 |
 | M21 | 简易进度条（时间或帧） | ✅ HUD 进度条可点 seek |
-| M22 | 灯光预设 2–3 套 | ✅ 扩展为 6 套：stage / soft / daylight / warm / rim / contrast |
+| M22 | 灯光预设 2–3 套 | ✅ 扩展为 6 套：stage / soft / daylight / warm / rim / contrast；雾 / 地面 / 天空底部改为随预设联动并统一色温（原雾与地面写死深色，导致亮色预设下天空与场景撕裂） |
 | M23 | 可选地面阴影（map，低成本） | ✅ 画质细项 shadows |
 | M24 | 与 Studio 资源握手（可选） | ⛔ 已取消；保持页面/renderer 隔离 |
 | M12 | 模型列表显隐 | ✅ 最多 3 条 HUD 切换 |
@@ -206,6 +220,7 @@ src/mmdVrShowcase/
 | A3 | VR 内移除模型 | ✅ 模型卡片内移除；释放 runtime、材质、贴图、动作和独立 Bullet world |
 | A4 | 模型级完整复位 | ✅ 初始位置、旋转和缩放已实现；真机确认交互文案 |
 | A5 | 加载预算提示 | 准备页显示文件体积；能可靠读取时再增加顶点/贴图提示 |
+| A6 | 环境物件 glTF/GLB（轻量旁路） | ✅ 准备页可选 glTF/GLB 场景物件（上限 3 个）；**不进 mmdRuntime**，用 `GLTFLoader` 直接加载为 `THREE.Group` 与角色同场景共存；支持显隐 / 放置 / 缩放 / 旋转 / 移除；**无动画、无物理、无 morph**；`.glb` 自包含直接加载，`.gltf` 外部资源（bin/纹理）按目录同伴文件做 URL 改写；资源随移除 / 退出释放 |
 
 ### v0.4 — 舒适性
 
@@ -234,7 +249,7 @@ src/mmdVrShowcase/
 
 | ID | 任务 | 说明 |
 |----|------|------|
-| X1 | Bullet 物理开关（实验） | ✅ 会话内默认关；左右控制器 grip 各注入一个 8cm 静态球形刚体；Quest 真机碰撞与性能待验收 |
+| X1 | Bullet 物理开关（实验） | ✅ 会话内默认关；左右 grip 各注入 8cm 静态球体；已含 50ms 时间步钳制、质量档、碰撞诊断与速度映射震动三档；Quest 真机碰撞、性能与手感待验收 |
 | X2 | 双柄缩放舞台或模型 | 晕动与误触 |
 | X3 | 手部追踪实验 | 默认关 |
 | X4 | 从 VR 桌面「切换会话」引导 | 仍分会话，只做流程文案 |
@@ -300,7 +315,7 @@ src/mmdVrShowcase/
 | 晕动（平滑行走） | 速度上限；可选瞬移/减少加速；设置项后续 |
 | 模型过大 OOM / 掉帧 | 上限 + 低档 + 加载前体积/顶点数提示（能做则做） |
 | 角色与房间 PMX 材质需求冲突 | 增加显式资产类型；禁止对所有模型统一强制 DoubleSide |
-| Quest attach 阶段画质 API 卡会话 | MMD VR 暂不应用 framebuffer scale / foveation；无真机回归不得恢复 |
+| Quest attach 阶段画质 API 卡会话 | 默认不应用 framebuffer scale / foveation；仅「实验渲染覆盖」显式开启时应用；无真机回归不得放开默认值 |
 | 文件选择在 VR 内难用 | **2D 预选再进 VR** 作主路径 |
 | 与 VR 桌面会话冲突 | 入口互斥；文档与 UI 写清 |
 | 误把 Studio 后处理拷进 XR | Code review + 本非目标表 |
@@ -312,13 +327,13 @@ src/mmdVrShowcase/
 
 > 全项目 VR 人力优先本文件；勿回流做 VR 桌面新 app。
 
-1. **S3 / S4 / M8**：Quest 双眼 HUD 复测与性能矩阵签字（记 §6 表）
+1. **S3 / S4 / M8**：Quest 双眼 HUD 复测与性能矩阵签字（记 §6 表），含物理中档与震动三档手感验收
 2. **A1**：区分角色与场景资产，解决房间内表面与角色材质策略冲突
 3. **A2**：每模型动作配置，完成资产清单闭环；A3 已完成
 4. **C2**：移动方向；C1 已完成，再依据真机反馈决定 C3 / C4
 5. **V4**：只有性能矩阵留有预算时评估 IBL；V1 已完成，bloom 继续延后
 
-**已完成可跳过：** M0–M5、M7、M11、M13、M14、M20–M23、V3，以及模型缩放/旋转/复位、身高补偿和 VR 内快速设置。X1 已完成实验实现，但必须通过 Quest 真机碰撞与性能验收后才能视为稳定能力。
+**已完成可跳过：** M0–M5、M7、M11、M13、M14、M20–M23、V3，以及模型缩放/旋转/复位、身高补偿、VR 内快速设置、Quest 预设与旧偏好迁移、实验渲染覆盖、物理时间步钳制、物理质量档与诊断、震动三档、A6 环境物件。X6–X13 未实现。X1 已完成实验实现，但必须通过 Quest 真机碰撞与性能验收后才能视为稳定能力。
 
 ---
 
@@ -330,12 +345,14 @@ src/mmdVrShowcase/
 | 嵌进 VR 桌面面板？ | **否** |
 | 渲染 | **WebGL + WebXR only** |
 | 物理默认 | **关** |
+| 非 MMD 角色（glTF/FBX 等） | **不做**（v0–v1）；只做 glTF/GLB **环境物件**轻量旁路（A6） |
 | 控制器物理碰撞 | **实验性**；左右 grip 以 8cm 静态球形刚体进入每个启用物理的模型 Bullet world；tracking 丢失时移出场景 |
 | 相机动作 v0 | **不做**（用户行走） |
 | 视觉效果 | **后续白名单**，非 Studio 全栈 |
 | 导入主路径 | **2D 预选 → VR**；XR 内导入为辅 |
-| Quest framebuffer scale / foveation | attach 阶段暂不应用；稳定性优先于暴露无效设置 |
+| Quest framebuffer scale / foveation | 默认不应用；仅「实验渲染覆盖」显式开启后应用；稳定性优先 |
 | PMX 角色与场景 | 下一阶段显式分类，不再依赖材质启发式判断 |
+| 近期 VR 优化是否回流 Studio | **否**（除概念性共享）：光照预设联动、阴影档位化均依赖 VR 舞台/会话语义；「暂停跳过骨骼求值」守卫已在 VR 启用（修复版：加载完成回调重置求值时间戳，避免静态模型永不求值），仅作为 Studio demand-render 的经验参照（见 mmd-studio.md 缺陷 #10） |
 
 ---
 

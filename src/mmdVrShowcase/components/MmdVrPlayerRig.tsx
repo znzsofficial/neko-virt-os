@@ -45,6 +45,8 @@ export function MmdVrPlayerRig({
   panelHideLabel,
   panelShowLabel,
   panelDragLabel,
+  panelFollowOnLabel,
+  panelFollowOffLabel,
   fpsOnLabel,
   fpsOffLabel,
   physicsOnLabel,
@@ -57,6 +59,12 @@ export function MmdVrPlayerRig({
   physicsRadiusLabel,
   physicsQualityLabels,
   physicsHapticLevelLabels,
+  physicsBoneFeedbackLabel,
+  physicsBoneFeedbackLabels,
+  physicsColliderFrictionLabel,
+  physicsColliderFrictionLabels,
+  physicsColliderRestitutionLabel,
+  physicsColliderRestitutionLabels,
   resetPhysicsLabel,
   snapTurnLabel,
   exposureLabel,
@@ -96,6 +104,8 @@ export function MmdVrPlayerRig({
   panelHideLabel: string;
   panelShowLabel: string;
   panelDragLabel: string;
+  panelFollowOnLabel: string;
+  panelFollowOffLabel: string;
   fpsOnLabel: string;
   fpsOffLabel: string;
   physicsOnLabel: string;
@@ -108,6 +118,12 @@ export function MmdVrPlayerRig({
   physicsRadiusLabel: string;
   physicsQualityLabels: [string, string, string];
   physicsHapticLevelLabels: [string, string, string];
+  physicsBoneFeedbackLabel: string;
+  physicsBoneFeedbackLabels: [string, string, string];
+  physicsColliderFrictionLabel: string;
+  physicsColliderFrictionLabels: [string, string, string];
+  physicsColliderRestitutionLabel: string;
+  physicsColliderRestitutionLabels: [string, string, string];
   resetPhysicsLabel: string;
   snapTurnLabel: string;
   exposureLabel: string;
@@ -210,6 +226,8 @@ export function MmdVrPlayerRig({
         panelHideLabel={panelHideLabel}
         panelShowLabel={panelShowLabel}
         panelDragLabel={panelDragLabel}
+        panelFollowOnLabel={panelFollowOnLabel}
+        panelFollowOffLabel={panelFollowOffLabel}
         fpsOnLabel={fpsOnLabel}
         fpsOffLabel={fpsOffLabel}
         physicsOnLabel={physicsOnLabel}
@@ -222,6 +240,12 @@ export function MmdVrPlayerRig({
         physicsRadiusLabel={physicsRadiusLabel}
         physicsQualityLabels={physicsQualityLabels}
         physicsHapticLevelLabels={physicsHapticLevelLabels}
+        physicsBoneFeedbackLabel={physicsBoneFeedbackLabel}
+        physicsBoneFeedbackLabels={physicsBoneFeedbackLabels}
+        physicsColliderFrictionLabel={physicsColliderFrictionLabel}
+        physicsColliderFrictionLabels={physicsColliderFrictionLabels}
+        physicsColliderRestitutionLabel={physicsColliderRestitutionLabel}
+        physicsColliderRestitutionLabels={physicsColliderRestitutionLabels}
         resetPhysicsLabel={resetPhysicsLabel}
         snapTurnLabel={snapTurnLabel}
         exposureLabel={exposureLabel}

@@ -111,6 +111,7 @@ function createBackup(): SettingsBackup {
       exposure: 1.2,
       advancedRenderOverrides: true,
       detailedPhysicsDiagnostics: true,
+      panelFollowUser: true,
     },
   };
 }

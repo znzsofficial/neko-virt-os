@@ -711,12 +711,116 @@ function ModelPanels(props: Pick<Parameters<typeof ModelPanel>[0], "hideLabel" |
   );
 }
 
+function ObjectPanel({
+  objectId,
+  position,
+  hideLabel,
+  showLabel,
+  placeOnLabel,
+  placeOffLabel,
+  scaleLabel,
+  resetValueLabel,
+  rotateLeftLabel,
+  rotateRightLabel,
+  removeLabel,
+  onInteractionChange,
+}: {
+  objectId: string;
+  position: [number, number, number];
+  hideLabel: string;
+  showLabel: string;
+  placeOnLabel: string;
+  placeOffLabel: string;
+  scaleLabel: string;
+  resetValueLabel: string;
+  rotateLeftLabel: string;
+  rotateRightLabel: string;
+  removeLabel: string;
+  onInteractionChange: (active: boolean) => void;
+}) {
+  const object = useMmdVrStore((s) => s.objects.find((entry) => entry.id === objectId));
+  const placeMode = useMmdVrStore((s) => s.placeMode);
+  const placeModelId = useMmdVrStore((s) => s.placeModelId);
+  const enqueueVisibilityToggle = useMmdVrStore((s) => s.enqueueVisibilityToggle);
+  const setPlaceModelId = useMmdVrStore((s) => s.setPlaceModelId);
+  const setPlaceMode = useMmdVrStore((s) => s.setPlaceMode);
+  const requestModelScale = useMmdVrStore((s) => s.requestModelScale);
+  const requestModelRotation = useMmdVrStore((s) => s.requestModelRotation);
+  const requestModelReset = useMmdVrStore((s) => s.requestModelReset);
+  const enqueueModelRemoval = useMmdVrStore((s) => s.enqueueModelRemoval);
+
+  if (!object) return null;
+  const placementActive = placeMode && placeModelId === object.id;
+  const setScale = (scale: number) => requestModelScale(object.id, scale);
+
+  return (
+    <group position={position}>
+      <ModelPanelBackdrop />
+      <ValueLabel position={[0, 0.34, 0]} label={shortName(object.name, 14)} value={object.visible ? "●" : "○"} />
+      <HudButton
+        position={[-0.25, 0.19, 0]}
+        label={object.visible ? hideLabel : showLabel}
+        size={[0.42, 0.11]}
+        onPress={() => enqueueVisibilityToggle(object.id)}
+      />
+      <HudButton
+        position={[0.25, 0.19, 0]}
+        label={placementActive ? placeOnLabel : placeOffLabel}
+        active={placementActive}
+        size={[0.42, 0.11]}
+        onPress={() => {
+          if (placementActive) {
+            setPlaceMode(false);
+          } else {
+            setPlaceModelId(object.id);
+            setPlaceMode(true);
+          }
+        }}
+      />
+      <ValueLabel position={[0, 0.02, 0]} label={scaleLabel} value={formatMmdVrModelScale(object.scale)} />
+      <HudSlider
+        position={[0, -0.12, 0]}
+        value={mmdVrModelScaleToSlider(object.scale)}
+        onChange={(value) => setScale(mmdVrSliderToModelScale(value))}
+        onInteractionChange={onInteractionChange}
+      />
+      <HudButton position={[-0.34, -0.31, 0]} label={rotateLeftLabel} size={[0.24, 0.1]} onPress={() => requestModelRotation(object.id, object.rotationY - 15)} />
+      <HudButton position={[-0.06, -0.31, 0]} label={resetValueLabel} size={[0.22, 0.1]} onPress={() => requestModelReset(object.id)} />
+      <HudButton position={[0.2, -0.31, 0]} label={rotateRightLabel} size={[0.26, 0.1]} onPress={() => requestModelRotation(object.id, object.rotationY + 15)} />
+      <HudButton position={[0.42, -0.31, 0]} label={removeLabel} size={[0.16, 0.1]} danger onPress={() => enqueueModelRemoval(object.id)} />
+    </group>
+  );
+}
+
+function ObjectPanels(props: Pick<Parameters<typeof ObjectPanel>[0], "hideLabel" | "showLabel" | "placeOnLabel" | "placeOffLabel" | "scaleLabel" | "resetValueLabel" | "rotateLeftLabel" | "rotateRightLabel" | "removeLabel" | "onInteractionChange">) {
+  const objects = useMmdVrStore((s) => s.objects);
+  const spacing = 1.1;
+  return (
+    <group position={[0.16, -2.34, 0.02]}>
+      {objects.slice(0, 3).map((object, index) => (
+        <ObjectPanel
+          key={object.id}
+          {...props}
+          objectId={object.id}
+          position={[(index - (objects.length - 1) / 2) * spacing, 0, 0]}
+        />
+      ))}
+    </group>
+  );
+}
+
 function PhysicsSettingsPanel({
   collisionOnLabel,
   collisionOffLabel,
   radiusLabel,
   qualityLabels,
   hapticLevelLabels,
+  boneFeedbackLabel,
+  boneFeedbackLabels,
+  colliderFrictionLabel,
+  colliderFrictionLabels,
+  colliderRestitutionLabel,
+  colliderRestitutionLabels,
   resetPhysicsLabel,
   snapTurnLabel,
   exposureLabel,
@@ -726,6 +830,12 @@ function PhysicsSettingsPanel({
   radiusLabel: string;
   qualityLabels: [string, string, string];
   hapticLevelLabels: [string, string, string];
+  boneFeedbackLabel: string;
+  boneFeedbackLabels: [string, string, string];
+  colliderFrictionLabel: string;
+  colliderFrictionLabels: [string, string, string];
+  colliderRestitutionLabel: string;
+  colliderRestitutionLabels: [string, string, string];
   resetPhysicsLabel: string;
   snapTurnLabel: string;
   exposureLabel: string;
@@ -737,19 +847,28 @@ function PhysicsSettingsPanel({
   const radius = useMmdVrStore((s) => s.physicsColliderRadius);
   const quality = useMmdVrStore((s) => s.physicsQuality);
   const hapticLevel = useMmdVrStore((s) => s.physicsHapticLevel);
+  const boneFeedback = useMmdVrStore((s) => s.physicsBoneFeedback);
+  const colliderFriction = useMmdVrStore((s) => s.physicsColliderFriction);
+  const colliderRestitution = useMmdVrStore((s) => s.physicsColliderRestitution);
   const setCollisions = useMmdVrStore((s) => s.setPhysicsControllerCollisions);
   const cycleRadius = useMmdVrStore((s) => s.cyclePhysicsColliderRadius);
   const cycleQuality = useMmdVrStore((s) => s.cyclePhysicsQuality);
   const cycleHapticLevel = useMmdVrStore((s) => s.cyclePhysicsHapticLevel);
+  const cycleBoneFeedback = useMmdVrStore((s) => s.cyclePhysicsBoneFeedback);
+  const cycleFriction = useMmdVrStore((s) => s.cyclePhysicsColliderFriction);
+  const cycleRestitution = useMmdVrStore((s) => s.cyclePhysicsColliderRestitution);
   const requestReset = useMmdVrStore((s) => s.requestPhysicsReset);
   const setPrefs = useMmdVrStore((s) => s.setPrefs);
   const qualityLabel = quality === "low" ? qualityLabels[0] : quality === "high" ? qualityLabels[2] : qualityLabels[1];
   const hapticLabel = hapticLevel === "off" ? hapticLevelLabels[0] : hapticLevel === "low" ? hapticLevelLabels[1] : hapticLevelLabels[2];
+  const boneFeedbackValue = boneFeedback === "soft" ? boneFeedbackLabels[0] : boneFeedback === "hard" ? boneFeedbackLabels[2] : boneFeedbackLabels[1];
+  const frictionValue = colliderFriction === "low" ? colliderFrictionLabels[0] : colliderFriction === "high" ? colliderFrictionLabels[2] : colliderFrictionLabels[1];
+  const restitutionValue = colliderRestitution === "none" ? colliderRestitutionLabels[0] : colliderRestitution === "high" ? colliderRestitutionLabels[2] : colliderRestitutionLabels[1];
   const physicsControlsDisabled = !physicsEnabled || physicsBusy;
 
   return (
     <group position={[0.16, -1.05, 0.02]}>
-      <group scale={[2.35, 0.72, 1]}>
+      <group scale={[2.35, 0.9, 1]}>
         <ModelPanelBackdrop />
       </group>
       <HudButton
@@ -784,6 +903,27 @@ function PhysicsSettingsPanel({
         label={`${exposureLabel}:${prefs.exposure.toFixed(1)}`}
         size={[0.52, 0.11]}
         onPress={() => setPrefs({ exposure: prefs.exposure >= 1.3 ? 0.7 : prefs.exposure + 0.1 })}
+      />
+      <HudButton
+        position={[-0.58, -0.36, 0]}
+        label={`${boneFeedbackLabel}:${boneFeedbackValue}`}
+        size={[0.52, 0.11]}
+        disabled={physicsControlsDisabled}
+        onPress={cycleBoneFeedback}
+      />
+      <HudButton
+        position={[0, -0.36, 0]}
+        label={`${colliderFrictionLabel}:${frictionValue}`}
+        size={[0.52, 0.11]}
+        disabled={physicsControlsDisabled}
+        onPress={cycleFriction}
+      />
+      <HudButton
+        position={[0.58, -0.36, 0]}
+        label={`${colliderRestitutionLabel}:${restitutionValue}`}
+        size={[0.52, 0.11]}
+        disabled={physicsControlsDisabled}
+        onPress={cycleRestitution}
       />
     </group>
   );
@@ -885,6 +1025,8 @@ export function MmdVrControlBar({
   panelHideLabel,
   panelShowLabel,
   panelDragLabel,
+  panelFollowOnLabel,
+  panelFollowOffLabel,
   fpsOnLabel,
   fpsOffLabel,
   physicsOnLabel,
@@ -897,6 +1039,12 @@ export function MmdVrControlBar({
   physicsRadiusLabel,
   physicsQualityLabels,
   physicsHapticLevelLabels,
+  physicsBoneFeedbackLabel,
+  physicsBoneFeedbackLabels,
+  physicsColliderFrictionLabel,
+  physicsColliderFrictionLabels,
+  physicsColliderRestitutionLabel,
+  physicsColliderRestitutionLabels,
   resetPhysicsLabel,
   snapTurnLabel,
   exposureLabel,
@@ -937,6 +1085,8 @@ export function MmdVrControlBar({
   panelHideLabel: string;
   panelShowLabel: string;
   panelDragLabel: string;
+  panelFollowOnLabel: string;
+  panelFollowOffLabel: string;
   fpsOnLabel: string;
   fpsOffLabel: string;
   physicsOnLabel: string;
@@ -949,6 +1099,12 @@ export function MmdVrControlBar({
   physicsRadiusLabel: string;
   physicsQualityLabels: [string, string, string];
   physicsHapticLevelLabels: [string, string, string];
+  physicsBoneFeedbackLabel: string;
+  physicsBoneFeedbackLabels: [string, string, string];
+  physicsColliderFrictionLabel: string;
+  physicsColliderFrictionLabels: [string, string, string];
+  physicsColliderRestitutionLabel: string;
+  physicsColliderRestitutionLabels: [string, string, string];
   resetPhysicsLabel: string;
   snapTurnLabel: string;
   exposureLabel: string;
@@ -963,6 +1119,7 @@ export function MmdVrControlBar({
   const playing = useMmdVrStore((s) => s.playing);
   const loop = useMmdVrStore((s) => s.loop);
   const modelCount = useMmdVrStore((s) => s.modelCount);
+  const objectCount = useMmdVrStore((s) => s.objects.length);
   const statusLine = useMmdVrStore((s) => s.statusLine);
   const placeMode = useMmdVrStore((s) => s.placeMode);
   const lightPreset = useMmdVrStore((s) => s.prefs.lightPreset);
@@ -986,6 +1143,22 @@ export function MmdVrControlBar({
   const [panelVisible, setPanelVisible] = useState(true);
   const [physicsPanelOpen, setPhysicsPanelOpen] = useState(false);
   const [panelPosition, setPanelPosition] = useState(PANEL_DEFAULT_POSITION);
+  const panelGroupRef = useRef<THREE.Group>(null);
+  const billboardTarget = useMemo(() => new THREE.Vector3(), []);
+  // Yaw-only billboard: keep the panel upright and always facing the user,
+  // independent of where it was dragged or how the origin was turned.
+  useFrame(({ camera }) => {
+    const group = panelGroupRef.current;
+    const parent = group?.parent;
+    if (!group || !parent) return;
+    if (!useMmdVrStore.getState().prefs.panelFollowUser) return;
+    camera.getWorldPosition(billboardTarget);
+    parent.worldToLocal(billboardTarget);
+    const dx = billboardTarget.x - group.position.x;
+    const dz = billboardTarget.z - group.position.z;
+    if (dx * dx + dz * dz < 1e-8) return;
+    group.rotation.y = Math.atan2(dx, dz);
+  });
   const heightOffset = prefs.heightOffset;
   const viewDistance = prefs.viewDistance;
   const walkIndex = prefs.walkSpeedPref === "slow" ? 0 : prefs.walkSpeedPref === "fast" ? 2 : 1;
@@ -993,7 +1166,7 @@ export function MmdVrControlBar({
 
   const status =
     statusLine ??
-    (modelCount === 0 ? emptyHint : placeMode ? placeHint : null);
+    (modelCount === 0 && objectCount === 0 ? emptyHint : placeMode ? placeHint : null);
   const lightLabel =
     lightPreset === "soft"
       ? lightSoftLabel
@@ -1009,7 +1182,7 @@ export function MmdVrControlBar({
 
   if (!panelVisible) {
     return (
-      <group position={panelPosition}>
+      <group position={panelPosition} ref={panelGroupRef}>
         <HudButton
           position={[0, 0, 0]}
           label={panelShowLabel}
@@ -1027,10 +1200,17 @@ export function MmdVrControlBar({
   }
 
   return (
-    <group position={panelPosition}>
+    <group position={panelPosition} ref={panelGroupRef}>
       <PanelBackdrop />
       <DragHandle label={panelDragLabel} onDragChange={onDragChange} onPositionChange={setPanelPosition} />
       <HudButton position={[1.43, 0.42, 0]} label={panelHideLabel} size={[0.36, 0.1]} onPress={() => setPanelVisible(false)} />
+      <HudButton
+        position={[-1.3, 0.42, 0]}
+        label={prefs.panelFollowUser ? panelFollowOnLabel : panelFollowOffLabel}
+        size={[0.42, 0.1]}
+        active={prefs.panelFollowUser}
+        onPress={() => setPrefs({ panelFollowUser: !useMmdVrStore.getState().prefs.panelFollowUser })}
+      />
       {status ? <StatusPlane text={status} /> : null}
       <ProgressBar />
       <HudButton
@@ -1050,7 +1230,7 @@ export function MmdVrControlBar({
       <HudButton
         position={[-0.45, 0.05, 0]}
         label={placeMode ? placeOnLabel : placeOffLabel}
-        disabled={busy || modelCount === 0}
+        disabled={busy || (modelCount === 0 && objectCount === 0)}
         size={[0.38, 0.11]}
         active={placeMode}
         onPress={() => setPlaceMode(!useMmdVrStore.getState().placeMode)}
@@ -1150,23 +1330,43 @@ export function MmdVrControlBar({
           radiusLabel={physicsRadiusLabel}
           qualityLabels={physicsQualityLabels}
           hapticLevelLabels={physicsHapticLevelLabels}
+          boneFeedbackLabel={physicsBoneFeedbackLabel}
+          boneFeedbackLabels={physicsBoneFeedbackLabels}
+          colliderFrictionLabel={physicsColliderFrictionLabel}
+          colliderFrictionLabels={physicsColliderFrictionLabels}
+          colliderRestitutionLabel={physicsColliderRestitutionLabel}
+          colliderRestitutionLabels={physicsColliderRestitutionLabels}
           resetPhysicsLabel={resetPhysicsLabel}
           snapTurnLabel={snapTurnLabel}
           exposureLabel={exposureLabel}
         />
       ) : (
-        <ModelPanels
-          hideLabel={hideLabel}
-          showLabel={showLabel}
-          placeOnLabel={placeOnLabel}
-          placeOffLabel={placeOffLabel}
-          scaleLabel={scaleLabel}
-          rotateLeftLabel={rotateLeftLabel}
-          rotateRightLabel={rotateRightLabel}
-          resetValueLabel={resetValueLabel}
-          removeLabel={removeLabel}
-          onInteractionChange={onDragChange}
-        />
+        <>
+          <ModelPanels
+            hideLabel={hideLabel}
+            showLabel={showLabel}
+            placeOnLabel={placeOnLabel}
+            placeOffLabel={placeOffLabel}
+            scaleLabel={scaleLabel}
+            rotateLeftLabel={rotateLeftLabel}
+            rotateRightLabel={rotateRightLabel}
+            resetValueLabel={resetValueLabel}
+            removeLabel={removeLabel}
+            onInteractionChange={onDragChange}
+          />
+          <ObjectPanels
+            hideLabel={hideLabel}
+            showLabel={showLabel}
+            placeOnLabel={placeOnLabel}
+            placeOffLabel={placeOffLabel}
+            scaleLabel={scaleLabel}
+            rotateLeftLabel={rotateLeftLabel}
+            rotateRightLabel={rotateRightLabel}
+            resetValueLabel={resetValueLabel}
+            removeLabel={removeLabel}
+            onInteractionChange={onDragChange}
+          />
+        </>
       )}
       <FpsBadge />
     </group>

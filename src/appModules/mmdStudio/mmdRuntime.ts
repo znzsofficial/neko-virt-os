@@ -220,7 +220,10 @@ export type MmdRuntimeOptions = {
   controllerColliders?: () => readonly THREE.Matrix4[];
   controllerCollidersEnabled?: () => boolean;
   controllerColliderRadius?: () => number;
+  controllerColliderFriction?: () => number;
+  controllerColliderRestitution?: () => number;
   physicsQuality?: () => MmdPhysicsQuality;
+  physicsBoneFeedbackScale?: () => number;
   prepareModel?: (root: THREE.Object3D) => void;
 };
 
@@ -443,6 +446,9 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
             return (controllerColliderRadius?.() ?? 0.08) / scale;
           },
           quality: physicsQuality,
+          boneFeedbackScale: options.physicsBoneFeedbackScale,
+          controllerFriction: options.controllerColliderFriction,
+          controllerRestitution: options.controllerColliderRestitution,
         })
       : null;
     if (disposed) {

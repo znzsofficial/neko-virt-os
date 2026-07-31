@@ -6,7 +6,9 @@ import {
   type MmdRuntimeHandle,
 } from "../../appModules/mmdStudio/mmdRuntime";
 import { useLanguageStore } from "../../languageStore";
-import { getMmdVrSessionAssets } from "../mmdVrAssets";
+import { getMmdVrSessionAssets, type MmdVrModelSlot, type MmdVrObjectSlot } from "../mmdVrAssets";
+import { createMmdVrGltfLoader } from "../mmdVrGltf";
+import { relativePath } from "../../mmdImport/folderFiles";
 import {
   clampMmdVrSimulationDelta,
   resetMmdVrClock,
@@ -25,7 +27,14 @@ import {
 } from "../mmdVrHaptics";
 
 const STAGE_BG = "#0c1018";
-const FLOOR = "#1a2230";
+const OBJECT_DEFAULT_Z = -2.2;
+
+type MmdVrObjectRef = {
+  group: THREE.Group;
+  name: string;
+  revoke: () => void;
+  defaultPosition: [number, number, number];
+};
 
 const LIGHT_PRESETS: Record<
   MmdVrLightPreset,
@@ -38,10 +47,10 @@ const LIGHT_PRESETS: Record<
     hemiSky: string;
     hemiGround: string;
     sunPos: [number, number, number];
-    fogFar: number;
-    envIntensity: number;
     skyZenith: string;
     skyHorizon: string;
+    fogColor: string;
+    floorColor: string;
   }
 > = {
   stage: {
@@ -53,10 +62,10 @@ const LIGHT_PRESETS: Record<
     hemiSky: "#b8c8e0",
     hemiGround: "#1a2230",
     sunPos: [3.2, 6.5, 2.4],
-    fogFar: 22,
-    envIntensity: 0.35,
     skyZenith: "#1a2840",
     skyHorizon: "#0e1520",
+    fogColor: "#0c1018",
+    floorColor: "#1a2230",
   },
   soft: {
     ambient: 0.75,
@@ -67,10 +76,10 @@ const LIGHT_PRESETS: Record<
     hemiSky: "#cedcf2",
     hemiGround: "#26313f",
     sunPos: [1.5, 5.5, 3.5],
-    fogFar: 26,
-    envIntensity: 0.5,
-    skyZenith: "#2a3a52",
-    skyHorizon: "#141c28",
+    skyZenith: "#3a4060",
+    skyHorizon: "#2a2c44",
+    fogColor: "#282a46",
+    floorColor: "#34344c",
   },
   contrast: {
     ambient: 0.28,
@@ -81,10 +90,10 @@ const LIGHT_PRESETS: Record<
     hemiSky: "#9eb4d5",
     hemiGround: "#090d14",
     sunPos: [4.5, 7, 1.2],
-    fogFar: 18,
-    envIntensity: 0.2,
     skyZenith: "#0a1018",
     skyHorizon: "#05080c",
+    fogColor: "#0a0e15",
+    floorColor: "#141a26",
   },
   daylight: {
     ambient: 0.62,
@@ -95,10 +104,10 @@ const LIGHT_PRESETS: Record<
     hemiSky: "#b9dcf5",
     hemiGround: "#40515a",
     sunPos: [-3.5, 7.5, 4.5],
-    fogFar: 30,
-    envIntensity: 0.48,
-    skyZenith: "#447ca8",
-    skyHorizon: "#a7c5d2",
+    skyZenith: "#4a86b8",
+    skyHorizon: "#b7ccd8",
+    fogColor: "#a3bccb",
+    floorColor: "#5a6a76",
   },
   warm: {
     ambient: 0.42,
@@ -106,13 +115,13 @@ const LIGHT_PRESETS: Record<
     sun: 1.22,
     sunColor: "#ffb782",
     hemi: 0.3,
-    hemiSky: "#856f8f",
-    hemiGround: "#342a32",
+    hemiSky: "#a08aa0",
+    hemiGround: "#3a2f38",
     sunPos: [4.8, 4.2, 3.6],
-    fogFar: 23,
-    envIntensity: 0.32,
-    skyZenith: "#35344f",
-    skyHorizon: "#8b5361",
+    skyZenith: "#5a4566",
+    skyHorizon: "#9a6a70",
+    fogColor: "#8a5f66",
+    floorColor: "#4a3a42",
   },
   rim: {
     ambient: 0.3,
@@ -123,15 +132,15 @@ const LIGHT_PRESETS: Record<
     hemiSky: "#86bcd1",
     hemiGround: "#151a26",
     sunPos: [-1.8, 5.2, -4.5],
-    fogFar: 25,
-    envIntensity: 0.25,
-    skyZenith: "#182b3d",
-    skyHorizon: "#243047",
+    skyZenith: "#1a3246",
+    skyHorizon: "#24384c",
+    fogColor: "#1e3142",
+    floorColor: "#26303f",
   },
 };
 
-/** Inward-facing gradient dome (cheap sky, no HDR). */
-function StageSky({ zenith, horizon }: { zenith: string; horizon: string }) {
+/** Inward-facing gradient dome (cheap sky, no HDR). Bottom blends into the fog color. */
+function StageSky({ zenith, horizon, bottom }: { zenith: string; horizon: string; bottom: string }) {
   const texture = useMemo(() => {
     const canvas = document.createElement("canvas");
     canvas.width = 4;
@@ -141,7 +150,7 @@ function StageSky({ zenith, horizon }: { zenith: string; horizon: string }) {
       const g = ctx.createLinearGradient(0, 0, 0, 64);
       g.addColorStop(0, zenith);
       g.addColorStop(0.55, horizon);
-      g.addColorStop(1, STAGE_BG);
+      g.addColorStop(1, bottom);
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, 4, 64);
     }
@@ -149,7 +158,7 @@ function StageSky({ zenith, horizon }: { zenith: string; horizon: string }) {
     map.colorSpace = THREE.SRGBColorSpace;
     map.needsUpdate = true;
     return map;
-  }, [zenith, horizon]);
+  }, [zenith, horizon, bottom]);
 
   useEffect(
     () => () => {
@@ -171,11 +180,13 @@ function StageFloor({
   shadows,
   placeMode,
   themeColor,
+  floorColor,
 }: {
   segments: number;
   shadows: boolean;
   placeMode: boolean;
   themeColor: string;
+  floorColor: string;
 }) {
   const accent = getXrAccentTokens(themeColor);
   return (
@@ -193,9 +204,9 @@ function StageFloor({
       >
         <circleGeometry args={[8, segments]} />
         {shadows ? (
-          <meshStandardMaterial color={FLOOR} roughness={0.92} metalness={0.05} depthWrite={false} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+          <meshStandardMaterial color={floorColor} roughness={0.92} metalness={0.05} depthWrite={false} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         ) : (
-          <meshBasicMaterial color={FLOOR} depthWrite={false} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+          <meshBasicMaterial color={floorColor} depthWrite={false} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         )}
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
@@ -222,8 +233,11 @@ export function MmdVrStageContent() {
   const lightPreset = mmdPrefs.lightPreset;
   const lightCfg = LIGHT_PRESETS[lightPreset] ?? LIGHT_PRESETS.stage;
   const viewDistance = mmdPrefs.viewDistance;
+  const shadowExtent = profile.quality === "high" ? 6 : profile.quality === "balanced" ? 5 : 4;
+  const shadowFar = profile.quality === "high" ? 24 : profile.quality === "balanced" ? 20 : 16;
   const setPlaying = useMmdVrStore((s) => s.setPlaying);
   const setModels = useMmdVrStore((s) => s.setModels);
+  const setObjects = useMmdVrStore((s) => s.setObjects);
   const setDuration = useMmdVrStore((s) => s.setDuration);
   const setStatusLine = useMmdVrStore((s) => s.setStatusLine);
   const seekEpoch = useMmdVrStore((s) => s.seekEpoch);
@@ -231,6 +245,8 @@ export function MmdVrStageContent() {
   const language = useLanguageStore((s) => s.language);
 
   const runtimeRef = useRef<MmdRuntimeHandle | null>(null);
+  const objectsRef = useRef<Map<string, MmdVrObjectRef>>(new Map());
+  const lastEvaluatedTimeRef = useRef(-Infinity);
   const timeRef = useRef(0);
   const physicsOnlyTimeRef = useRef(0);
   const physicsContactPollRef = useRef(0);
@@ -283,6 +299,18 @@ export function MmdVrStageContent() {
       controllerCollidersEnabled: () => useMmdVrStore.getState().physicsControllerCollisions,
       controllerColliderRadius: () => useMmdVrStore.getState().physicsColliderRadius,
       physicsQuality: () => useMmdVrStore.getState().physicsQuality,
+      physicsBoneFeedbackScale: () => {
+        const map = { soft: 0.35, normal: 1, hard: 1.8 } as const;
+        return map[useMmdVrStore.getState().physicsBoneFeedback];
+      },
+      controllerColliderFriction: () => {
+        const map = { low: 0.2, medium: 0.5, high: 0.9 } as const;
+        return map[useMmdVrStore.getState().physicsColliderFriction];
+      },
+      controllerColliderRestitution: () => {
+        const map = { none: 0, low: 0.25, high: 0.55 } as const;
+        return map[useMmdVrStore.getState().physicsColliderRestitution];
+      },
       prepareModel: prepareMmdVrModel,
     });
     runtimeRef.current = handle;
@@ -317,6 +345,7 @@ export function MmdVrStageContent() {
         } catch {
           // ignore
         }
+        disposeAllObjects();
         if (runtimeRef.current === runtime) runtimeRef.current = null;
         loadedKeyRef.current = null;
       });
@@ -335,7 +364,7 @@ export function MmdVrStageContent() {
     sun.color.set(cfg.sunColor);
     sun.castShadow = getMmdVrRenderProfile(useMmdVrStore.getState().prefs).shadows;
     runtime.setLighting({
-      envIntensity: cfg.envIntensity,
+      envIntensity: 0,
       ambientIntensity: cfg.ambient,
       directionalLight: sun,
       envMap: null,
@@ -380,6 +409,88 @@ export function MmdVrStageContent() {
     setMmdVrClockDuration(runtime.duration);
   }
 
+  function syncObjects() {
+    const list = [...objectsRef.current.entries()].map(([id, entry]) => ({
+      id,
+      name: entry.name,
+      visible: entry.group.visible,
+      scale: entry.group.scale.x,
+      rotationY: entry.group.rotation.y,
+    }));
+    setObjects(list);
+  }
+
+  function disposeGroupResources(group: THREE.Group) {
+    group.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.geometry?.dispose();
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const material of materials) {
+        if (!material) continue;
+        for (const value of Object.values(material)) {
+          if (value instanceof THREE.Texture) value.dispose();
+        }
+        material.dispose();
+      }
+    });
+  }
+
+  function disposeObjectEntry(id: string, entry: MmdVrObjectRef) {
+    scene.remove(entry.group);
+    disposeGroupResources(entry.group);
+    entry.revoke();
+    objectsRef.current.delete(id);
+  }
+
+  function disposeAllObjects() {
+    for (const [id, entry] of [...objectsRef.current.entries()]) disposeObjectEntry(id, entry);
+  }
+
+  async function loadObjectSlot(
+    slot: MmdVrObjectSlot,
+    id: string,
+    offsetX: number,
+    isStale: () => boolean,
+  ): Promise<void> {
+    const { loader, url, revoke } = createMmdVrGltfLoader(slot.objectFile, slot.companionFiles);
+    return new Promise<void>((resolve, reject) => {
+      loader.load(
+        url,
+        (gltf) => {
+          if (isStale()) {
+            revoke();
+            disposeGroupResources(gltf.scene);
+            resolve();
+            return;
+          }
+          const group = gltf.scene;
+          group.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+              child.frustumCulled = false;
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
+          });
+          group.position.set(offsetX, 0, OBJECT_DEFAULT_Z);
+          scene.add(group);
+          objectsRef.current.set(id, {
+            group,
+            name: slot.objectFile.name.replace(/\.(gltf|glb)$/i, ""),
+            revoke,
+            defaultPosition: [offsetX, 0, OBJECT_DEFAULT_Z],
+          });
+          resolve();
+        },
+        undefined,
+        (error) => {
+          revoke();
+          reject(error instanceof Error ? error : new Error(String(error)));
+        },
+      );
+    });
+  }
+
   useEffect(() => {
     if (seekEpoch === lastSeekEpochRef.current) return;
     lastSeekEpochRef.current = seekEpoch;
@@ -392,19 +503,23 @@ export function MmdVrStageContent() {
   useEffect(() => {
     const slots = getMmdVrSessionAssets();
     const loadKey = slots
-      .map((s) => `${s.modelFile.name}:${s.modelFile.size}:${s.bodyMotionFile?.name ?? ""}`)
+      .map((slot) => slot.kind === "model"
+        ? `m:${slot.modelFile.name}:${slot.modelFile.size}:${slot.bodyMotionFile?.name ?? ""}`
+        : `o:${slot.objectFile.name}:${slot.objectFile.size}`)
       .join("|");
 
     if (!slots.length) {
       setStatusLine(labelsRef.current.empty);
       setModels([]);
+      setObjects([]);
       setDuration(0);
       resetMmdVrClock();
       return;
     }
 
-    if (loadedKeyRef.current === loadKey && runtime.listModels().length > 0) {
+    if (loadedKeyRef.current === loadKey && (runtime.listModels().length > 0 || objectsRef.current.size > 0)) {
       syncModelList();
+      syncObjects();
       return;
     }
 
@@ -414,11 +529,12 @@ export function MmdVrStageContent() {
     queueMicrotask(() => void (async () => {
       if (cancelled || gen !== loadGenRef.current) return;
       try {
-        let index = 0;
         const failures: string[] = [];
-        for (const slot of slots) {
+        const modelSlots = slots.filter((slot): slot is MmdVrModelSlot => slot.kind === "model");
+        let modelIndex = 0;
+        for (const slot of modelSlots) {
           if (cancelled || gen !== loadGenRef.current) return;
-          const offsetX = (index - (slots.length - 1) / 2) * 1.1;
+          const offsetX = (modelIndex - (modelSlots.length - 1) / 2) * 1.1;
           try {
             const report = await runtime.addModel(slot.modelFile, slot.companionFiles, {
               physics: false,
@@ -444,12 +560,30 @@ export function MmdVrStageContent() {
             failures.push(slot.modelFile.name);
             console.error(`[mmdVr] model load failed: ${slot.modelFile.name}`, error);
           }
-          index += 1;
+          modelIndex += 1;
+        }
+        const objectSlots = slots.filter((slot): slot is MmdVrObjectSlot => slot.kind === "object");
+        let objectIndex = 0;
+        for (const slot of objectSlots) {
+          if (cancelled || gen !== loadGenRef.current) return;
+          const id = `object:${relativePath(slot.objectFile)}`;
+          const offsetX = (objectIndex - (objectSlots.length - 1) / 2) * 1.4;
+          try {
+            await loadObjectSlot(slot, id, offsetX, () => cancelled || gen !== loadGenRef.current);
+          } catch (error) {
+            failures.push(slot.objectFile.name);
+            console.error(`[mmdVr] object load failed: ${slot.objectFile.name}`, error);
+          }
+          objectIndex += 1;
         }
         if (cancelled || gen !== loadGenRef.current) return;
         loadedKeyRef.current = loadKey;
         timeRef.current = 0;
+        // Force an evaluation on the next frame so static models (no motion,
+        // no physics) are posed/bound after the async load finishes.
+        lastEvaluatedTimeRef.current = -Infinity;
         syncModelList();
+        syncObjects();
         setStatusLine(failures.length ? `${labelsRef.current.failed}: ${failures.join(", ").slice(0, 36)}` : null);
         setMmdVrClockTime(0, true);
         if (runtime.duration > 0) setPlaying(true);
@@ -458,14 +592,17 @@ export function MmdVrStageContent() {
         const msg = err instanceof Error ? err.message : String(err);
         console.error("[mmdVr] load failed", err);
         setStatusLine(`${labelsRef.current.failed}: ${msg.slice(0, 28)}`);
+        // Partially loaded models still need an evaluation pass.
+        lastEvaluatedTimeRef.current = -Infinity;
         syncModelList();
+        syncObjects();
       }
     })());
 
     return () => {
       cancelled = true;
     };
-  }, [runtime, setDuration, setModels, setPlaying, setStatusLine]);
+  }, [runtime, setDuration, setModels, setObjects, setPlaying, setStatusLine]);
 
   useFrame((_, delta) => {
     applyLighting();
@@ -474,32 +611,49 @@ export function MmdVrStageContent() {
     let modelTransformChanged = false;
     const removals = store.physicsBusy ? [] : store.takeModelRemovals();
     if (removals.length) {
-      for (const id of removals) runtime.removeModel(id);
+      for (const id of removals) {
+        const objectEntry = objectsRef.current.get(id);
+        if (objectEntry) disposeObjectEntry(id, objectEntry);
+        else runtime.removeModel(id);
+      }
       syncModelList();
+      syncObjects();
     }
     const toggles = store.physicsBusy ? [] : store.takeVisibilityToggles();
     if (toggles.length) {
       for (const id of toggles) {
+        const objectEntry = objectsRef.current.get(id);
+        if (objectEntry) {
+          objectEntry.group.visible = !objectEntry.group.visible;
+          continue;
+        }
         const entry = runtime.listModels().find((m) => m.id === id);
         if (entry) runtime.setModelVisible(id, !entry.visible);
       }
       syncModelList();
+      syncObjects();
     }
 
     const place = store.physicsBusy ? null : store.takeGroundPlace();
     if (place) {
       const models = runtime.listModels();
+      const objectIds = [...objectsRef.current.keys()];
       const targetId =
-        (store.placeModelId && models.some((m) => m.id === store.placeModelId)
+        (store.placeModelId && (models.some((m) => m.id === store.placeModelId) || objectIds.includes(store.placeModelId))
           ? store.placeModelId
-          : models.find((m) => m.visible)?.id) ?? models[0]?.id;
+          : models.find((m) => m.visible)?.id) ?? models[0]?.id ?? objectIds[0];
       if (targetId) {
-        runtime.setModelTransform(targetId, {
-          positionX: place.x,
-          positionY: 0,
-          positionZ: place.z,
-        });
-        modelTransformChanged = true;
+        const objectEntry = objectsRef.current.get(targetId);
+        if (objectEntry) {
+          objectEntry.group.position.set(place.x, 0, place.z);
+        } else {
+          runtime.setModelTransform(targetId, {
+            positionX: place.x,
+            positionY: 0,
+            positionZ: place.z,
+          });
+          modelTransformChanged = true;
+        }
         if (store.placeModelId !== targetId) {
           store.setPlaceModelId(targetId);
         }
@@ -510,6 +664,18 @@ export function MmdVrStageContent() {
     if (transformRequests.length) {
       const models = runtime.listModels();
       for (const request of transformRequests) {
+        const objectEntry = objectsRef.current.get(request.id);
+        if (objectEntry) {
+          if (request.reset) {
+            objectEntry.group.position.set(...objectEntry.defaultPosition);
+            objectEntry.group.scale.setScalar(1);
+            objectEntry.group.rotation.y = 0;
+          } else {
+            if (request.scale != null) objectEntry.group.scale.setScalar(request.scale);
+            if (request.rotationY != null) objectEntry.group.rotation.y = request.rotationY;
+          }
+          continue;
+        }
         if (request.reset) {
           const index = models.findIndex((model) => model.id === request.id);
           const positionX = index >= 0 ? (index - (models.length - 1) / 2) * 1.1 : 0;
@@ -532,6 +698,7 @@ export function MmdVrStageContent() {
         });
       }
       syncModelList();
+      syncObjects();
       modelTransformChanged = true;
     }
 
@@ -579,7 +746,16 @@ export function MmdVrStageContent() {
       perspective.updateProjectionMatrix();
     }
     const evaluationTime = duration > 0 ? timeRef.current : physicsOnlyTimeRef.current;
-    rt.update(evaluationTime, physicsEnabled && !physicsBusy, perspective, aspect, false);
+    const physicsOn = physicsEnabled && !physicsBusy;
+    // Paused + no physics: bone/IK/morph evaluation would recompute identical
+    // results, so skip it and keep rendering the frozen pose. Physics must
+    // keep stepping when enabled so controller collisions stay alive, and a
+    // seek while paused must still re-evaluate the target frame once.
+    const timeChanged = Math.abs(evaluationTime - lastEvaluatedTimeRef.current) > 1e-5;
+    if (playingRef.current || physicsOn || timeChanged) {
+      rt.update(evaluationTime, physicsOn, perspective, aspect, false);
+      lastEvaluatedTimeRef.current = evaluationTime;
+    }
     hapticContactPollRef.current += delta;
     if (hapticContactPollRef.current >= MMD_VR_HAPTIC_POLL_INTERVAL) {
       hapticContactPollRef.current %= MMD_VR_HAPTIC_POLL_INTERVAL;
@@ -624,8 +800,8 @@ export function MmdVrStageContent() {
   return (
     <>
       <color attach="background" args={[STAGE_BG]} />
-      <fog attach="fog" args={[STAGE_BG, Math.min(10, viewDistance * 0.45), viewDistance]} />
-      <StageSky zenith={lightCfg.skyZenith} horizon={lightCfg.skyHorizon} />
+      <fog attach="fog" args={[lightCfg.fogColor, Math.min(10, viewDistance * 0.45), viewDistance]} />
+      <StageSky zenith={lightCfg.skyZenith} horizon={lightCfg.skyHorizon} bottom={lightCfg.fogColor} />
       <ambientLight color={lightCfg.ambientColor} intensity={lightCfg.ambient} />
       <directionalLight
         ref={sunRef}
@@ -636,11 +812,11 @@ export function MmdVrStageContent() {
         shadow-mapSize-width={profile.shadows ? profile.shadowMapSize : 256}
         shadow-mapSize-height={profile.shadows ? profile.shadowMapSize : 256}
         shadow-camera-near={0.5}
-        shadow-camera-far={24}
-        shadow-camera-left={-6}
-        shadow-camera-right={6}
-        shadow-camera-top={6}
-        shadow-camera-bottom={-6}
+        shadow-camera-far={shadowFar}
+        shadow-camera-left={-shadowExtent}
+        shadow-camera-right={shadowExtent}
+        shadow-camera-top={shadowExtent}
+        shadow-camera-bottom={-shadowExtent}
       />
       <hemisphereLight args={[lightCfg.hemiSky, lightCfg.hemiGround, lightCfg.hemi]} />
       <StageFloor
@@ -648,6 +824,7 @@ export function MmdVrStageContent() {
         shadows={profile.shadows}
         placeMode={placeMode}
         themeColor={mmdPrefs.themeColor}
+        floorColor={lightCfg.floorColor}
       />
       {profile.showGrid ? (
         <gridHelper

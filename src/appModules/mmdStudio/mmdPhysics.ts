@@ -54,6 +54,9 @@ export async function createBulletPhysicsBackend(options: {
   controllerColliders?: MmdControllerColliderProvider;
   controllerRadius?: number | (() => number);
   quality?: () => MmdPhysicsQuality;
+  boneFeedbackScale?: () => number;
+  controllerFriction?: () => number;
+  controllerRestitution?: () => number;
 } = {}): Promise<MmdPhysicsBackend> {
   const { createCustomBulletMmdPhysicsBackend } = await import("@yohawing/three-mmd-loader/physics");
   const module = await loadBulletModule();
@@ -62,7 +65,7 @@ export async function createBulletPhysicsBackend(options: {
     fixedTimeStep: 1 / 60,
     maxSubSteps: qualityOptions.maxSubSteps,
     resetCatchUpSteps: 0,
-    dynamicWithBoneRotationFeedbackScale: 1,
+    dynamicWithBoneRotationFeedbackScale: options.boneFeedbackScale?.() ?? 1,
     solverIterations: qualityOptions.solverIterations,
     splitImpulse: true,
     splitImpulsePenetrationThreshold: -0.04,
@@ -72,11 +75,19 @@ export async function createBulletPhysicsBackend(options: {
     backendOptions,
   );
   return options.controllerColliders
-    ? createControllerColliderPhysicsBackend(backend, options.controllerColliders, options.controllerRadius, () => {
-        const next = PHYSICS_QUALITY_OPTIONS[options.quality?.() ?? "medium"];
-        backendOptions.maxSubSteps = next.maxSubSteps;
-        backendOptions.solverIterations = next.solverIterations;
-      })
+    ? createControllerColliderPhysicsBackend(
+        backend,
+        options.controllerColliders,
+        options.controllerRadius,
+        () => {
+          const next = PHYSICS_QUALITY_OPTIONS[options.quality?.() ?? "medium"];
+          backendOptions.maxSubSteps = next.maxSubSteps;
+          backendOptions.solverIterations = next.solverIterations;
+          backendOptions.dynamicWithBoneRotationFeedbackScale = options.boneFeedbackScale?.() ?? 1;
+        },
+        options.controllerFriction,
+        options.controllerRestitution,
+      )
     : backend;
 }
 
@@ -85,6 +96,8 @@ export function createControllerColliderPhysicsBackend(
   getMatrices: MmdControllerColliderProvider,
   radius: number | (() => number) = 0.08,
   beforeStep?: () => void,
+  friction: number | (() => number) = 0.5,
+  restitution: number | (() => number) = 0,
 ): MmdControllerColliderPhysicsBackend {
   let sourceSkeleton: MmdPhysicsStepContext["skeleton"];
   let sourceRigidBodies: MmdPhysicsStepContext["rigidBodies"];
@@ -92,6 +105,8 @@ export function createControllerColliderPhysicsBackend(
   let augmentedRigidBodies: NonNullable<MmdPhysicsStepContext["rigidBodies"]> | undefined;
   let cachedColliderCount = -1;
   let cachedRadius = -1;
+  let cachedFriction = -1;
+  let cachedRestitution = -1;
   let cachedControllerGroup = -1;
   let directBuffers: ReturnType<MmdDirectBufferPhysicsBackend["acquireStepBuffers"]>;
   let directColliderCount: number | undefined;
@@ -125,6 +140,8 @@ export function createControllerColliderPhysicsBackend(
         throw new Error("Controller collider count changed after direct buffers were acquired");
       }
       const colliderRadius = Math.max(0.001, typeof radius === "function" ? radius() : radius);
+      const colliderFriction = Math.max(0, Math.min(1, typeof friction === "function" ? friction() : friction));
+      const colliderRestitution = Math.max(0, Math.min(1, typeof restitution === "function" ? restitution() : restitution));
       const controllerGroup = chooseControllerCollisionGroup(context.rigidBodies);
       const controllerGroupMask = 1 << controllerGroup;
       if (
@@ -132,12 +149,16 @@ export function createControllerColliderPhysicsBackend(
         sourceRigidBodies !== context.rigidBodies ||
         cachedColliderCount !== colliderCount ||
         cachedRadius !== colliderRadius ||
+        cachedFriction !== colliderFriction ||
+        cachedRestitution !== colliderRestitution ||
         cachedControllerGroup !== controllerGroup
       ) {
         sourceSkeleton = context.skeleton;
         sourceRigidBodies = context.rigidBodies;
         cachedColliderCount = colliderCount;
         cachedRadius = colliderRadius;
+        cachedFriction = colliderFriction;
+        cachedRestitution = colliderRestitution;
         cachedControllerGroup = controllerGroup;
         augmentedSkeleton = {
           bones: [
@@ -165,8 +186,8 @@ export function createControllerColliderPhysicsBackend(
             localTranslation: [0, 0, 0] as const,
             localRotation: [0, 0, 0, 1] as const,
             mass: 0,
-            friction: 0.5,
-            restitution: 0,
+            friction: colliderFriction,
+            restitution: colliderRestitution,
             collisionGroup: controllerGroup,
             collisionMask: 0xffff,
           })),

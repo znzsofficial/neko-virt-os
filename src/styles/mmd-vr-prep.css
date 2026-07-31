@@ -137,7 +137,7 @@
   border: 1px solid transparent;
   border-radius: 12px;
   display: grid;
-  grid-template-columns: 32px 1fr auto;
+  grid-template-columns: 32px 1fr auto auto;
   align-items: center;
   gap: 10px;
   color: inherit;
@@ -147,9 +147,13 @@
 
 .mmd-vr-prep-model.is-selected { border-color: color-mix(in oklab, var(--os-primary) 55%, var(--os-border)); }
 .mmd-vr-prep-model > span { color: var(--os-muted); font: 700 11px/1 ui-monospace, monospace; }
-.mmd-vr-prep-model strong, .mmd-vr-prep-model small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mmd-vr-prep-model small { margin-top: 4px; color: var(--os-muted); }
+.mmd-vr-prep-model-info { all: unset; cursor: pointer; min-width: 0; }
+.mmd-vr-prep-model-info strong, .mmd-vr-prep-model-info small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mmd-vr-prep-model-info small { margin-top: 4px; color: var(--os-muted); }
 .mmd-vr-prep-model > iconify-icon { color: var(--os-primary); }
+.mmd-vr-prep-icon-btn { all: unset; cursor: pointer; display: inline-grid; place-items: center; padding: 4px; border-radius: 8px; color: var(--os-muted); }
+.mmd-vr-prep-icon-btn:hover { background: color-mix(in oklab, var(--os-primary) 12%, transparent); }
+.mmd-vr-prep-remove:hover { color: #ef4444; }
 .mmd-vr-prep-empty { margin-top: 18px; padding: 32px; border: 1px dashed var(--os-border); border-radius: 12px; color: var(--os-muted); text-align: center; }
 
 .mmd-vr-prep-motion-grid {

@@ -114,6 +114,41 @@ describe("MMD VR adjustments", () => {
     expect(useMmdVrStore.getState().takeModelRemovals()).toEqual([]);
   });
 
+  it("applies object transforms through the shared id queues", () => {
+    useMmdVrStore.setState({
+      objects: [{ id: "object:chair.glb", name: "chair", visible: true, scale: 1, rotationY: 0 }],
+    });
+    const store = useMmdVrStore.getState();
+    store.requestModelScale("object:chair.glb", 2);
+    useMmdVrStore.getState().requestModelRotation("object:chair.glb", 90);
+
+    expect(useMmdVrStore.getState().objects[0]).toMatchObject({ scale: 2, rotationY: 90 });
+    expect(useMmdVrStore.getState().takeModelTransformRequests()).toEqual([
+      { id: "object:chair.glb", scale: 2, rotationY: 90 },
+    ]);
+
+    useMmdVrStore.getState().requestModelReset("object:chair.glb");
+    expect(useMmdVrStore.getState().objects[0]).toMatchObject({ scale: 1, rotationY: 0 });
+    expect(useMmdVrStore.getState().takeModelTransformRequests()).toEqual([
+      { id: "object:chair.glb", reset: true },
+    ]);
+  });
+
+  it("queues objects for removal and picks objects for placement", () => {
+    useMmdVrStore.setState({
+      objects: [{ id: "object:table.glb", name: "table", visible: true, scale: 1, rotationY: 0 }],
+      models: [],
+      modelCount: 0,
+    });
+    const store = useMmdVrStore.getState();
+    store.enqueueModelRemoval("object:table.glb");
+    expect(useMmdVrStore.getState().takeModelRemovals()).toEqual(["object:table.glb"]);
+
+    useMmdVrStore.getState().setPlaceMode(true);
+    expect(useMmdVrStore.getState().placeModelId).toBe("object:table.glb");
+    useMmdVrStore.getState().setPlaceMode(false);
+  });
+
   it("cycles through all six lighting modes", () => {
     useMmdVrStore.getState().setPrefs({ lightPreset: "stage" });
     const seen = [useMmdVrStore.getState().prefs.lightPreset];
@@ -188,6 +223,27 @@ describe("MMD VR adjustments", () => {
       physicsControllerCollisions: true,
       physicsHapticLevel: "off",
       physicsResetEpoch: 0,
+    });
+  });
+
+  it("cycles physics tuning tiers and restores defaults after exit", () => {
+    const store = useMmdVrStore.getState();
+    store.cyclePhysicsBoneFeedback();
+    useMmdVrStore.getState().cyclePhysicsColliderFriction();
+    useMmdVrStore.getState().cyclePhysicsColliderRestitution();
+
+    expect(useMmdVrStore.getState()).toMatchObject({
+      physicsBoneFeedback: "hard",
+      physicsColliderFriction: "high",
+      physicsColliderRestitution: "low",
+    });
+
+    useMmdVrStore.getState().closeOverlay();
+
+    expect(useMmdVrStore.getState()).toMatchObject({
+      physicsBoneFeedback: "normal",
+      physicsColliderFriction: "medium",
+      physicsColliderRestitution: "none",
     });
   });
 });

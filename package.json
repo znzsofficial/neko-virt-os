@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "license": "Apache-2.0",
   "type": "module",
-  "packageManager": "pnpm@11.17.0",
+  "packageManager": "pnpm@11.18.0",
   "engines": {
     "node": ">=22.13.0",
     "pnpm": ">=11.17.0"
@@ -31,9 +31,9 @@
     "fuse.js": "^7.5.0",
     "jsqr": "^1.4.0",
     "marked": "^18.0.7",
-    "mediabunny": "^1.51.0",
+    "mediabunny": "^1.52.1",
     "nanoid": "^6.0.0",
-    "postprocessing": "^6.39.3",
+    "postprocessing": "^6.39.4",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -51,12 +51,12 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@types/three": "^0.185.1",
-    "@vitejs/plugin-react": "^6.0.4",
+    "@vitejs/plugin-react": "^6.0.5",
     "eslint": "^10.8.0",
     "jsdom": "latest",
     "prettier": "^3.9.6",
     "typescript": "^7.0.2",
-    "vite": "^8.1.5",
+    "vite": "^8.2.0",
     "vitest": "latest"
   }
 }

@@ -1,6 +1,6 @@
 # MMD Studio — 进度与约定
 
-最后更新：2026-07-27（`@yohawing/three-mmd-loader@0.7.0`）
+最后更新：2026-07-31（`@yohawing/three-mmd-loader@0.7.0`）
 
 文档索引：[docs/README.md](./README.md)
 
@@ -197,6 +197,7 @@ docs/mmd-studio.md
 - 这会持续增加显存带宽与 CPU/GPU 占用，在高 DPR、PostFX 和大型纹理包下明显降低 context-loss 余量。
 - 位置：`MmdCanvas.tsx` renderer config / `useFrame`、`mmdRuntime.ts#update`。
 - 修复方向：正常预览关闭 preserved buffer，截图走显式 render target；暂停时 demand render；仅播放、录制、物理 settling、控制器交互或动态效果时连续渲染。
+- 经验参照（MMD VR 已实现「暂停 && 物理关时跳过 `runtime.update`」，见 `MmdVrStage.tsx`）：模型异步加载期间首帧会先把 `lastEvaluatedTimeRef` 置为当前时间，若加载完成后不补一次求值，`evaluationTime` 未变 → `update` 被永久跳过 → 骨骼从未求值、材质 enhance 从未初始化；修复是在加载完成回调里把 `lastEvaluatedTimeRef` 重置为 `-Infinity` 强制下一帧求值。若未来在 Studio 做 demand-render，必须采用同样的「加载完成后标记需求值」方案。且 Studio 暂停时 morph 权重与材质 override 依赖 `update` 内 `applyMorphOverrides`/材质同步实时生效，跳过整段会破坏侧栏即时预览；若要跳过，只能在 `mmdRuntime.update` 内按「时间未变 && 物理关」跳过 WASM 骨骼求值、保留 morph/材质/相机应用。
 
 #### 11. 录制音频 graph 和 track 没有完整释放（已确认）
 
