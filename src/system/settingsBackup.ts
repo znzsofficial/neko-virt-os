@@ -126,6 +126,12 @@ const mmdVrPrefsSchema = z.strictObject({
   advancedRenderOverrides: z.boolean().default(false),
   detailedPhysicsDiagnostics: z.boolean().default(false),
   panelFollowUser: z.boolean().default(true),
+  physicsColliderRadius: z.number().default(0.08),
+  physicsQuality: z.enum(["low", "medium", "high"]).default("medium"),
+  physicsBoneFeedback: z.enum(["soft", "normal", "hard"]).default("normal"),
+  physicsColliderFriction: z.enum(["low", "medium", "high"]).default("medium"),
+  physicsColliderRestitution: z.enum(["none", "low", "high"]).default("none"),
+  physicsHapticLevel: z.enum(["off", "low", "normal"]).default("low"),
 });
 
 const settingsBackupV2Schema = z.strictObject({

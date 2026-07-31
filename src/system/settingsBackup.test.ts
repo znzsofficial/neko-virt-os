@@ -112,6 +112,12 @@ function createBackup(): SettingsBackup {
       advancedRenderOverrides: true,
       detailedPhysicsDiagnostics: true,
       panelFollowUser: true,
+      physicsColliderRadius: 0.12,
+      physicsQuality: "high",
+      physicsBoneFeedback: "hard",
+      physicsColliderFriction: "high",
+      physicsColliderRestitution: "low",
+      physicsHapticLevel: "normal",
     },
   };
 }

@@ -14,9 +14,9 @@ type MmdDebugContact = { rigidBodyIndexA: number; rigidBodyIndexB: number };
 const MAX_DEBUG_CONTACTS = 256;
 
 const PHYSICS_QUALITY_OPTIONS: Record<MmdPhysicsQuality, { maxSubSteps: number; solverIterations: number }> = {
-  low: { maxSubSteps: 2, solverIterations: 6 },
-  medium: { maxSubSteps: 5, solverIterations: 10 },
-  high: { maxSubSteps: 8, solverIterations: 16 },
+  low: { maxSubSteps: 3, solverIterations: 15 },
+  medium: { maxSubSteps: 5, solverIterations: 20 },
+  high: { maxSubSteps: 8, solverIterations: 20 },
 };
 export type MmdControllerColliderPhysicsBackend = MmdPhysicsBackend & Partial<MmdDirectBufferPhysicsBackend> & {
   debugControllerContactCount: (controllerIndex?: number) => number;

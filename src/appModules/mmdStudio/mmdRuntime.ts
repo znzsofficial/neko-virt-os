@@ -15,6 +15,7 @@ import {
   applyMaterialOverrides,
   applyMaterialVisibility,
   createDefaultMaterialOverrides,
+  getMeshMaterials,
   mergeMaterialOverride,
   refreshMaterialTextures,
   stripWebGlOnlyMaterialShaders,
@@ -292,9 +293,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
   }
 
   function isStrippedForWebGpu(entry: RuntimeEntryWithPhysics) {
-    const mats = Array.isArray(entry.model.mesh.material)
-      ? entry.model.mesh.material
-      : [entry.model.mesh.material];
+    const mats = getMeshMaterials(entry.model.mesh);
     return mats.some((m) => m?.userData?.mmdWebGpuStripped);
   }
 
@@ -791,7 +790,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       ensureTslLightBinding();
       for (const entry of entries.values()) {
         if (entry.tslAttached || entry.tslPending) continue;
-        const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
+        const materials = getMeshMaterials(entry.model.mesh);
         if (directionalLight) syncMmdSpecularDirection(materials, directionalLight);
         applyMaterialOverrides(entry, lightingContext());
       }
@@ -871,10 +870,10 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
         try {
           syncEntryWorldMatrix(entry, true);
           entry.model.runtime.seek(ahead);
-          entry.model.update(ahead, { physics: true, ik: true });
+          entry.model.update(ahead, { physics: true, ik: entry.bodyAnimation != null });
           syncEntryWorldMatrix(entry, true);
           entry.model.runtime.seek(t);
-          entry.model.update(t, { physics: true, ik: true });
+          entry.model.update(t, { physics: true, ik: entry.bodyAnimation != null });
           // Restore visual scale after physics rebind.
           syncEntryWorldMatrix(entry, false);
           lastPhysicsSeconds.set(entry.id, t);
@@ -947,7 +946,8 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
           }
         }
 
-        entry.model.update(seconds, { physics: physicsOn, ik: true });
+        const hasBodyMotion = entry.bodyAnimation != null;
+        entry.model.update(seconds, { physics: physicsOn, ik: hasBodyMotion });
         if (physicsOn) {
           lastPhysicsSeconds.set(entry.id, seconds);
         } else if (!wantPhysics) {
@@ -961,7 +961,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
         if (entry.tslAttached) {
           enforceModelCastOnlyShadows(entry.model.root, { receiveOnly: true });
         } else if (!entry.tslPending) {
-          const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
+          const materials = getMeshMaterials(entry.model.mesh);
           if (directionalLight) syncMmdSpecularDirection(materials, directionalLight);
           applyMaterialOverrides(entry, lightingContext());
           enforceModelCastOnlyShadows(entry.model.root);

@@ -16,7 +16,7 @@ import {
   setMmdVrClockTime,
 } from "../mmdVrClock";
 import { getMmdVrRenderProfile } from "../mmdVrQuality";
-import { useMmdVrStore, type MmdVrLightPreset } from "../mmdVrStore";
+import { useMmdVrStore, type MmdVrLightPreset, type MmdVrMaterialState } from "../mmdVrStore";
 import { getXrAccentTokens } from "../../xr";
 import { prepareMmdVrModel } from "../prepareMmdVrModel";
 import { getMmdVrControllerColliderMatrices } from "../mmdVrControllerColliders";
@@ -237,6 +237,8 @@ export function MmdVrStageContent() {
   const shadowFar = profile.quality === "high" ? 24 : profile.quality === "balanced" ? 20 : 16;
   const setPlaying = useMmdVrStore((s) => s.setPlaying);
   const setModels = useMmdVrStore((s) => s.setModels);
+  const setMaterialModels = useMmdVrStore((s) => s.setMaterialModels);
+  const setRuntimeRef = useMmdVrStore((s) => s.setRuntimeRef);
   const setObjects = useMmdVrStore((s) => s.setObjects);
   const setDuration = useMmdVrStore((s) => s.setDuration);
   const setStatusLine = useMmdVrStore((s) => s.setStatusLine);
@@ -297,25 +299,35 @@ export function MmdVrStageContent() {
       webGpu: false,
       controllerColliders: getMmdVrControllerColliderMatrices,
       controllerCollidersEnabled: () => useMmdVrStore.getState().physicsControllerCollisions,
-      controllerColliderRadius: () => useMmdVrStore.getState().physicsColliderRadius,
-      physicsQuality: () => useMmdVrStore.getState().physicsQuality,
+      controllerColliderRadius: () => useMmdVrStore.getState().prefs.physicsColliderRadius,
+      physicsQuality: () => useMmdVrStore.getState().prefs.physicsQuality,
       physicsBoneFeedbackScale: () => {
         const map = { soft: 0.35, normal: 1, hard: 1.8 } as const;
-        return map[useMmdVrStore.getState().physicsBoneFeedback];
+        return map[useMmdVrStore.getState().prefs.physicsBoneFeedback];
       },
       controllerColliderFriction: () => {
         const map = { low: 0.2, medium: 0.5, high: 0.9 } as const;
-        return map[useMmdVrStore.getState().physicsColliderFriction];
+        return map[useMmdVrStore.getState().prefs.physicsColliderFriction];
       },
       controllerColliderRestitution: () => {
         const map = { none: 0, low: 0.25, high: 0.55 } as const;
-        return map[useMmdVrStore.getState().physicsColliderRestitution];
+        return map[useMmdVrStore.getState().prefs.physicsColliderRestitution];
       },
       prepareModel: prepareMmdVrModel,
     });
     runtimeRef.current = handle;
     return handle;
   }, [scene]);
+
+  useEffect(() => {
+    const handle = runtimeRef.current;
+    if (!handle) return;
+    setRuntimeRef({
+      setMaterialVisible: (modelId, materialName, visible) => handle.setMaterialVisible(modelId, materialName, visible),
+      setMaterialOverride: (modelId, materialName, patch) => handle.setMaterialOverride(modelId, materialName, patch),
+    });
+    return () => setRuntimeRef(null);
+  }, [runtime, setRuntimeRef]);
 
   useEffect(() => {
     let cancelled = false;
@@ -407,6 +419,24 @@ export function MmdVrStageContent() {
     setModels(list);
     setDuration(runtime.duration);
     setMmdVrClockDuration(runtime.duration);
+  }
+
+  function syncMaterialModels() {
+    const assets = runtime.exportProjectModels();
+    for (const model of assets) {
+      const materialNames = Object.keys(model.materialOverrides);
+      const materials: MmdVrMaterialState[] = materialNames.map((name: string) => {
+        const override = model.materialOverrides[name];
+        return {
+          name,
+          visible: model.materialVisible[name] !== false,
+          opacity: override?.opacity ?? 1,
+          roughness: override?.roughness ?? 0.55,
+          metallic: override?.metallic ?? 0,
+        };
+      });
+      setMaterialModels(model.id, materials);
+    }
   }
 
   function syncObjects() {
@@ -583,6 +613,7 @@ export function MmdVrStageContent() {
         // no physics) are posed/bound after the async load finishes.
         lastEvaluatedTimeRef.current = -Infinity;
         syncModelList();
+        syncMaterialModels();
         syncObjects();
         setStatusLine(failures.length ? `${labelsRef.current.failed}: ${failures.join(", ").slice(0, 36)}` : null);
         setMmdVrClockTime(0, true);
@@ -595,6 +626,7 @@ export function MmdVrStageContent() {
         // Partially loaded models still need an evaluation pass.
         lastEvaluatedTimeRef.current = -Infinity;
         syncModelList();
+        syncMaterialModels();
         syncObjects();
       }
     })());
@@ -617,6 +649,7 @@ export function MmdVrStageContent() {
         else runtime.removeModel(id);
       }
       syncModelList();
+      syncMaterialModels();
       syncObjects();
     }
     const toggles = store.physicsBusy ? [] : store.takeVisibilityToggles();
@@ -704,10 +737,14 @@ export function MmdVrStageContent() {
 
     if (modelTransformChanged && store.physicsEnabled && !store.physicsBusy) {
       runtime.resetPhysics(timeRef.current);
+      physicsOnlyTimeRef.current = 0;
     }
     if (store.physicsResetEpoch !== lastPhysicsResetEpochRef.current) {
       lastPhysicsResetEpochRef.current = store.physicsResetEpoch;
-      if (store.physicsEnabled && !store.physicsBusy) runtime.resetPhysics(timeRef.current);
+      if (store.physicsEnabled && !store.physicsBusy) {
+        runtime.resetPhysics(timeRef.current);
+        physicsOnlyTimeRef.current = 0;
+      }
     }
 
     const rt = runtimeRef.current;
@@ -732,9 +769,23 @@ export function MmdVrStageContent() {
         }
       }
     }
+    // No-motion physics: let Bullet settle for a few seconds (gravity sags
+    // clothes), then freeze the timeline so deltaSeconds=0 — Bullet stops
+    // stepping and the bone-feedback loop can't sustain oscillation.
+    // Matches the official viewer pattern (pause freezes elapsedSeconds).
+    // Exception: when controller collisions are on, keep stepping so the
+    // user can interact with cloth — Bullet needs deltaSeconds>0 to resolve
+    // controller penetration.
+    const controllerCollisionsActive = store.physicsEnabled
+      && !store.physicsBusy
+      && store.physicsControllerCollisions;
     if (store.physicsEnabled && !store.physicsBusy && duration <= 0) {
-      physicsOnlyTimeRef.current += simulationDelta;
-    } else if (!store.physicsEnabled) {
+      if (controllerCollisionsActive) {
+        physicsOnlyTimeRef.current += simulationDelta;
+      } else {
+        physicsOnlyTimeRef.current = Math.min(physicsOnlyTimeRef.current + simulationDelta, 5);
+      }
+    } else if (!store.physicsEnabled || duration > 0) {
       physicsOnlyTimeRef.current = 0;
     }
     setMmdVrClockTime(timeRef.current);
@@ -762,7 +813,7 @@ export function MmdVrStageContent() {
       if (store.physicsEnabled
         && !store.physicsBusy
         && store.physicsControllerCollisions
-        && store.physicsHapticLevel !== "off") {
+        && store.prefs.physicsHapticLevel !== "off") {
         setMmdVrHapticContacts(
           rt.getControllerContactCount(0) > 0,
           rt.getControllerContactCount(1) > 0,

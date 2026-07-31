@@ -102,15 +102,28 @@ export function disposeEnhancementTextures(material: THREE.Material) {
   delete userData.mmdEnhanceTextureRequestId;
 }
 
+const singleMaterialCache = new WeakMap<THREE.Material, THREE.Material[]>();
+
+export function getMeshMaterials(mesh: { material: THREE.Material | THREE.Material[] }): THREE.Material[] {
+  const mat = mesh.material;
+  if (Array.isArray(mat)) return mat;
+  let cached = singleMaterialCache.get(mat);
+  if (!cached) {
+    cached = [mat];
+    singleMaterialCache.set(mat, cached);
+  }
+  return cached;
+}
+
 export function disposeEntryEnhancementTextures(entry: MaterialPipelineEntry) {
-  const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
+  const materials = getMeshMaterials(entry.model.mesh);
   materials.forEach((material) => {
     if (material) disposeEnhancementTextures(material);
   });
 }
 
 async function syncEnhancementTextures(entry: MaterialPipelineEntry) {
-  const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
+  const materials = getMeshMaterials(entry.model.mesh);
   await Promise.all(materials.map(async (material, index) => {
     if (!material) return;
     const name = entry.materialNames[index] ?? `Material ${index + 1}`;
@@ -141,7 +154,7 @@ async function syncEnhancementTextures(entry: MaterialPipelineEntry) {
 }
 
 export function applyMaterialVisibility(entry: MaterialPipelineEntry) {
-  const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
+  const materials = getMeshMaterials(entry.model.mesh);
   materials.forEach((material, index) => {
     if (!material) return;
     const name = entry.materialNames[index] ?? `Material ${index + 1}`;
@@ -261,7 +274,7 @@ export function applyMaterialOverrides(
   const envIntensity = ctx.envIntensity ?? 0;
   const ambient = ctx.ambientIntensity ?? ambientIntensity;
 
-  const materials = Array.isArray(entry.model.mesh.material) ? entry.model.mesh.material : [entry.model.mesh.material];
+  const materials = getMeshMaterials(entry.model.mesh);
   materials.forEach((material, index) => {
     if (!material) return;
     const name = entry.materialNames[index] ?? `Material ${index + 1}`;

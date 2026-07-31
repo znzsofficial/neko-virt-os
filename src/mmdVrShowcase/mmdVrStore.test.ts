@@ -204,35 +204,40 @@ describe("MMD VR adjustments", () => {
     useMmdVrStore.getState().cyclePhysicsQuality();
     useMmdVrStore.getState().setPhysicsControllerCollisions(false);
     useMmdVrStore.getState().cyclePhysicsHapticLevel();
-    useMmdVrStore.getState().cyclePhysicsHapticLevel();
     useMmdVrStore.getState().requestPhysicsReset();
 
     expect(useMmdVrStore.getState()).toMatchObject({
-      physicsColliderRadius: 0.12,
-      physicsQuality: "high",
+      prefs: { physicsColliderRadius: 0.12, physicsQuality: "high" },
       physicsControllerCollisions: false,
-      physicsHapticLevel: "normal",
       physicsResetEpoch: 1,
     });
+    expect(useMmdVrStore.getState().prefs.physicsHapticLevel).toBe("normal");
 
     useMmdVrStore.getState().closeOverlay();
 
+    // Session-only fields reset; prefs fields persist.
     expect(useMmdVrStore.getState()).toMatchObject({
+      prefs: { physicsColliderRadius: 0.12, physicsQuality: "high" },
+      physicsControllerCollisions: true,
+      physicsResetEpoch: 0,
+    });
+    expect(useMmdVrStore.getState().prefs.physicsHapticLevel).toBe("normal");
+
+    // Restore prefs defaults for subsequent tests.
+    useMmdVrStore.getState().setPrefs({
       physicsColliderRadius: 0.08,
       physicsQuality: "medium",
-      physicsControllerCollisions: true,
-      physicsHapticLevel: "off",
-      physicsResetEpoch: 0,
+      physicsHapticLevel: "low",
     });
   });
 
-  it("cycles physics tuning tiers and restores defaults after exit", () => {
+  it("cycles physics tuning tiers and persists across exit", () => {
     const store = useMmdVrStore.getState();
     store.cyclePhysicsBoneFeedback();
     useMmdVrStore.getState().cyclePhysicsColliderFriction();
     useMmdVrStore.getState().cyclePhysicsColliderRestitution();
 
-    expect(useMmdVrStore.getState()).toMatchObject({
+    expect(useMmdVrStore.getState().prefs).toMatchObject({
       physicsBoneFeedback: "hard",
       physicsColliderFriction: "high",
       physicsColliderRestitution: "low",
@@ -240,7 +245,15 @@ describe("MMD VR adjustments", () => {
 
     useMmdVrStore.getState().closeOverlay();
 
-    expect(useMmdVrStore.getState()).toMatchObject({
+    // Prefs persist across session exit.
+    expect(useMmdVrStore.getState().prefs).toMatchObject({
+      physicsBoneFeedback: "hard",
+      physicsColliderFriction: "high",
+      physicsColliderRestitution: "low",
+    });
+
+    // Restore prefs defaults for subsequent tests.
+    useMmdVrStore.getState().setPrefs({
       physicsBoneFeedback: "normal",
       physicsColliderFriction: "medium",
       physicsColliderRestitution: "none",

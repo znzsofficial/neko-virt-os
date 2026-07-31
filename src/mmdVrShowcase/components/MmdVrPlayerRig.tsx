@@ -69,6 +69,10 @@ export function MmdVrPlayerRig({
   snapTurnLabel,
   exposureLabel,
   removeLabel,
+  materialsLabel,
+  materialOpacityLabel,
+  materialRoughnessLabel,
+  materialMetallicLabel,
   themeLabels,
   walkLabels,
   walkSpeedLabel,
@@ -128,6 +132,10 @@ export function MmdVrPlayerRig({
   snapTurnLabel: string;
   exposureLabel: string;
   removeLabel: string;
+  materialsLabel: string;
+  materialOpacityLabel: string;
+  materialRoughnessLabel: string;
+  materialMetallicLabel: string;
   themeLabels: [string, string, string, string, string];
   walkLabels: [string, string, string];
   walkSpeedLabel: string;
@@ -250,6 +258,10 @@ export function MmdVrPlayerRig({
         snapTurnLabel={snapTurnLabel}
         exposureLabel={exposureLabel}
         removeLabel={removeLabel}
+        materialsLabel={materialsLabel}
+        materialOpacityLabel={materialOpacityLabel}
+        materialRoughnessLabel={materialRoughnessLabel}
+        materialMetallicLabel={materialMetallicLabel}
         themeLabels={themeLabels}
         walkLabels={walkLabels}
         walkSpeedLabel={walkSpeedLabel}

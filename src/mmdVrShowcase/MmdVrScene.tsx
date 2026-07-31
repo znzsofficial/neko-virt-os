@@ -1,6 +1,7 @@
 import { Canvas } from "@react-three/fiber";
 import { XR } from "@react-three/xr";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
 import { useLanguageStore } from "../languageStore";
 import { useOsUiStore } from "../osUiStore";
 import { createXrSceneMountGuard } from "../xr";
@@ -26,6 +27,7 @@ export function MmdVrScene() {
   const [exiting, setExiting] = useState(false);
   const [hideExitHud, setHideExitHud] = useState(false);
   const exitGenRef = useRef(0);
+  const glRef = useRef<THREE.WebGLRenderer | null>(null);
 
   const { mountedRef } = useXrSceneLifecycle({
     isOverlayOpen: () => useMmdVrStore.getState().overlayOpen,
@@ -50,6 +52,17 @@ export function MmdVrScene() {
     }, 200);
   }
 
+  useEffect(() => () => {
+    const gl = glRef.current;
+    if (!gl) return;
+    glRef.current = null;
+    try {
+      gl.dispose();
+    } catch {
+      // ignore
+    }
+  }, []);
+
   return (
     <div
       className="vr-desktop-overlay mmd-vr-overlay"
@@ -67,6 +80,9 @@ export function MmdVrScene() {
         camera={{ position: [0, 1.5, 2.8], fov: 70, near: 0.05, far: mmdPrefs.viewDistance }}
         dpr={profile.dpr}
         frameloop="always"
+        onCreated={({ gl }) => {
+          glRef.current = gl as THREE.WebGLRenderer;
+        }}
       >
         <XR store={mmdVrXrStore}>
           <AttachPendingMmdVrSession />
@@ -145,6 +161,10 @@ export function MmdVrScene() {
             snapTurnLabel={t("settingsMmdVrSnapTurn")}
             exposureLabel={t("settingsMmdVrExposure")}
             removeLabel={t("settingsMmdVrRemoveModel")}
+            materialsLabel={t("settingsMmdVrMaterials")}
+            materialOpacityLabel={t("settingsMmdVrMaterialOpacity")}
+            materialRoughnessLabel={t("settingsMmdVrMaterialRoughness")}
+            materialMetallicLabel={t("settingsMmdVrMaterialMetallic")}
             themeLabels={[
               t("settingsMmdVrThemeBlue"),
               t("settingsMmdVrThemeCyan"),

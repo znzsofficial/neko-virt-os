@@ -40,12 +40,28 @@ export type MmdVrColliderRestitution = "none" | "low" | "high";
 
 export type MmdVrSessionPhase = "idle" | "entering" | "active" | "error";
 
+const EMPTY_STRING_ARRAY: readonly string[] = Object.freeze([]);
+const EMPTY_TRANSFORM_ARRAY: readonly { id: string; scale?: number; rotationY?: number; reset?: boolean }[] = Object.freeze([]);
+
 export type MmdVrModelEntry = {
   id: string;
   name: string;
   visible: boolean;
   scale: number;
   rotationY: number;
+};
+
+export type MmdVrMaterialState = {
+  name: string;
+  visible: boolean;
+  opacity: number;
+  roughness: number;
+  metallic: number;
+};
+
+export type MmdVrRuntimeRef = {
+  setMaterialVisible: (modelId: string, materialName: string, visible: boolean) => void;
+  setMaterialOverride: (modelId: string, materialName: string, patch: { opacity?: number; roughness?: number; metallic?: number }) => void;
 };
 
 export type MmdVrObjectEntry = {
@@ -78,6 +94,12 @@ export type MmdVrPrefs = {
   advancedRenderOverrides: boolean;
   detailedPhysicsDiagnostics: boolean;
   panelFollowUser: boolean;
+  physicsColliderRadius: number;
+  physicsQuality: MmdPhysicsQuality;
+  physicsBoneFeedback: MmdVrBoneFeedback;
+  physicsColliderFriction: MmdVrColliderFriction;
+  physicsColliderRestitution: MmdVrColliderRestitution;
+  physicsHapticLevel: MmdVrHapticLevel;
 };
 
 export const MMD_VR_PREFS_KEY = "neko-virt-os.mmd-vr-showcase.v2";
@@ -109,17 +131,11 @@ type MmdVrStore = {
   setPhysicsDebugEnabled: (enabled: boolean) => void;
   physicsControllerCollisions: boolean;
   setPhysicsControllerCollisions: (enabled: boolean) => void;
-  physicsColliderRadius: number;
-  cyclePhysicsColliderRadius: () => void;
-  physicsQuality: MmdPhysicsQuality;
-  cyclePhysicsQuality: () => void;
-  physicsHapticLevel: MmdVrHapticLevel;
   cyclePhysicsHapticLevel: () => void;
-  physicsBoneFeedback: MmdVrBoneFeedback;
+  cyclePhysicsColliderRadius: () => void;
+  cyclePhysicsQuality: () => void;
   cyclePhysicsBoneFeedback: () => void;
-  physicsColliderFriction: MmdVrColliderFriction;
   cyclePhysicsColliderFriction: () => void;
-  physicsColliderRestitution: MmdVrColliderRestitution;
   cyclePhysicsColliderRestitution: () => void;
   physicsResetEpoch: number;
   requestPhysicsReset: () => void;
@@ -137,6 +153,14 @@ type MmdVrStore = {
   modelCount: number;
   models: MmdVrModelEntry[];
   setModels: (models: MmdVrModelEntry[]) => void;
+  materialModels: Record<string, MmdVrMaterialState[]>;
+  setMaterialModels: (modelId: string, materials: MmdVrMaterialState[]) => void;
+  runtimeRef: MmdVrRuntimeRef | null;
+  setRuntimeRef: (ref: MmdVrRuntimeRef | null) => void;
+  setMaterialVisible: (modelId: string, materialName: string, visible: boolean) => void;
+  setMaterialParam: (modelId: string, materialName: string, param: "opacity" | "roughness" | "metallic", value: number) => void;
+  materialPanelModelId: string | null;
+  setMaterialPanelModelId: (id: string | null) => void;
   objects: MmdVrObjectEntry[];
   setObjects: (objects: MmdVrObjectEntry[]) => void;
   /** FIFO of model ids for stage to toggle visibility. */
@@ -204,6 +228,36 @@ export function normalizeMmdVrExposure(value: unknown): number {
   return Math.round(Math.min(1.3, Math.max(0.7, exposure)) * 10) / 10;
 }
 
+function normalizePhysicsQuality(value: unknown): MmdPhysicsQuality {
+  if (value === "low" || value === "medium" || value === "high") return value;
+  return "medium";
+}
+
+function normalizePhysicsColliderRadius(value: unknown): number {
+  const radius = typeof value === "number" && Number.isFinite(value) ? value : 0.08;
+  return [0.04, 0.08, 0.12, 0.16].includes(radius) ? radius : 0.08;
+}
+
+function normalizeBoneFeedback(value: unknown): MmdVrBoneFeedback {
+  if (value === "soft" || value === "normal" || value === "hard") return value;
+  return "normal";
+}
+
+function normalizeColliderFriction(value: unknown): MmdVrColliderFriction {
+  if (value === "low" || value === "medium" || value === "high") return value;
+  return "medium";
+}
+
+function normalizeColliderRestitution(value: unknown): MmdVrColliderRestitution {
+  if (value === "none" || value === "low" || value === "high") return value;
+  return "none";
+}
+
+function normalizeHapticLevel(value: unknown): MmdVrHapticLevel {
+  if (value === "off" || value === "low" || value === "normal") return value;
+  return "low";
+}
+
 export function normalizeMmdVrPrefs(parsed: Partial<MmdVrPrefs> = {}): MmdVrPrefs {
   return {
     renderQuality: normalizeImmersiveQuality(parsed.renderQuality),
@@ -227,6 +281,12 @@ export function normalizeMmdVrPrefs(parsed: Partial<MmdVrPrefs> = {}): MmdVrPref
     advancedRenderOverrides: Boolean(parsed.advancedRenderOverrides),
     detailedPhysicsDiagnostics: Boolean(parsed.detailedPhysicsDiagnostics),
     panelFollowUser: parsed.panelFollowUser !== false,
+    physicsColliderRadius: normalizePhysicsColliderRadius(parsed.physicsColliderRadius),
+    physicsQuality: normalizePhysicsQuality(parsed.physicsQuality),
+    physicsBoneFeedback: normalizeBoneFeedback(parsed.physicsBoneFeedback),
+    physicsColliderFriction: normalizeColliderFriction(parsed.physicsColliderFriction),
+    physicsColliderRestitution: normalizeColliderRestitution(parsed.physicsColliderRestitution),
+    physicsHapticLevel: normalizeHapticLevel(parsed.physicsHapticLevel),
   };
 }
 
@@ -255,6 +315,12 @@ const prefsStorage = createLocalPrefsStorage<MmdVrPrefs>({
     advancedRenderOverrides: false,
     detailedPhysicsDiagnostics: false,
     panelFollowUser: true,
+    physicsColliderRadius: 0.08,
+    physicsQuality: "medium" as MmdPhysicsQuality,
+    physicsBoneFeedback: "normal" as MmdVrBoneFeedback,
+    physicsColliderFriction: "medium" as MmdVrColliderFriction,
+    physicsColliderRestitution: "none" as MmdVrColliderRestitution,
+    physicsHapticLevel: "low" as MmdVrHapticLevel,
   }),
   normalize: normalizeMmdVrPrefs,
 });
@@ -267,12 +333,6 @@ function sessionReset() {
     physicsEnabled: false,
     physicsDebugEnabled: false,
     physicsControllerCollisions: true,
-    physicsColliderRadius: 0.08,
-    physicsQuality: "medium" as MmdPhysicsQuality,
-    physicsHapticLevel: "off" as MmdVrHapticLevel,
-    physicsBoneFeedback: "normal" as MmdVrBoneFeedback,
-    physicsColliderFriction: "medium" as MmdVrColliderFriction,
-    physicsColliderRestitution: "none" as MmdVrColliderRestitution,
     physicsResetEpoch: 0,
     physicsBusy: false,
     physicsContactCount: 0,
@@ -282,6 +342,9 @@ function sessionReset() {
     physicsStepCount: 0,
     modelCount: 0,
     models: [] as MmdVrModelEntry[],
+    materialModels: {} as Record<string, MmdVrMaterialState[]>,
+    runtimeRef: null as MmdVrRuntimeRef | null,
+    materialPanelModelId: null as string | null,
     objects: [] as MmdVrObjectEntry[],
     pendingVisibilityToggles: [] as string[],
     pendingModelRemovals: [] as string[],
@@ -320,8 +383,35 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
     if (patch.advancedRenderOverrides != null) prefs.advancedRenderOverrides = Boolean(patch.advancedRenderOverrides);
     if (patch.detailedPhysicsDiagnostics != null) prefs.detailedPhysicsDiagnostics = Boolean(patch.detailedPhysicsDiagnostics);
     if (patch.panelFollowUser != null) prefs.panelFollowUser = Boolean(patch.panelFollowUser);
+    if (patch.physicsColliderRadius != null) prefs.physicsColliderRadius = normalizePhysicsColliderRadius(patch.physicsColliderRadius);
+    if (patch.physicsQuality != null) prefs.physicsQuality = normalizePhysicsQuality(patch.physicsQuality);
+    if (patch.physicsBoneFeedback != null) prefs.physicsBoneFeedback = normalizeBoneFeedback(patch.physicsBoneFeedback);
+    if (patch.physicsColliderFriction != null) prefs.physicsColliderFriction = normalizeColliderFriction(patch.physicsColliderFriction);
+    if (patch.physicsColliderRestitution != null) prefs.physicsColliderRestitution = normalizeColliderRestitution(patch.physicsColliderRestitution);
+    if (patch.physicsHapticLevel != null) prefs.physicsHapticLevel = normalizeHapticLevel(patch.physicsHapticLevel);
     prefsStorage.write(prefs);
     set({ prefs, loop: prefs.loop });
+  },
+  cyclePhysicsColliderRadius: () => {
+    const radii = [0.04, 0.08, 0.12, 0.16];
+    const cur = get().prefs.physicsColliderRadius;
+    get().setPrefs({ physicsColliderRadius: radii[(radii.indexOf(cur) + 1) % radii.length] });
+  },
+  cyclePhysicsQuality: () => {
+    const cur = get().prefs.physicsQuality;
+    get().setPrefs({ physicsQuality: cur === "low" ? "medium" : cur === "medium" ? "high" : "low" });
+  },
+  cyclePhysicsBoneFeedback: () => {
+    const cur = get().prefs.physicsBoneFeedback;
+    get().setPrefs({ physicsBoneFeedback: cur === "soft" ? "normal" : cur === "normal" ? "hard" : "soft" });
+  },
+  cyclePhysicsColliderFriction: () => {
+    const cur = get().prefs.physicsColliderFriction;
+    get().setPrefs({ physicsColliderFriction: cur === "low" ? "medium" : cur === "medium" ? "high" : "low" });
+  },
+  cyclePhysicsColliderRestitution: () => {
+    const cur = get().prefs.physicsColliderRestitution;
+    get().setPrefs({ physicsColliderRestitution: cur === "none" ? "low" : cur === "low" ? "high" : "none" });
   },
   setHeightOffsetTransient: (heightOffset) =>
     set((state) => ({
@@ -394,43 +484,14 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
   setPhysicsControllerCollisions: (physicsControllerCollisions) => set(physicsControllerCollisions
     ? { physicsControllerCollisions }
     : { physicsControllerCollisions, physicsControllerContactCounts: [0, 0] }),
-  physicsColliderRadius: 0.08,
-  cyclePhysicsColliderRadius: () => set((state) => {
-    const radii = [0.04, 0.08, 0.12, 0.16];
-    const index = radii.indexOf(state.physicsColliderRadius);
-    return { physicsColliderRadius: radii[(index + 1) % radii.length] };
-  }),
-  physicsQuality: "medium",
-  cyclePhysicsQuality: () => set((state) => ({
-    physicsQuality: state.physicsQuality === "low" ? "medium" : state.physicsQuality === "medium" ? "high" : "low",
-  })),
-  physicsHapticLevel: "off",
-  cyclePhysicsHapticLevel: () => set((state) => {
-    const physicsHapticLevel = state.physicsHapticLevel === "off"
-      ? "low"
-      : state.physicsHapticLevel === "low" ? "normal" : "off";
-    return physicsHapticLevel === "off"
-      ? { physicsHapticLevel, physicsControllerContactCounts: [0, 0] }
-      : { physicsHapticLevel };
-  }),
-  physicsBoneFeedback: "normal",
-  cyclePhysicsBoneFeedback: () => set((state) => ({
-    physicsBoneFeedback: state.physicsBoneFeedback === "soft"
-      ? "normal"
-      : state.physicsBoneFeedback === "normal" ? "hard" : "soft",
-  })),
-  physicsColliderFriction: "medium",
-  cyclePhysicsColliderFriction: () => set((state) => ({
-    physicsColliderFriction: state.physicsColliderFriction === "low"
-      ? "medium"
-      : state.physicsColliderFriction === "medium" ? "high" : "low",
-  })),
-  physicsColliderRestitution: "none",
-  cyclePhysicsColliderRestitution: () => set((state) => ({
-    physicsColliderRestitution: state.physicsColliderRestitution === "none"
-      ? "low"
-      : state.physicsColliderRestitution === "low" ? "high" : "none",
-  })),
+  cyclePhysicsHapticLevel: () => {
+    const cur = get().prefs.physicsHapticLevel;
+    const next = cur === "off" ? "low" : cur === "low" ? "normal" : "off";
+    if (next === "off") {
+      set({ physicsControllerContactCounts: [0, 0] });
+    }
+    get().setPrefs({ physicsHapticLevel: next });
+  },
   physicsResetEpoch: 0,
   requestPhysicsReset: () => set((state) => ({ physicsResetEpoch: state.physicsResetEpoch + 1 })),
   physicsBusy: false,
@@ -446,6 +507,9 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
   setPhysicsRuntimeStats: (physicsRigidBodyCount, physicsStepCount) => set({ physicsRigidBodyCount, physicsStepCount }),
   modelCount: 0,
   models: [],
+  materialModels: {},
+  runtimeRef: null,
+  materialPanelModelId: null,
   setModels: (models) =>
     set((s) => ({
       models,
@@ -455,6 +519,34 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
           ? s.placeModelId
           : models[0]?.id ?? null,
     })),
+  setMaterialModels: (modelId, materials) =>
+    set((s) => ({ materialModels: { ...s.materialModels, [modelId]: materials } })),
+  setRuntimeRef: (runtimeRef) => set({ runtimeRef }),
+  setMaterialPanelModelId: (materialPanelModelId) => set({ materialPanelModelId }),
+  setMaterialVisible: (modelId, materialName, visible) => {
+    const state = get();
+    state.runtimeRef?.setMaterialVisible(modelId, materialName, visible);
+    const mats = state.materialModels[modelId];
+    if (!mats) return;
+    set({
+      materialModels: {
+        ...state.materialModels,
+        [modelId]: mats.map((m) => m.name === materialName ? { ...m, visible } : m),
+      },
+    });
+  },
+  setMaterialParam: (modelId, materialName, param, value) => {
+    const state = get();
+    state.runtimeRef?.setMaterialOverride(modelId, materialName, { [param]: value });
+    const mats = state.materialModels[modelId];
+    if (!mats) return;
+    set({
+      materialModels: {
+        ...state.materialModels,
+        [modelId]: mats.map((m) => m.name === materialName ? { ...m, [param]: value } : m),
+      },
+    });
+  },
   objects: [],
   setObjects: (objects) =>
     set((s) => ({
@@ -471,7 +563,7 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
     })),
   takeVisibilityToggles: () => {
     const list = get().pendingVisibilityToggles;
-    if (!list.length) return [];
+    if (!list.length) return EMPTY_STRING_ARRAY as string[];
     set({ pendingVisibilityToggles: [] });
     return list;
   },
@@ -483,7 +575,7 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
   })),
   takeModelRemovals: () => {
     const list = get().pendingModelRemovals;
-    if (!list.length) return [];
+    if (!list.length) return EMPTY_STRING_ARRAY as string[];
     set({ pendingModelRemovals: [] });
     return list;
   },
@@ -552,7 +644,7 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
   },
   takeModelTransformRequests: () => {
     const requests = get().pendingModelTransforms;
-    if (!requests.length) return [];
+    if (!requests.length) return EMPTY_TRANSFORM_ARRAY as { id: string; scale?: number; rotationY?: number; reset?: boolean }[];
     set({ pendingModelTransforms: [] });
     return requests;
   },

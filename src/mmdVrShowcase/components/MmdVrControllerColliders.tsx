@@ -22,8 +22,8 @@ function ControllerCollider({ handedness, index }: { handedness: "left" | "right
   const physicsDebugEnabled = useMmdVrStore((state) => state.physicsDebugEnabled);
   const physicsBusy = useMmdVrStore((state) => state.physicsBusy);
   const collisionsEnabled = useMmdVrStore((state) => state.physicsControllerCollisions);
-  const colliderRadius = useMmdVrStore((state) => state.physicsColliderRadius);
-  const hapticLevel = useMmdVrStore((state) => state.physicsHapticLevel);
+  const colliderRadius = useMmdVrStore((state) => state.prefs.physicsColliderRadius);
+  const hapticLevel = useMmdVrStore((state) => state.prefs.physicsHapticLevel);
   const contactCount = useMmdVrStore((state) => state.physicsControllerContactCounts[index]);
   const ref = useRef<THREE.Object3D>(null);
   const hapticGateRef = useRef(createMmdVrHapticGate());

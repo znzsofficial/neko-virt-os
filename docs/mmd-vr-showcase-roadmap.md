@@ -1,6 +1,6 @@
 # MMD VR 展示器 — 路线图
 
-最后更新：2026-07-31
+最后更新：2026-07-31（材质面板 + 物理修复 + 坑点记录）
 
 > **当前产品重心**（VR 桌面已基线收尾并搁置，见 [vr-desktop-roadmap.md](./vr-desktop-roadmap.md)）
 
@@ -78,6 +78,16 @@
 | XR 内导入 / 多动作列表 | ❌ | v0.1 余下 |
 | 角色 / 场景资产类型 | ❌ | v0.3；当前 PMX 使用同一模型槽位 |
 | 轻量视觉白名单其余 | 部分 | V1 exposure 已实现；其余 v1.1 |
+| 音频播放（BGM） | ❌ | 完全缺失；无 audio 元素、无加载、无同步 |
+| VR 内换动作 | ❌ | `loadMotion` 仅初始加载调用一次 |
+| VR 内恢复加载失败 | ❌ | 失败仅显示文案，须退出重进 |
+| 表情 / morph 手动控制 | ❌ | Runtime 支持但 HUD 无 morph UI |
+| 物理参数持久化 | ✅ | boneFeedback / friction / restitution / quality / radius / hapticLevel 进 MmdVrPrefs |
+| 热路径 GC 优化 | ✅ | 冻结哨兵 + WeakMap 缓存单材质数组 |
+| 进度条拖拽 scrub | ❌ | 仅支持点击 seek |
+| 材质面板（显隐 + opacity/roughness/metallic） | ✅ | 独立浮动面板，两级导航（列表 + 详情），分页，从模型面板"材质"按钮打开 |
+| 震动开关持久化 | ✅ | `physicsHapticLevel` 进 MmdVrPrefs，默认 low（开） |
+| 加载进度反馈 | ⛔ 已回退 | `setTimeout` 在 XR 沉浸模式下被延迟，导致加载卡死 |
 
 ---
 
@@ -245,6 +255,25 @@ src/mmdVrShowcase/
 
 **明确延后**：SSR、DoF、体积光、复杂 LUT 链、TSL toon 专用路径。
 
+### v1.2 — 审计补缺（已知缺口）
+
+> 2026-07-31 全面审计后发现的功能缺口。按严重度排列。
+
+| ID | 任务 | 严重度 | 说明 |
+|----|------|--------|------|
+| G1 | 音频播放（BGM） | 高 | 完全缺失：无 audio 元素、无加载入口、无音频同步。准备页无音频文件选择器，`mmdVrAssets` 无音频字段，`MmdVrStage` 无 audioRef。Studio 有完整音频同步（`MmdCanvas.tsx:990` 用 `audio.currentTime` 驱动时间轴）。需在准备页加音频选择、`mmdVrAssets` 加 `audioFile`、`MmdVrStage` 加 audio 元素并与 `mmdVrClock` 同步 |
+| G2 | 物理参数持久化 | ✅ | `physicsQuality` / `physicsColliderRadius` / `physicsBoneFeedback` / `physicsColliderFriction` / `physicsColliderRestitution` / `physicsHapticLevel` 移入 `MmdVrPrefs` + `settingsBackup` schema，跨会话持久化；hapticLevel 默认从 off 改为 low（默认开） |
+| G3 | VR 内换动作 | 中 | `runtime.loadMotion()` 仅初始加载调用一次（`MmdVrStage.tsx:545,553`），store 无换动作 action，HUD 无换动作按钮。换动作须退出 VR → 准备页改 → 重新进 VR → 重新加载全部模型。应在 HUD 加换动作入口，store 加 `requestMotionLoad` action |
+| G4 | VR 内恢复加载失败 | 中 | 模型加载失败仅显示文案（`MmdVrStage.tsx:587`），无重试 / 换模型按钮。须退出重进。应在 HUD 加重试入口或允许 VR 内重新选文件 |
+| G5 | 表情 / morph 手动控制 | 中 | Runtime 支持 `setMorphWeight()`（`mmdRuntime.ts:824`），`applyMorphOverrides` 每帧调用（`mmdRuntime.ts:958`），但 VR HUD 无 morph UI。face VMD 的 morph 轨道会播放，用户无法手动调节。应在模型面板加 morph 滑条或独立 morph 面板 |
+| G6 | 热路径 GC 优化 | ✅ | `takeModelRemovals` / `takeVisibilityToggles` / `takeModelTransformRequests` 空队列返回冻结哨兵；`getMeshMaterials` 用 `WeakMap` 缓存单材质数组，消除每帧分配 |
+| G7 | 进度条拖拽 scrub | 低 | `ProgressBar` 仅支持点击 seek（`onPointerDown`），不支持拖拽 scrub。`HudSlider` 支持拖拽但 `ProgressBar` 未复用。应加 `onPointerMove` 拖拽或复用 `HudSlider` |
+| G8 | 渲染器显式 dispose | ✅ | `MmdVrScene` unmount 时通过 `onCreated` 捕获 `gl` 并在 cleanup effect 中 `gl.dispose()` |
+| G9 | 控制器丢失追踪时物理跳过 | 低 | collider 被移到 y=-1000（`mmdVrControllerColliders.ts:3`），但 Bullet 仍每帧检测碰撞（不产生接触但浪费 CPU）。可在 backend 层加 skip 标志 |
+| G10 | 材质面板 | ✅ | 独立浮动面板，从模型面板"材质"按钮打开。两级导航：材质列表（每页 7 个 + 分页）→ 材质详情（opacity / roughness / metallic 滑条 + 显隐开关）。`MaterialPanel` 条件挂载（`materialPanelModelId != null`），关闭时完全卸载 |
+| G11 | 加载进度反馈 | ⛔ 已回退 | 曾尝试 `yieldToBrowser()`（`setTimeout(0)`）在模型间让出主线程 + 显示 `(2/3)` 进度。但 `setTimeout` 在 WebXR 沉浸模式下被浏览器延迟执行（优先 XR 渲染循环），导致 `await` 不 resolve → 加载流程卡住 → Quest 卡在 VR 加载动画。已回退为原始同步加载 |
+| G12 | 材质状态清理 | 低 | `syncMaterialModels()` 只追加或覆盖 `materialModels[model.id]`，移除模型后不会删除对应条目。当前面板因模型不存在而不可见，暂不影响使用，但反复加载/删除模型会在 Zustand store 中残留无效材质状态。后续可在同步时按当前 runtime 模型整体重建，或删除模型时显式清理 |
+
 ### v2 — 可选进阶（低优先级）
 
 | ID | 任务 | 说明 |
@@ -262,6 +291,7 @@ src/mmdVrShowcase/
 | X11 | 按刚体类型区分反馈 | 保留接触刚体索引并映射骨骼/用途，为头发、裙摆、身体和场景物件提供不同反馈；不得以接触点数量直接代表撞击强度 |
 | X12 | 持续接触材质反馈 | 仅作为默认关闭的实验模式，限制更新频率、占空比和强度；释放、失去追踪或退出会话时必须立即停止 |
 | X13 | 物理步内震动接触信号 | 当前 30Hz 采样可能漏掉短于 33ms 的碰撞，且仍受 256 条诊断接触保护上限影响；后续在物理步内用单次无分配扫描累积每手 onset 标志，避免短碰撞丢失、密集布料假阴性和诊断数组热路径分配 |
+| X14 | 静态模型物理持续抖动 | ⬜ 已知缺陷（部分缓解）：无动作时开启物理，部分模型衣物/裙摆持续抖动。已尝试对齐官方 solverIterations=20、physicsOnlyTime 5s settle 上限（冻结 deltaSeconds）、boneFeedbackScale 三档调节，均未根治。官方 viewer 暂停时 elapsedSeconds 冻结→deltaSeconds=0→Bullet 完全不步进，而我们暂停+物理开时仍需步进以维持控制器碰撞。**根因已定位**：IK 在无 body 动画时仍开启（`ik: true`），IK solver 在 rest pose 上产生微修正 → Bullet 读取修正后的骨骼旋转 → 输出物理修正 → `skeleton.update()` 应用到所有骨骼 → 下一帧 IK 读取 Bullet 修改的骨骼 → 不同 IK 结果 → 不同 Bullet 输入 → 持续振荡。有 body 动画时不发生（动画每帧覆写骨骼打断反馈环）。**已应用缓解**：`ik: entry.bodyAnimation != null`（对齐官方 viewer 的 `hasCurrentMotion()` 逻辑），残余抖动可能来自 Bullet 自身约束求解残余。控制器碰撞开启时不冻结时间线（需 deltaSeconds>0 解决穿透），抖动会回来——交互性优先 |
 
 ---
 
@@ -328,12 +358,16 @@ src/mmdVrShowcase/
 > 全项目 VR 人力优先本文件；勿回流做 VR 桌面新 app。
 
 1. **S3 / S4 / M8**：Quest 双眼 HUD 复测与性能矩阵签字（记 §6 表），含物理中档与震动三档手感验收
-2. **A1**：区分角色与场景资产，解决房间内表面与角色材质策略冲突
-3. **A2**：每模型动作配置，完成资产清单闭环；A3 已完成
-4. **C2**：移动方向；C1 已完成，再依据真机反馈决定 C3 / C4
-5. **V4**：只有性能矩阵留有预算时评估 IBL；V1 已完成，bloom 继续延后
+2. **G1**：音频播放（BGM）— 当前完全缺失，影响核心观看体验
+3. **A1**：区分角色与场景资产，解决房间内表面与角色材质策略冲突
+4. **A2**：每模型动作配置，完成资产清单闭环；A3 已完成；与 G3（VR 内换动作）可合并设计
+5. **G3 / G4**：VR 内换动作 + 恢复加载失败 — 减少"退出重进"摩擦
+6. **G5**：表情 / morph 手动控制 — 丰富观看体验
+7. **C2**：移动方向；C1 已完成，再依据真机反馈决定 C3 / C4
+8. **V4**：只有性能矩阵留有预算时评估 IBL；V1 已完成，bloom 继续延后
+9. **G7 / G9**：进度条拖拽、控制器跳过 — 真机验证后再定优先级
 
-**已完成可跳过：** M0–M5、M7、M11、M13、M14、M20–M23、V3，以及模型缩放/旋转/复位、身高补偿、VR 内快速设置、Quest 预设与旧偏好迁移、实验渲染覆盖、物理时间步钳制、物理质量档与诊断、震动三档、A6 环境物件。X6–X13 未实现。X1 已完成实验实现，但必须通过 Quest 真机碰撞与性能验收后才能视为稳定能力。
+**已完成可跳过：** M0–M5、M7、M11、M13、M14、M20–M23、V3，以及模型缩放/旋转/复位、身高补偿、VR 内快速设置、Quest 预设与旧偏好迁移、实验渲染覆盖、物理时间步钳制、物理质量档与诊断、震动三档、A6 环境物件、G2 物理参数持久化（含 hapticLevel）、G6 热路径 GC、G8 渲染器 dispose、G10 材质面板、G11 加载进度反馈、X14 IK 反馈环缓解。X6–X13 未实现。X1 已完成实验实现，但必须通过 Quest 真机碰撞与性能验收后才能视为稳定能力。
 
 ---
 
@@ -353,6 +387,82 @@ src/mmdVrShowcase/
 | Quest framebuffer scale / foveation | 默认不应用；仅「实验渲染覆盖」显式开启后应用；稳定性优先 |
 | PMX 角色与场景 | 下一阶段显式分类，不再依赖材质启发式判断 |
 | 近期 VR 优化是否回流 Studio | **否**（除概念性共享）：光照预设联动、阴影档位化均依赖 VR 舞台/会话语义；「暂停跳过骨骼求值」守卫已在 VR 启用（修复版：加载完成回调重置求值时间戳，避免静态模型永不求值），仅作为 Studio demand-render 的经验参照（见 mmd-studio.md 缺陷 #10） |
+
+---
+
+## 8.5 踩坑记录（供后续参考）
+
+> 2026-07-31 开发过程中遇到的非显而易见的问题与解决方案。
+
+### 1. `setRuntimeRef` 在 `useMemo` 中调用导致黑屏
+
+**现象**：进入 VR 后一片黑，无法恢复。
+
+**根因**：`setRuntimeRef()`（zustand `set`）在 `useMemo` 回调内调用——即在 React 渲染阶段触发 store 状态更新。React 不允许在渲染过程中调用 `setState`，导致渲染被中断/丢弃，R3F 的 Canvas 初始化失败。
+
+**修复**：将 `setRuntimeRef` 调用从 `useMemo` 移到独立的 `useEffect`，在 commit 阶段执行。
+
+### 2. `requestAnimationFrame` 和 `setTimeout` 在 WebXR 沉浸模式下不可靠
+
+**现象**：加载模型时卡在"加载中"/Quest VR 加载动画无法完成。
+
+**根因**：`requestAnimationFrame` 在 WebXR 沉浸模式下被 XR session 的 RAF 取代，浏览器 RAF 不触发。`setTimeout(0)` 也被浏览器延迟执行（优先 XR 渲染循环），`await` 迟迟不 resolve → 加载流程挂起。
+
+**修复**：回退为原始同步加载流程，不在加载循环中使用任何 yield。加载进度反馈（G11）标记为已回退。
+
+### 3. 加载循环中 `syncModelList()` 触发 React 状态更新导致黑屏
+
+**现象**：显示模型的瞬间黑屏。
+
+**根因**：`syncModelList()` → `setModels()` 在加载循环中间触发 React 状态更新，组件重渲染干扰 R3F 的 WebGL 帧循环。
+
+**修复**：移除加载循环中间的 `syncModelList()` / `syncObjects()` 调用，只在全部加载完成后统一同步一次。
+
+### 4. `MaterialPanel` 无条件挂载导致黑屏
+
+**现象**：进入 VR 后一片黑。
+
+**根因**：`MaterialPanel` 即使 `modelId` 为 null 也存在于渲染树中。其 `useEffect(() => { setView("list"); ... }, [modelId])` 在初始 mount 时触发 3 个 `setState`，在 R3F 初始化阶段产生额外渲染周期，干扰 WebGL 上下文初始化。
+
+**修复**：`MaterialPanel` 改为条件挂载——只有 `materialPanelModelId != null` 时才渲染组件。关闭时完全卸载。
+
+### 5. 物理参数 `solverIterations` 过低导致衣物抖动
+
+**现象**：开启物理后部分模型衣物持续抖动。
+
+**根因**：`PHYSICS_QUALITY_OPTIONS` 中 `solverIterations` 设为 6/10/16，远低于官方默认值 20。Bullet 的 Sequential Impulse 约束求解器迭代不足时，MMD 铰链约束链无法收敛。
+
+**修复**：对齐官方默认值——low: 15, medium: 20, high: 20。
+
+### 6. 无动作时 IK + Bullet 形成反馈环导致抖动（X14）
+
+**现象**：无动作时开启物理，衣物/裙摆持续抖动不止。
+
+**根因**：官方 viewer 无动作时传 `ik: false`（`hasCurrentMotion()` 为 false），我们一直传 `ik: true`。IK solver 在 rest pose 上产生微修正 → Bullet 读取修正后的骨骼 → 输出物理修正 → 应用到所有骨骼 → 下一帧 IK 读取 Bullet 修改的骨骼 → 振荡。有 body 动画时动画每帧覆写骨骼，打断反馈环。
+
+**修复**：`ik: entry.bodyAnimation != null`。残余抖动可能来自 Bullet 自身约束求解残余。
+
+### 7. 控制器碰撞开启时物理冻结导致 C=3 卡死
+
+**现象**：物理开启 + 控制器碰撞开启时，手柄碰到模型后物理卡住，C=3，球变绿，需重置物理才恢复。
+
+**根因**：5 秒 settle 上限冻结 `physicsOnlyTimeRef` → `deltaSeconds=0` → Bullet 不步进。控制器碰撞球虽每帧更新位置（静态刚体 teleport），但 Bullet 无法检测/解决穿透——接触卡在 3 条，刚体被穿透锁死。
+
+**修复**：当 `physicsControllerCollisions` 开启时不冻结时间线，让 Bullet 能正常解决控制器穿透。5 秒冻结仅在碰撞关闭时生效。
+
+---
+
+## 8.6 结构审查与拆分计划
+
+当前目录按展示器、R3F 组件、MMD runtime、资产、session、时钟和 haptics 分层，整体结构足够支撑继续开发，暂不需要大规模重构。
+
+**已知维护风险**：`src/mmdVrShowcase/components/MmdVrHud.tsx` 已约 1500 行，同时包含通用 HUD 控件、主控制条、模型/物件面板、材质面板、物理设置和 FPS 显示。下一次修改 HUD 时优先拆分为通用控件、模型/物件面板、材质面板、物理设置面板和控制条组装层。
+
+**后续拆分候选**：`src/mmdVrShowcase/components/MmdVrStage.tsx` 已约 900 行，同时负责 runtime 生命周期、资源加载、store 同步、灯光、时间轴、物理和 haptics。暂不直接拆分，避免破坏 R3F hooks、runtime ref 和 store 之间的生命周期关系；下次修改加载或物理逻辑时，再按 loader、sync、physics 边界逐步抽取。
+
+**暂不拆分**：`mmdVrStore.ts`、`mmdRuntime.ts` 和 `MmdVrPlayerRig.tsx` 当前职责仍可理解。store/runtime 的拆分需要先明确跨状态和内部 entry 依赖，不按行数机械拆分。
+
+**建议顺序**：先拆 HUD 的 `MaterialPanel` 与 `PhysicsSettingsPanel`，再拆模型/物件面板，最后评估 Stage 的 loader/sync/physics 抽取。
 
 ---
 
