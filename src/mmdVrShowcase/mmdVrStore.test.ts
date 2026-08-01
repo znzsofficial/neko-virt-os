@@ -259,4 +259,17 @@ describe("MMD VR adjustments", () => {
       physicsColliderRestitution: "none",
     });
   });
+
+  it("clears material state for removed models", () => {
+    const store = useMmdVrStore.getState();
+    store.setMaterialModels({
+      "model-1": [{ name: "Body", visible: true, opacity: 1, roughness: 0.55, metallic: 0 }],
+    });
+    store.setMaterialPanelModelId("model-1");
+
+    useMmdVrStore.getState().setMaterialModels({});
+
+    expect(useMmdVrStore.getState().materialModels).toEqual({});
+    expect(useMmdVrStore.getState().materialPanelModelId).toBeNull();
+  });
 });

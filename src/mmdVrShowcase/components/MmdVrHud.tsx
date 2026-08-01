@@ -517,6 +517,44 @@ function ProgressBar() {
   );
 
   const lastPaintVersionRef = useRef(-1);
+  const pointerRef = useRef<number | null>(null);
+
+  function updateSeek(event: ThreeEvent<PointerEvent>) {
+    const uv = event.uv;
+    if (!uv) return;
+    const trackStart = PROGRESS_PAD / 640;
+    const trackEnd = 1 - PROGRESS_PAD / 640;
+    const ratio = Math.min(1, Math.max(0, (uv.x - trackStart) / (trackEnd - trackStart)));
+    requestSeek(ratio * useMmdVrStore.getState().duration);
+  }
+
+  function beginSeek(event: ThreeEvent<PointerEvent>) {
+    event.stopPropagation();
+    pointerRef.current = event.pointerId;
+    updateSeek(event);
+    try {
+      (event.target as unknown as { setPointerCapture?: (id: number) => void }).setPointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture is optional in WebXR implementations.
+    }
+  }
+
+  function moveSeek(event: ThreeEvent<PointerEvent>) {
+    if (pointerRef.current !== event.pointerId) return;
+    event.stopPropagation();
+    updateSeek(event);
+  }
+
+  function endSeek(event: ThreeEvent<PointerEvent>) {
+    if (pointerRef.current !== event.pointerId) return;
+    event.stopPropagation();
+    pointerRef.current = null;
+    try {
+      (event.target as unknown as { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture is optional in WebXR implementations.
+    }
+  }
 
   useEffect(
     () => () => {
@@ -561,18 +599,11 @@ function ProgressBar() {
     <mesh
       position={[0, 0.22, 0]}
       renderOrder={30}
-      onPointerDown={(e) => {
-        e.stopPropagation();
-        const uv = e.uv;
-        if (!uv) return;
-        // Map UV through the painted track (not full plane including side padding).
-        const trackStart = PROGRESS_PAD / 640;
-        const trackEnd = 1 - PROGRESS_PAD / 640;
-        const span = trackEnd - trackStart;
-        const ratio = Math.min(1, Math.max(0, (uv.x - trackStart) / span));
-        const d = useMmdVrStore.getState().duration;
-        requestSeek(ratio * d);
-      }}
+      onPointerDown={beginSeek}
+      onPointerMove={moveSeek}
+      onPointerUp={endSeek}
+      onPointerCancel={endSeek}
+      onLostPointerCapture={endSeek}
     >
       <planeGeometry args={[1.05, 0.1]} />
       <meshBasicMaterial map={texture} toneMapped={false} transparent fog={false} depthWrite={false} depthTest={false} />

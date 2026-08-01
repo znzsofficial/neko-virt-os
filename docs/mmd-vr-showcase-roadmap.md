@@ -84,7 +84,7 @@
 | 表情 / morph 手动控制 | ❌ | Runtime 支持但 HUD 无 morph UI |
 | 物理参数持久化 | ✅ | boneFeedback / friction / restitution / quality / radius / hapticLevel 进 MmdVrPrefs |
 | 热路径 GC 优化 | ✅ | 冻结哨兵 + WeakMap 缓存单材质数组 |
-| 进度条拖拽 scrub | ❌ | 仅支持点击 seek |
+| 进度条拖拽 scrub | ✅ | 支持指针拖动，沿进度条连续 seek |
 | 材质面板（显隐 + opacity/roughness/metallic） | ✅ | 独立浮动面板，两级导航（列表 + 详情），分页，从模型面板"材质"按钮打开 |
 | 震动开关持久化 | ✅ | `physicsHapticLevel` 进 MmdVrPrefs，默认 low（开） |
 | 加载进度反馈 | ⛔ 已回退 | `setTimeout` 在 XR 沉浸模式下被延迟，导致加载卡死 |
@@ -267,12 +267,13 @@ src/mmdVrShowcase/
 | G4 | VR 内恢复加载失败 | 中 | 模型加载失败仅显示文案（`MmdVrStage.tsx:587`），无重试 / 换模型按钮。须退出重进。应在 HUD 加重试入口或允许 VR 内重新选文件 |
 | G5 | 表情 / morph 手动控制 | 中 | Runtime 支持 `setMorphWeight()`（`mmdRuntime.ts:824`），`applyMorphOverrides` 每帧调用（`mmdRuntime.ts:958`），但 VR HUD 无 morph UI。face VMD 的 morph 轨道会播放，用户无法手动调节。应在模型面板加 morph 滑条或独立 morph 面板 |
 | G6 | 热路径 GC 优化 | ✅ | `takeModelRemovals` / `takeVisibilityToggles` / `takeModelTransformRequests` 空队列返回冻结哨兵；`getMeshMaterials` 用 `WeakMap` 缓存单材质数组，消除每帧分配 |
-| G7 | 进度条拖拽 scrub | 低 | `ProgressBar` 仅支持点击 seek（`onPointerDown`），不支持拖拽 scrub。`HudSlider` 支持拖拽但 `ProgressBar` 未复用。应加 `onPointerMove` 拖拽或复用 `HudSlider` |
+| G7 | 进度条拖拽 scrub | ✅ | `ProgressBar` 支持指针捕获和 `onPointerMove`，沿进度条连续 seek |
 | G8 | 渲染器显式 dispose | ✅ | `MmdVrScene` unmount 时通过 `onCreated` 捕获 `gl` 并在 cleanup effect 中 `gl.dispose()` |
-| G9 | 控制器丢失追踪时物理跳过 | 低 | collider 被移到 y=-1000（`mmdVrControllerColliders.ts:3`），但 Bullet 仍每帧检测碰撞（不产生接触但浪费 CPU）。可在 backend 层加 skip 标志 |
+| G9 | 控制器丢失追踪时物理跳过 | 不做 | 未使用控制器时会切换到手部追踪，不采用“丢失控制器跳过物理”的优化路径 |
 | G10 | 材质面板 | ✅ | 独立浮动面板，从模型面板"材质"按钮打开。两级导航：材质列表（每页 7 个 + 分页）→ 材质详情（opacity / roughness / metallic 滑条 + 显隐开关）。`MaterialPanel` 条件挂载（`materialPanelModelId != null`），关闭时完全卸载 |
 | G11 | 加载进度反馈 | ⛔ 已回退 | 曾尝试 `yieldToBrowser()`（`setTimeout(0)`）在模型间让出主线程 + 显示 `(2/3)` 进度。但 `setTimeout` 在 WebXR 沉浸模式下被浏览器延迟执行（优先 XR 渲染循环），导致 `await` 不 resolve → 加载流程卡住 → Quest 卡在 VR 加载动画。已回退为原始同步加载 |
-| G12 | 材质状态清理 | 低 | `syncMaterialModels()` 只追加或覆盖 `materialModels[model.id]`，移除模型后不会删除对应条目。当前面板因模型不存在而不可见，暂不影响使用，但反复加载/删除模型会在 Zustand store 中残留无效材质状态。后续可在同步时按当前 runtime 模型整体重建，或删除模型时显式清理 |
+| G12 | 材质状态清理 | ✅ | `syncMaterialModels()` 按当前 runtime 模型整体重建材质映射，空资源时清空，移除模型后不再残留无效条目 |
+| G13 | 暂停动画时手部碰撞 | 中 | 当前暂停后 `MmdVrStage` 仍调用 `runtime.update()`，但动画时间不变；`three-mmd-loader` 根据连续 update 时间计算 `deltaSeconds`，因此 Bullet 不再步进，控制器矩阵虽更新但碰撞不响应。正确方案是为动画和物理维护独立时钟：暂停时固定 `animationSeconds` 以保持动画姿态，继续增加 `physicsSeconds` 以驱动 Bullet。需要先扩展 `three-mmd-loader` 的 update API 支持独立 `physicsSeconds`，再修改项目 runtime、seek/reset/loop 语义，并补充暂停、seek、循环和 Quest 真机测试。 |
 
 ### v2 — 可选进阶（低优先级）
 
@@ -365,9 +366,9 @@ src/mmdVrShowcase/
 6. **G5**：表情 / morph 手动控制 — 丰富观看体验
 7. **C2**：移动方向；C1 已完成，再依据真机反馈决定 C3 / C4
 8. **V4**：只有性能矩阵留有预算时评估 IBL；V1 已完成，bloom 继续延后
-9. **G7 / G9**：进度条拖拽、控制器跳过 — 真机验证后再定优先级
+9. **G7**：进度条拖拽 — 真机验证拖动和 seek 反馈
 
-**已完成可跳过：** M0–M5、M7、M11、M13、M14、M20–M23、V3，以及模型缩放/旋转/复位、身高补偿、VR 内快速设置、Quest 预设与旧偏好迁移、实验渲染覆盖、物理时间步钳制、物理质量档与诊断、震动三档、A6 环境物件、G2 物理参数持久化（含 hapticLevel）、G6 热路径 GC、G8 渲染器 dispose、G10 材质面板、G11 加载进度反馈、X14 IK 反馈环缓解。X6–X13 未实现。X1 已完成实验实现，但必须通过 Quest 真机碰撞与性能验收后才能视为稳定能力。
+**已完成可跳过：** M0–M5、M7、M11、M13、M14、M20–M23、V3，以及模型缩放/旋转/复位、身高补偿、VR 内快速设置、Quest 预设与旧偏好迁移、实验渲染覆盖、物理时间步钳制、物理质量档与诊断、震动三档、A6 环境物件、G2 物理参数持久化（含 hapticLevel）、G6 热路径 GC、G7 进度条拖拽、G8 渲染器 dispose、G10 材质面板、G11 加载进度反馈、G12 材质状态清理、X14 IK 反馈环缓解。G9 不做；X6–X13 未实现。X1 已完成实验实现，但必须通过 Quest 真机碰撞与性能验收后才能视为稳定能力。
 
 ---
 

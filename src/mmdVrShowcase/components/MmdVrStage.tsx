@@ -423,6 +423,7 @@ export function MmdVrStageContent() {
 
   function syncMaterialModels() {
     const assets = runtime.exportProjectModels();
+    const materialModels: Record<string, MmdVrMaterialState[]> = {};
     for (const model of assets) {
       const materialNames = Object.keys(model.materialOverrides);
       const materials: MmdVrMaterialState[] = materialNames.map((name: string) => {
@@ -435,8 +436,9 @@ export function MmdVrStageContent() {
           metallic: override?.metallic ?? 0,
         };
       });
-      setMaterialModels(model.id, materials);
+      materialModels[model.id] = materials;
     }
+    setMaterialModels(materialModels);
   }
 
   function syncObjects() {
@@ -541,6 +543,7 @@ export function MmdVrStageContent() {
     if (!slots.length) {
       setStatusLine(labelsRef.current.empty);
       setModels([]);
+      setMaterialModels({});
       setObjects([]);
       setDuration(0);
       resetMmdVrClock();
@@ -634,7 +637,7 @@ export function MmdVrStageContent() {
     return () => {
       cancelled = true;
     };
-  }, [runtime, setDuration, setModels, setObjects, setPlaying, setStatusLine]);
+  }, [runtime, setDuration, setMaterialModels, setModels, setObjects, setPlaying, setStatusLine]);
 
   useFrame((_, delta) => {
     applyLighting();

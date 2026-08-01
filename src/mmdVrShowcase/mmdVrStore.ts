@@ -154,7 +154,7 @@ type MmdVrStore = {
   models: MmdVrModelEntry[];
   setModels: (models: MmdVrModelEntry[]) => void;
   materialModels: Record<string, MmdVrMaterialState[]>;
-  setMaterialModels: (modelId: string, materials: MmdVrMaterialState[]) => void;
+  setMaterialModels: (materials: Record<string, MmdVrMaterialState[]>) => void;
   runtimeRef: MmdVrRuntimeRef | null;
   setRuntimeRef: (ref: MmdVrRuntimeRef | null) => void;
   setMaterialVisible: (modelId: string, materialName: string, visible: boolean) => void;
@@ -519,8 +519,12 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
           ? s.placeModelId
           : models[0]?.id ?? null,
     })),
-  setMaterialModels: (modelId, materials) =>
-    set((s) => ({ materialModels: { ...s.materialModels, [modelId]: materials } })),
+  setMaterialModels: (materialModels) => set((state) => ({
+    materialModels,
+    materialPanelModelId: state.materialPanelModelId && materialModels[state.materialPanelModelId]
+      ? state.materialPanelModelId
+      : null,
+  })),
   setRuntimeRef: (runtimeRef) => set({ runtimeRef }),
   setMaterialPanelModelId: (materialPanelModelId) => set({ materialPanelModelId }),
   setMaterialVisible: (modelId, materialName, visible) => {
