@@ -118,6 +118,7 @@ export type Notification = {
   createdAt?: number;
   progress?: number;
   sticky?: boolean;
+  leaving?: boolean;
 };
 
 export type WallpaperId =

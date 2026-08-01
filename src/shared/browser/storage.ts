@@ -4,6 +4,9 @@ export const BROWSER_SESSION_STORAGE_KEY = "neko-virt-os.browser-session.v1";
 export const BROWSER_RECENTS_STORAGE_KEY = "neko-virt-os.browser-recents.v1";
 export const BROWSER_BOOKMARKS_STORAGE_KEY = "neko-virt-os.browser-bookmarks.v1";
 export const BROWSER_CLOSED_TABS_STORAGE_KEY = "neko-virt-os.browser-closed-tabs.v1";
+export const BROWSER_SEARCH_ENGINE_STORAGE_KEY = "neko-virt-os.browser-search-engine.v1";
+
+export type BrowserSearchEngine = "duckduckgo" | "google" | "bing";
 
 export type BrowserRecentEntry = {
   title: string;
@@ -140,6 +143,24 @@ export function readBrowserSessionRecords(): {
 export function writeBrowserSessionRecords(tabs: BrowserTabRecord[], activeTabId: string) {
   try {
     localStorage.setItem(BROWSER_SESSION_STORAGE_KEY, JSON.stringify({ tabs, activeTabId }));
+  } catch {
+    // ignore
+  }
+}
+
+export function readBrowserSearchEngine(): BrowserSearchEngine {
+  try {
+    const raw = localStorage.getItem(BROWSER_SEARCH_ENGINE_STORAGE_KEY);
+    if (raw === "google" || raw === "bing" || raw === "duckduckgo") return raw;
+  } catch {
+    // ignore
+  }
+  return "duckduckgo";
+}
+
+export function writeBrowserSearchEngine(engine: BrowserSearchEngine) {
+  try {
+    localStorage.setItem(BROWSER_SEARCH_ENGINE_STORAGE_KEY, engine);
   } catch {
     // ignore
   }

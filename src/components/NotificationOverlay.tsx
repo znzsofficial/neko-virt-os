@@ -19,7 +19,7 @@ const categoryKeys: Record<NotificationCategory, TranslationKey> = {
 export function NotificationOverlay() {
   const notifications = useNotificationStore((state) => state.notifications);
   const history = useNotificationStore((state) => state.history);
-  const removeNotification = useNotificationStore((state) => state.removeNotification);
+  const dismissNotification = useNotificationStore((state) => state.dismissNotification);
   const clearNotifications = useNotificationStore((state) => state.clearNotifications);
   const clearHistory = useNotificationStore((state) => state.clearHistory);
   const centerOpen = useOsUiStore((state) => state.notificationCenterOpen);
@@ -54,11 +54,11 @@ export function NotificationOverlay() {
         {notifications.map((n) => (
           <div
             key={n.id}
-            className={clsx("notification-toast", n.type, n.appId && "is-clickable")}
+            className={clsx("notification-toast", n.type, n.appId && "is-clickable", n.leaving && "is-leaving")}
             onClick={() => {
               if (!n.appId) return;
               activateNotification(n.appId);
-              removeNotification(n.id);
+              dismissNotification(n.id);
             }}
           >
             <div className="notification-icon">
@@ -76,7 +76,7 @@ export function NotificationOverlay() {
               className="notification-close"
               onClick={(event) => {
                 event.stopPropagation();
-                removeNotification(n.id);
+                dismissNotification(n.id);
               }}
               aria-label={t("closeNotification")}
             >

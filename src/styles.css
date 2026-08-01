@@ -1,5 +1,6 @@
 /* NekoVirtOS styles entry — domain sheets under ./styles/ */
 @import "./styles/base.css";
+@import "./styles/scrollbar.css";
 @import "./styles/shell.css";
 @import "./styles/settings.css";
 @import "./styles/files.css";

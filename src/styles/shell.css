@@ -38,6 +38,28 @@
   background-repeat: var(--os-wallpaper-repeat), no-repeat;
   background-size: var(--os-wallpaper-size), cover;
 }
+/* Wallpaper cross-fade overlay — staged by theme.ts via --os-wallpaper-next-* vars. */
+.os::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-position: center, center;
+  background-repeat: var(--os-wallpaper-next-repeat), no-repeat;
+  background-size: var(--os-wallpaper-next-size), 100% 100%;
+  background-image: var(--os-wallpaper-next-image), none;
+  opacity: 0;
+  transition: opacity 340ms ease;
+}
+[data-wallpaper="online"] .os::before {
+  background-image:
+    var(--os-wallpaper-next-image),
+    linear-gradient(135deg, oklch(0.08 0.012 255 / 0.2), oklch(0.08 0.012 255 / 0.08));
+}
+.os.is-wallpaper-crossfade::before {
+  opacity: 1;
+}
 .desktop {
   position: absolute;
   inset: 0;
@@ -778,6 +800,7 @@
   display: flex;
   min-width: 0;
   flex: 1;
+  align-items: flex-end;
   gap: 6px;
 }
 .taskbar-item {
@@ -792,15 +815,22 @@
   color: var(--os-muted);
   cursor: pointer;
   padding: 0 10px 3px;
-  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+  transform-origin: center bottom;
+  transition: background 140ms ease, color 140ms ease, transform 220ms cubic-bezier(0.34, 1.35, 0.5, 1);
 }
 .taskbar-item:hover,
 .taskbar-item.is-active {
   background: var(--app-soft, var(--os-elevated));
   color: var(--os-ink);
 }
-.taskbar-item:hover {
-  transform: translateY(-1px);
+/* macOS-style dock magnification: hovered app grows, neighbors lift slightly. */
+.taskbar-apps > .taskbar-item:hover {
+  transform: translateY(-3px) scale(1.16);
+  z-index: 1;
+}
+.taskbar-apps > .taskbar-item:has(+ .taskbar-item:hover),
+.taskbar-apps > .taskbar-item:hover + .taskbar-item {
+  transform: translateY(-2px) scale(1.05);
 }
 .taskbar-item iconify-icon {
   color: var(--app-color, currentColor);
@@ -821,6 +851,8 @@
   border-radius: 999px;
   background: var(--os-subtle);
   transform: translateX(-50%);
+  animation: taskbar-dot-in 320ms cubic-bezier(0.34, 1.4, 0.64, 1);
+  transition: width 180ms ease, background 180ms ease, opacity 180ms ease;
 }
 .taskbar-item.is-active::after {
   width: 16px;
@@ -1064,6 +1096,19 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+@keyframes taskbar-dot-in {
+  0% {
+    transform: translateX(-50%) scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: translateX(-50%) scale(1.35);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-50%) scale(1);
   }
 }
 html[data-debug-borders="on"] .system-window,

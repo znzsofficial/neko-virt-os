@@ -3,24 +3,29 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { appPrompt } from "../dialogStore";
 import { consumeBrowserOpenUrl } from "../fs";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
+import { useNotificationStore } from "../notificationStore";
 import {
   BROWSER_HOME_URL,
   DEFAULT_BROWSER_BOOKMARKS,
   LEGACY_BOOKMARK_TITLE_ALIASES,
   LEGACY_BOOKMARK_TITLE_BY_URL,
   createBrowserTabRecord,
+  isBrowserHome,
   normalizeBrowserUrl,
   pushBrowserRecent,
   readBrowserBookmarksRaw,
   readBrowserRecents,
+  readBrowserSearchEngine,
   readBrowserSessionRecords,
   readClosedTabRecords,
   writeBrowserBookmarks,
   writeBrowserRecents,
+  writeBrowserSearchEngine,
   writeBrowserSessionRecords,
   writeClosedTabRecords,
   type BrowserBookmarkEntry,
   type BrowserRecentEntry,
+  type BrowserSearchEngine,
   type BrowserTabRecord,
 } from "../shared";
 
@@ -104,6 +109,30 @@ function loadInitialBrowserState(): { tabs: BrowserTab[]; activeTabId: string } 
   return { tabs: [fallback], activeTabId: fallback.id };
 }
 
+/** Site favicon via Google's public service, falling back to an iconify icon. */
+function BrowserFavicon({ url, fallback, size = 16 }: { url: string; fallback: string; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  const host = (() => {
+    try {
+      return isBrowserHome(url) ? "" : new URL(url).hostname;
+    } catch {
+      return "";
+    }
+  })();
+  if (!host || failed) return <Icon icon={fallback} width={size} height={size} />;
+  return (
+    <img
+      className="browser-favicon"
+      src={`https://www.google.com/s2/favicons?sz=32&domain_url=${encodeURIComponent(url)}`}
+      alt=""
+      width={size}
+      height={size}
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 export function BrowserApp() {
   const t = useLanguageStore((state) => state.t);
   const addressInputRef = useRef<HTMLInputElement | null>(null);
@@ -114,6 +143,7 @@ export function BrowserApp() {
   const [bookmarks, setBookmarks] = useState<BrowserBookmarkEntry[]>(readBrowserBookmarks);
   const [closedTabs, setClosedTabs] = useState<BrowserTab[]>(readClosedTabs);
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
+  const [searchEngine, setSearchEngine] = useState<BrowserSearchEngine>(readBrowserSearchEngine);
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? createTab();
   const currentUrl = activeTab.history[activeTab.historyIndex] ?? HOME_URL;
@@ -189,12 +219,28 @@ export function BrowserApp() {
     [tabs, t],
   );
 
+  const suggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const list: BrowserRecentEntry[] = [];
+    for (const entry of [...recentEntries, ...bookmarks]) {
+      if (entry.url === HOME_URL || seen.has(entry.url)) continue;
+      seen.add(entry.url);
+      list.push({ title: entry.title, url: entry.url });
+    }
+    return list.slice(0, 12);
+  }, [recentEntries, bookmarks]);
+
+  function changeSearchEngine(engine: BrowserSearchEngine) {
+    setSearchEngine(engine);
+    writeBrowserSearchEngine(engine);
+  }
+
   function patchActiveTab(updater: (tab: BrowserTab) => BrowserTab) {
     setTabs((current) => current.map((tab) => tab.id === activeTabId ? updater(tab) : tab));
   }
 
   function navigate(value: string, mode: "current" | "new-tab" = "current") {
-    const nextUrl = normalizeBrowserUrl(value, HOME_URL);
+    const nextUrl = normalizeBrowserUrl(value, HOME_URL, searchEngine);
     if (nextUrl !== HOME_URL) {
       const title = (() => {
         try {
@@ -227,7 +273,7 @@ export function BrowserApp() {
   }
 
   function openTab(initialUrl = HOME_URL) {
-    const nextTab = createTab(normalizeBrowserUrl(initialUrl, HOME_URL));
+    const nextTab = createTab(normalizeBrowserUrl(initialUrl, HOME_URL, searchEngine));
     setTabs((current) => [...current, nextTab]);
     setActiveTabId(nextTab.id);
   }
@@ -306,6 +352,21 @@ export function BrowserApp() {
     patchActiveTab((tab) => ({ ...tab, iframeLoaded: false, iframeSlow: false, history: [...tab.history] }));
   }
 
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(currentUrl);
+      useNotificationStore.getState().addNotification({
+        title: t("browserCopyLink"),
+        message: t("browserLinkCopied"),
+        type: "success",
+        category: "apps",
+        appId: "browser",
+      });
+    } catch {
+      // clipboard unavailable — ignore
+    }
+  }
+
   return (
     <div className="browser-app">
       <div className="browser-tabbar">
@@ -324,7 +385,7 @@ export function BrowserApp() {
               onDragEnd={() => setDraggedTabId(null)}
             >
               <button type="button" className="browser-tab-main" onClick={() => setActiveTabId(tab.id)}>
-                <Icon icon={tab.history[tab.historyIndex] === HOME_URL ? "solar:home-2-bold-duotone" : "solar:global-bold-duotone"} width={14} height={14} />
+                <BrowserFavicon url={tab.history[tab.historyIndex]} fallback={tab.history[tab.historyIndex] === HOME_URL ? "solar:home-2-bold-duotone" : "solar:global-bold-duotone"} size={14} />
                 <span>{tab.title}</span>
               </button>
               <button type="button" className="browser-tab-close" onClick={() => closeTab(tab.id)} aria-label={t("close")}>
@@ -350,9 +411,21 @@ export function BrowserApp() {
             value={activeTab.address}
             onChange={(event) => patchActiveTab((tab) => ({ ...tab, address: event.target.value }))}
             placeholder={t("browserSearchPlaceholder")}
+            list="browser-suggestions"
             spellCheck="false"
           />
         </label>
+        <select
+          className="browser-search-engine"
+          value={searchEngine}
+          onChange={(event) => changeSearchEngine(event.target.value as BrowserSearchEngine)}
+          aria-label={t("browserSearchEngine")}
+          title={t("browserSearchEngine")}
+        >
+          <option value="duckduckgo">DuckDuckGo</option>
+          <option value="google">Google</option>
+          <option value="bing">Bing</option>
+        </select>
         <button className="button-primary" type="submit">{t("browserGo")}</button>
         <button className="button-ghost" type="button" disabled={isHome} onClick={saveCurrentBookmark}>{t("browserSaveBookmark")}</button>
         <button className="button-ghost" type="button" disabled={!closedTabs.length} onClick={reopenClosedTab}>{t("browserReopenClosedTab")}</button>
@@ -374,6 +447,7 @@ export function BrowserApp() {
                 value={activeTab.address === HOME_URL ? "" : activeTab.address}
                 onChange={(event) => patchActiveTab((tab) => ({ ...tab, address: event.target.value }))}
                 placeholder={t("browserSearchPlaceholder")}
+                list="browser-suggestions"
                 spellCheck="false"
               />
               <button type="submit">{t("browserSearch")}</button>
@@ -386,7 +460,7 @@ export function BrowserApp() {
               {bookmarks.map((entry) => (
                 <div key={entry.url} className="browser-bookmark-item">
                   <button type="button" className="browser-bookmark-main" onClick={() => openBookmark(entry.url)}>
-                    <Icon icon={entry.icon ?? "solar:bookmark-bold-duotone"} width={22} height={22} />
+                    <BrowserFavicon url={entry.url} fallback={entry.icon ?? "solar:bookmark-bold-duotone"} size={22} />
                     <strong>{entry.title}</strong>
                     <span>{entry.url.replace(/^https?:\/\//, "")}</span>
                   </button>
@@ -407,7 +481,7 @@ export function BrowserApp() {
               <div className="browser-recents">
                 {recentEntries.map((entry) => (
                   <button key={entry.url} type="button" className="browser-recent-item" onClick={() => navigate(entry.url)}>
-                    <Icon icon="solar:history-bold-duotone" width={18} height={18} />
+                    <BrowserFavicon url={entry.url} fallback="solar:history-bold-duotone" size={18} />
                     <span>{entry.title}</span>
                     <small>{entry.url.replace(/^https?:\/\//, "")}</small>
                   </button>
@@ -420,11 +494,13 @@ export function BrowserApp() {
             <iframe key={currentUrl} src={currentUrl} title={currentUrl} onLoad={() => patchActiveTab((tab) => ({ ...tab, iframeLoaded: true }))} />
             {activeTab.iframeSlow && !activeTab.iframeLoaded ? (
               <div className="browser-frame-notice">
-                <Icon icon="solar:shield-warning-bold-duotone" width={34} height={34} />
+                <Icon icon="solar:shield-warning-bold-duotone" width={40} height={40} />
                 <h2>{t("browserBlocked")}</h2>
                 <p>{t("browserBlockedMessage")}</p>
+                <code className="browser-blocked-url">{currentUrl}</code>
                 <div className="toolbar-actions">
-                  <button className="button-ghost" type="button" onClick={() => openTab(currentUrl)}>{t("browserDuplicateTab")}</button>
+                  <button className="button-ghost" type="button" onClick={copyLink}>{t("browserCopyLink")}</button>
+                  <button className="button-ghost" type="button" onClick={() => navigate(HOME_URL)}>{t("browserGoHome")}</button>
                   <button className="button-primary" type="button" onClick={() => window.open(currentUrl, "_blank", "noopener,noreferrer")}>{t("browserOpenExternal")}</button>
                 </div>
               </div>
@@ -432,6 +508,11 @@ export function BrowserApp() {
           </section>
         )}
       </main>
+      <datalist id="browser-suggestions">
+        {suggestions.map((entry) => (
+          <option key={entry.url} value={entry.url}>{entry.title}</option>
+        ))}
+      </datalist>
     </div>
   );
 }

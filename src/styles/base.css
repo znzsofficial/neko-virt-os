@@ -212,6 +212,10 @@ body {
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
 }
+::selection {
+  background: var(--os-selection);
+  color: var(--os-ink);
+}
 button,
 textarea,
 input,

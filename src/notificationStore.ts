@@ -7,6 +7,7 @@ type NotificationStore = {
   notifications: Notification[];
   history: Notification[];
   addNotification: (notification: Omit<Notification, "id">) => void;
+  dismissNotification: (id: string) => void;
   removeNotification: (id: string) => void;
   clearNotifications: () => void;
   clearHistory: () => void;
@@ -14,6 +15,7 @@ type NotificationStore = {
 
 const notificationTimers = new Map<string, number>();
 const HISTORY_LIMIT = 30;
+const EXIT_DELAY = 220;
 
 function clearNotificationTimer(id: string) {
   const timer = notificationTimers.get(id);
@@ -21,6 +23,13 @@ function clearNotificationTimer(id: string) {
     window.clearTimeout(timer);
     notificationTimers.delete(id);
   }
+}
+
+/** Flag a toast as leaving so it can play its exit animation before removal. */
+function markLeaving(id: string) {
+  useNotificationStore.setState((state) => ({
+    notifications: state.notifications.map((item) => (item.id === id ? { ...item, leaving: true } : item)),
+  }));
 }
 
 export const useNotificationStore = create<NotificationStore>((set) => ({
@@ -57,14 +66,23 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
 
     if (inDnd && !n.sticky) return;
     if (duration !== 0) {
+      const dismissAt = Math.max(150, duration - EXIT_DELAY);
       const timer = window.setTimeout(() => {
-        set((state) => ({
-          notifications: state.notifications.filter((item) => item.id !== id),
-        }));
+        markLeaving(id);
         notificationTimers.delete(id);
-      }, duration);
+        window.setTimeout(() => {
+          useNotificationStore.getState().removeNotification(id);
+        }, EXIT_DELAY);
+      }, dismissAt);
       notificationTimers.set(id, timer);
     }
+  },
+  dismissNotification: (id) => {
+    clearNotificationTimer(id);
+    markLeaving(id);
+    window.setTimeout(() => {
+      useNotificationStore.getState().removeNotification(id);
+    }, EXIT_DELAY);
   },
   removeNotification: (id) => {
     clearNotificationTimer(id);
@@ -74,7 +92,13 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
   },
   clearNotifications: () => {
     notificationTimers.forEach((_, id) => clearNotificationTimer(id));
-    set({ notifications: [] });
+    if (!useNotificationStore.getState().notifications.length) return;
+    useNotificationStore.setState((state) => ({
+      notifications: state.notifications.map((item) => ({ ...item, leaving: true })),
+    }));
+    window.setTimeout(() => {
+      useNotificationStore.setState({ notifications: [] });
+    }, EXIT_DELAY);
   },
   clearHistory: () => set({ history: [] }),
 }));

@@ -12,6 +12,7 @@ export {
 
 export {
   BROWSER_HOME_URL,
+  SEARCH_ENGINE_URLS,
   isBrowserHome,
   normalizeBrowserUrl,
   shortBrowserHost,
@@ -28,20 +29,24 @@ export {
   BROWSER_BOOKMARKS_STORAGE_KEY,
   BROWSER_CLOSED_TABS_STORAGE_KEY,
   BROWSER_RECENTS_STORAGE_KEY,
+  BROWSER_SEARCH_ENGINE_STORAGE_KEY,
   BROWSER_SESSION_STORAGE_KEY,
   createBrowserTabId,
   createBrowserTabRecord,
   pushBrowserRecent,
   readBrowserBookmarksRaw,
   readBrowserRecents,
+  readBrowserSearchEngine,
   readBrowserSessionRecords,
   readClosedTabRecords,
   writeBrowserBookmarks,
   writeBrowserRecents,
+  writeBrowserSearchEngine,
   writeBrowserSessionRecords,
   writeClosedTabRecords,
   type BrowserBookmarkEntry,
   type BrowserRecentEntry,
+  type BrowserSearchEngine,
   type BrowserTabRecord,
 } from "./browser/storage";
 

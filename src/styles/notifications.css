@@ -206,3 +206,12 @@
     transform: scaleX(0);
   }
 }
+.notification-toast.is-leaving {
+  animation: notification-slide-out 0.22s ease-in forwards;
+}
+@keyframes notification-slide-out {
+  to {
+    opacity: 0;
+    transform: translateX(24px) scale(0.96);
+  }
+}

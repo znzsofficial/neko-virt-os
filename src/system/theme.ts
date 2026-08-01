@@ -168,13 +168,47 @@ export function applyThemeSettings(theme: ThemeSettings) {
   const colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
   if (colorSchemeMeta) colorSchemeMeta.setAttribute("content", effectiveTheme);
   const wallpaper = WALLPAPERS[effectiveTheme === "dark" ? theme.wallpaperDarkId : theme.wallpaperLightId];
-  root.style.setProperty("--os-wallpaper-image", wallpaper.url ? `url("${wallpaper.url}")` : "none");
-  root.style.setProperty("--os-wallpaper-size", getWallpaperSize(theme.wallpaperFit));
-  root.style.setProperty("--os-wallpaper-repeat", theme.wallpaperFit === "tile" ? "repeat" : "no-repeat");
+  const nextImage = wallpaper.url ? `url("${wallpaper.url}")` : "none";
+  const nextSize = getWallpaperSize(theme.wallpaperFit);
+  const nextRepeat = theme.wallpaperFit === "tile" ? "repeat" : "no-repeat";
+
+  // Stage the incoming wallpaper on the cross-fade overlay layer, then commit
+  // to the real vars once the fade completes (see .os::before in shell.css).
+  root.style.setProperty("--os-wallpaper-next-image", nextImage);
+  root.style.setProperty("--os-wallpaper-next-size", nextSize);
+  root.style.setProperty("--os-wallpaper-next-repeat", nextRepeat);
   root.setAttribute("data-wallpaper", wallpaper.url ? "online" : "system");
-  root.setAttribute("data-wallpaper-fit", theme.wallpaperFit);
-  root.setAttribute("data-wallpaper-overlay", theme.wallpaperOverlay);
+
+  const firstApply = !root.hasAttribute("data-wallpaper-applied");
+  const prevImage = root.style.getPropertyValue("--os-wallpaper-image") || "none";
+  const prevSize = root.style.getPropertyValue("--os-wallpaper-size") || "cover";
+  const prevRepeat = root.style.getPropertyValue("--os-wallpaper-repeat") || "no-repeat";
+  const wallpaperChanged = prevImage !== nextImage || prevSize !== nextSize || prevRepeat !== nextRepeat;
+
+  const commitWallpaper = () => {
+    root.style.setProperty("--os-wallpaper-image", nextImage);
+    root.style.setProperty("--os-wallpaper-size", nextSize);
+    root.style.setProperty("--os-wallpaper-repeat", nextRepeat);
+    root.style.setProperty("--os-wallpaper-next-image", "none");
+    root.style.setProperty("--os-wallpaper-next-size", "cover");
+    root.style.setProperty("--os-wallpaper-next-repeat", "no-repeat");
+    root.classList.remove("is-wallpaper-crossfade");
+    root.setAttribute("data-wallpaper-fit", theme.wallpaperFit);
+    root.setAttribute("data-wallpaper-overlay", theme.wallpaperOverlay);
+    root.setAttribute("data-wallpaper-applied", "true");
+    wallpaperFadeTimer = undefined;
+  };
+
+  if (!firstApply && wallpaperChanged) {
+    window.clearTimeout(wallpaperFadeTimer);
+    root.classList.add("is-wallpaper-crossfade");
+    wallpaperFadeTimer = window.setTimeout(commitWallpaper, 380);
+  } else {
+    commitWallpaper();
+  }
 }
+
+let wallpaperFadeTimer: number | undefined;
 
 function getWallpaperSize(fit: ThemeSettings["wallpaperFit"]) {
   if (fit === "contain") return "contain";

@@ -63,7 +63,7 @@ export const apps = [
     icon: "solar:global-bold-duotone",
     description: "搜索和打开网页",
     descriptionKey: "descBrowser",
-    defaultSize: { width: 760, height: 500 },
+    defaultSize: { width: 900, height: 580 },
   },
   {
     id: "calculator",
