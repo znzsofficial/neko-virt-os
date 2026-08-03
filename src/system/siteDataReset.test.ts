@@ -82,7 +82,8 @@ describe("resetSiteData", () => {
 
     expect(result.ok).toBe(false);
     expect(result.stages.find(({ stage }) => stage === "virtualFiles")?.ok).toBe(false);
-    expect(result.stages.find(({ stage }) => stage === "preferences")?.ok).toBe(true);
+    expect(result.stages.find(({ stage }) => stage === "preferences")?.ok).toBe(false);
+    expect(storage.has(`${APP_STORAGE_PREFIX}theme.v2`)).toBe(true);
     expect(clearMmdProjects).toHaveBeenCalledOnce();
     expect(storage.has("another-app.token")).toBe(true);
   });

@@ -88,11 +88,16 @@ export async function resetSiteData(
     runStage("virtualFiles", resetVirtualFiles),
   ]);
 
-  // Clear preferences last so file reseeding can still use the current language.
-  stages.push(await runStage("preferences", () => {
-    if (!storage) throw new Error("local-storage-unavailable");
-    removeOwnedLocalStorage(storage);
-  }));
+  // Keep mounted stores and persisted preferences consistent after a partial
+  // failure. Preferences are cleared only after all other stages succeed.
+  if (stages.every((stage) => stage.ok)) {
+    stages.push(await runStage("preferences", () => {
+      if (!storage) throw new Error("local-storage-unavailable");
+      removeOwnedLocalStorage(storage);
+    }));
+  } else {
+    stages.push({ stage: "preferences", ok: false, error: new Error("prerequisite-stage-failed") });
+  }
 
   return {
     ok: stages.every((stage) => stage.ok),

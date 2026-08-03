@@ -4,7 +4,7 @@ export type DeveloperPrefs = {
   animationQuality: AnimationQuality;
   showFps: boolean;
   debugBorders: boolean;
-  /** Accessibility: force reduced motion (same as power for shell UI). */
+  /** Accessibility: disable non-essential motion. */
   reduceMotion: boolean;
   /** Accessibility: larger hit targets. */
   largeTargets: boolean;
@@ -45,8 +45,8 @@ export function readDeveloperPrefs(): DeveloperPrefs {
 
 export function applyDeveloperPrefs(prefs: DeveloperPrefs) {
   const root = document.documentElement;
-  const motion = prefs.reduceMotion || prefs.animationQuality === "power" ? "power" : "fluid";
-  root.setAttribute("data-motion", motion);
+  root.setAttribute("data-motion", prefs.reduceMotion ? "reduced" : "full");
+  root.setAttribute("data-animation-quality", prefs.animationQuality);
   root.setAttribute("data-debug-borders", prefs.debugBorders ? "on" : "off");
   root.setAttribute("data-show-fps", prefs.showFps ? "on" : "off");
   root.setAttribute("data-large-targets", prefs.largeTargets ? "on" : "off");

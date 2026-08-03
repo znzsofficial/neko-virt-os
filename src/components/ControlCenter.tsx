@@ -3,7 +3,7 @@ import { clsx } from "clsx";
 import { useEffect, useId, useState } from "react";
 import { useLanguageStore } from "../languageStore";
 import { useOsUiStore, type WorkspaceId } from "../osUiStore";
-import { readThemeSettings, updateThemeSettings } from "../system/theme";
+import { readThemeSettings, subscribeThemeSettings, updateThemeSettings } from "../system/theme";
 import type { ThemeSettings } from "../types";
 import { useDesktopStore } from "../windowStore";
 import { requestVrDesktopEnter } from "../vrDesktop/requestVrEnter";
@@ -39,6 +39,8 @@ export function ControlCenter() {
   useEffect(() => {
     if (open) setTheme(readThemeSettings());
   }, [open]);
+
+  useEffect(() => subscribeThemeSettings(setTheme), []);
 
   // Refresh when panel opens (secure context / xr may change after navigation).
   useEffect(() => {
@@ -173,7 +175,7 @@ export function ControlCenter() {
               void enter;
             }}
           >
-            <Icon icon="solar:glasses-bold-duotone" width={16} height={16} />
+            <Icon icon="boxicons:vr-headset-filled" width={16} height={16} />
             {vrPhase === "entering"
               ? t("settingsVrDesktopEntering")
               : t("settingsVrDesktop")}

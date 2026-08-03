@@ -514,8 +514,65 @@
   border-radius: 999px;
   background: color-mix(in oklch, var(--os-border) 80%, transparent);
   cursor: pointer;
-  padding: 3px;
+  padding: 0;
   flex: 0 0 auto;
+}
+
+.settings-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--os-border);
+  border-radius: 10px;
+  background: var(--os-elevated);
+  color: var(--os-muted);
+}
+
+.settings-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.settings-search-results {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.settings-search-results button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--os-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-search-results button:hover,
+.settings-search-results button:focus-visible {
+  background: var(--os-elevated);
+  outline: none;
+}
+
+.settings-search-results small,
+.settings-search-empty {
+  color: var(--os-muted);
+  font-size: 0.75rem;
+}
+
+.settings-search-empty {
+  margin: 8px 4px;
 }
 .settings-switch > input {
   position: absolute;
@@ -528,6 +585,12 @@
 }
 .settings-switch > span {
   display: block;
+  width: 46px;
+  height: 28px;
+  padding: 3px;
+  border-radius: inherit;
+  background: color-mix(in oklch, var(--os-border) 80%, transparent);
+  box-sizing: border-box;
 }
 .settings-switch i {
   display: block;
@@ -545,6 +608,9 @@
   opacity: 0.55;
 }
 .settings-switch.is-on {
+  background: transparent;
+}
+.settings-switch.is-on > span {
   background: var(--os-primary);
 }
 .settings-switch.is-on i {
@@ -945,6 +1011,11 @@
     padding-inline: 8px;
   }
   .settings-nav-item > span {
+    display: none;
+  }
+  .settings-search,
+  .settings-search-results,
+  .settings-search-empty {
     display: none;
   }
   .settings-choice-grid.cols-3 {

@@ -33,4 +33,5 @@ describe("normalizeDeveloperPrefs", () => {
       }).animationQuality,
     ).toBe("fluid");
   });
+
 });

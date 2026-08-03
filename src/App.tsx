@@ -81,8 +81,15 @@ export function App() {
       const nextTheme = readThemeSettings();
       if (nextTheme.theme === "system") applyThemeSettings(nextTheme);
     };
+    const updateWallpaperAvailability = () => applyThemeSettings(readThemeSettings());
     media.addEventListener?.("change", updateSystemTheme);
-    return () => media.removeEventListener?.("change", updateSystemTheme);
+    window.addEventListener("online", updateWallpaperAvailability);
+    window.addEventListener("offline", updateWallpaperAvailability);
+    return () => {
+      media.removeEventListener?.("change", updateSystemTheme);
+      window.removeEventListener("online", updateWallpaperAvailability);
+      window.removeEventListener("offline", updateWallpaperAvailability);
+    };
   }, []);
 
   // Capability refresh: secure context + navigator.xr; isSessionSupported is advisory only.

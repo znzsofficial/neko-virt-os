@@ -8,13 +8,30 @@ export function AppDialogHost() {
   const settle = useDialogStore((state) => state.settle);
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const cancelRef = useRef<HTMLButtonElement | null>(null);
   const confirmRef = useRef<HTMLButtonElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (current && !restoreFocusRef.current) {
+      const active = document.activeElement;
+      restoreFocusRef.current = active instanceof HTMLElement ? active : null;
+    }
+    if (current) return;
+    const element = restoreFocusRef.current;
+    restoreFocusRef.current = null;
+    if (element?.isConnected) {
+      window.setTimeout(() => element.focus(), 0);
+    }
+  }, [current]);
 
   useEffect(() => {
     if (!current) return;
     setValue(current.defaultValue ?? "");
     const id = window.setTimeout(() => {
       if (current.kind === "prompt") inputRef.current?.focus();
+      else if (current.danger) cancelRef.current?.focus();
       else confirmRef.current?.focus();
     }, 0);
     return () => window.clearTimeout(id);
@@ -26,6 +43,30 @@ export function AppDialogHost() {
       if (event.key === "Escape") {
         event.preventDefault();
         settle(current!.kind === "alert" ? true : null);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+      ));
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!dialog.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first)?.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
       }
     }
     window.addEventListener("keydown", onKey);
@@ -49,6 +90,7 @@ export function AppDialogHost() {
       }}
     >
       <div
+        ref={dialogRef}
         className="app-dialog"
         role="dialog"
         aria-modal="true"
@@ -77,7 +119,7 @@ export function AppDialogHost() {
         ) : null}
         <div className="app-dialog-actions">
           {current.kind !== "alert" ? (
-            <button type="button" className="button-ghost" onClick={() => settle(null)}>
+            <button ref={cancelRef} type="button" className="button-ghost" onClick={() => settle(null)}>
               {cancelLabel}
             </button>
           ) : null}

@@ -45,12 +45,12 @@ export const useDialogStore = create<DialogStore>((set, get) => ({
       promote(set, get);
     }),
   settle: (value) => {
-    const current = get().current;
+    const state = get();
+    const current = state.current;
     if (!current) return;
     current.resolve(value);
-    set({ current: null });
-    // Promote next on next microtask so React can clear first.
-    queueMicrotask(() => promote(set, get));
+    const [next, ...queue] = state.queue;
+    set({ current: next ?? null, queue });
   },
 }));
 

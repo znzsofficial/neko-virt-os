@@ -51,3 +51,7 @@ export function normalizeNotificationPrefs(
     },
   };
 }
+
+export function isValidNotificationTime(value: string) {
+  return TIME_PATTERN.test(value);
+}

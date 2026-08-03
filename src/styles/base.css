@@ -1423,13 +1423,19 @@ input[type="file"]::file-selector-button:hover {
   font-size: 11px;
 }
 /* Boot screen styles */
-html[data-motion="power"] *,
-html[data-motion="power"] *::before,
-html[data-motion="power"] *::after {
+html[data-motion="reduced"] *,
+html[data-motion="reduced"] *::before,
+html[data-motion="reduced"] *::after {
   animation-duration: 1ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 1ms !important;
   scroll-behavior: auto !important;
+}
+/* Power mode keeps feedback animations, but shortens UI transitions to reduce work. */
+html[data-animation-quality="power"] .os *,
+html[data-animation-quality="power"] .os *::before,
+html[data-animation-quality="power"] .os *::after {
+  transition-duration: 80ms;
 }
 html[data-large-targets="on"] {
   --os-spacing-xs: 6px;
@@ -1453,15 +1459,19 @@ html[data-large-targets="on"] .wallpaper-option {
   min-height: 44px;
 }
 html[data-large-targets="on"] .settings-switch {
-  width: 58px;
+  width: 46px;
   height: 44px;
-  padding: 8px 6px;
+  padding: 8px 0;
+  background: transparent;
+  box-sizing: border-box;
+  align-self: center;
 }
 html[data-large-targets="on"] .settings-switch.is-on i {
-  transform: translateX(24px);
+  transform: translateX(18px);
 }
 html[data-high-contrast="on"] {
-  --os-border: color-mix(in oklch, var(--os-ink) 28%, var(--os-border));
-  --os-border-strong: color-mix(in oklch, var(--os-ink) 42%, var(--os-border-strong));
+  /* Do not reference the token being redefined: self-referential custom properties become invalid. */
+  --os-border: color-mix(in oklch, var(--os-ink) 55%, var(--os-surface));
+  --os-border-strong: color-mix(in oklch, var(--os-ink) 72%, var(--os-surface));
 }
 /* VR Desktop (experimental WebXR shell) */

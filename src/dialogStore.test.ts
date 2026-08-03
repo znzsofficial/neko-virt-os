@@ -23,9 +23,6 @@ describe("dialogStore queue", () => {
     useDialogStore.getState().settle(false);
     await expect(first).resolves.toBe(false);
 
-    await new Promise<void>((resolve) => {
-      queueMicrotask(() => resolve());
-    });
     expect(useDialogStore.getState().current?.kind).toBe("alert");
     useDialogStore.getState().settle(true);
     await second;

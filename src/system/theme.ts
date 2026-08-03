@@ -106,6 +106,15 @@ export function readThemeSettings(): ThemeSettings {
   }
 }
 
+const themeListeners = new Set<(theme: ThemeSettings) => void>();
+
+export function subscribeThemeSettings(listener: (theme: ThemeSettings) => void) {
+  themeListeners.add(listener);
+  return () => {
+    themeListeners.delete(listener);
+  };
+}
+
 /** Merge patch, persist, and apply to the document. */
 export function updateThemeSettings(patch: Partial<ThemeSettings>): ThemeSettings {
   const next = normalizeThemeSettings({ ...readThemeSettings(), ...patch });
@@ -115,6 +124,7 @@ export function updateThemeSettings(patch: Partial<ThemeSettings>): ThemeSetting
     // ignore quota
   }
   applyThemeSettings(next);
+  for (const listener of themeListeners) listener(next);
   return next;
 }
 
@@ -167,7 +177,10 @@ export function applyThemeSettings(theme: ThemeSettings) {
   root.style.colorScheme = effectiveTheme;
   const colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
   if (colorSchemeMeta) colorSchemeMeta.setAttribute("content", effectiveTheme);
-  const wallpaper = WALLPAPERS[effectiveTheme === "dark" ? theme.wallpaperDarkId : theme.wallpaperLightId];
+  const configuredWallpaperId = effectiveTheme === "dark" ? theme.wallpaperDarkId : theme.wallpaperLightId;
+  const configuredWallpaper = WALLPAPERS[configuredWallpaperId];
+  const online = typeof navigator === "undefined" || navigator.onLine;
+  const wallpaper = !online && configuredWallpaper.url ? WALLPAPERS.system : configuredWallpaper;
   const nextImage = wallpaper.url ? `url("${wallpaper.url}")` : "none";
   const nextSize = getWallpaperSize(theme.wallpaperFit);
   const nextRepeat = theme.wallpaperFit === "tile" ? "repeat" : "no-repeat";
@@ -204,6 +217,7 @@ export function applyThemeSettings(theme: ThemeSettings) {
     root.classList.add("is-wallpaper-crossfade");
     wallpaperFadeTimer = window.setTimeout(commitWallpaper, 380);
   } else {
+    window.clearTimeout(wallpaperFadeTimer);
     commitWallpaper();
   }
 }
