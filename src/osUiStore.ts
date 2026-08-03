@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { setOwnedLocalStorageItem } from "./system/persistenceGate";
 import {
   applyDeveloperPrefs,
   readDeveloperPrefs,
@@ -106,7 +107,7 @@ export function isWithinDnd(prefs: NotificationPrefs, date = new Date()) {
 export const useOsUiStore = create<OsUiStore>((set) => ({
   activeWorkspace: loadWorkspace(),
   setActiveWorkspace: (workspace) => {
-    localStorage.setItem(WORKSPACE_KEY, String(workspace));
+    setOwnedLocalStorageItem(WORKSPACE_KEY, String(workspace));
     set({ activeWorkspace: workspace });
   },
   notificationCenterOpen: false,
@@ -151,12 +152,12 @@ export const useOsUiStore = create<OsUiStore>((set) => ({
   setNotificationPrefs: (patch) => set((state) => {
     const nextRaw = typeof patch === "function" ? patch(state.notificationPrefs) : { ...state.notificationPrefs, ...patch };
     const notificationPrefs = normalizeNotificationPrefs(nextRaw);
-    localStorage.setItem(NOTIFY_PREFS_KEY, JSON.stringify(notificationPrefs));
+    setOwnedLocalStorageItem(NOTIFY_PREFS_KEY, JSON.stringify(notificationPrefs));
     return { notificationPrefs };
   }),
   widgetsCollapsed: loadWidgetsCollapsed(),
   setWidgetsCollapsed: (collapsed) => {
-    localStorage.setItem(WIDGETS_KEY, collapsed ? "1" : "0");
+    setOwnedLocalStorageItem(WIDGETS_KEY, collapsed ? "1" : "0");
     set({ widgetsCollapsed: collapsed });
   },
   developerPrefs: initialDeveloperPrefs,

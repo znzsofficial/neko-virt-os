@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../languageStore";
 import type { ThemeSettings } from "../types";
+import { setOwnedLocalStorageItem } from "./persistenceGate";
 
 export const THEME_STORAGE_KEY = "neko-virt-os.theme-settings.v1";
 
@@ -119,7 +120,7 @@ export function subscribeThemeSettings(listener: (theme: ThemeSettings) => void)
 export function updateThemeSettings(patch: Partial<ThemeSettings>): ThemeSettings {
   const next = normalizeThemeSettings({ ...readThemeSettings(), ...patch });
   try {
-    localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(next));
+    setOwnedLocalStorageItem(THEME_STORAGE_KEY, JSON.stringify(next));
   } catch {
     // ignore quota
   }

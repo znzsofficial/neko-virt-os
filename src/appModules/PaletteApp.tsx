@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
+import { setOwnedLocalStorageItem } from "../system/persistenceGate";
 
 const BUILTIN = [
   ["Kernel", "#3467d6"],
@@ -66,7 +67,7 @@ export function PaletteApp() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(CUSTOM_KEY, JSON.stringify(custom));
+      setOwnedLocalStorageItem(CUSTOM_KEY, JSON.stringify(custom));
     } catch {
       // ignore
     }

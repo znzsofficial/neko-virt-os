@@ -1,4 +1,5 @@
 import { todayDateKey } from "./monthGrid";
+import { setOwnedLocalStorageItem } from "../../system/persistenceGate";
 
 export const CALENDAR_EVENTS_STORAGE_KEY = "neko-virt-os.calendar-events.v1";
 
@@ -35,7 +36,7 @@ export function readCalendarEvents(): LocalCalendarEvent[] {
 
 export function writeCalendarEvents(events: LocalCalendarEvent[]) {
   try {
-    localStorage.setItem(CALENDAR_EVENTS_STORAGE_KEY, JSON.stringify(events));
+    setOwnedLocalStorageItem(CALENDAR_EVENTS_STORAGE_KEY, JSON.stringify(events));
   } catch {
     // ignore
   }

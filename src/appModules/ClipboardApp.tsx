@@ -2,6 +2,7 @@ import { Icon } from "@iconify-icon/react";
 import { useEffect, useState } from "react";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
+import { setOwnedLocalStorageItem } from "../system/persistenceGate";
 
 type ClipboardEntry = { id: string; text: string; createdAt: number };
 
@@ -34,7 +35,7 @@ export function ClipboardApp() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(CLIPBOARD_HISTORY_STORAGE_KEY, JSON.stringify(history));
+      setOwnedLocalStorageItem(CLIPBOARD_HISTORY_STORAGE_KEY, JSON.stringify(history));
     } catch {
       // ignore quota / private mode
     }

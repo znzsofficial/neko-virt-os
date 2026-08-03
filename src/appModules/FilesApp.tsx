@@ -3,6 +3,7 @@ import { clsx } from "clsx";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { NavItem } from "../components/NavItem";
 import { appAlert, appConfirm, appPrompt } from "../dialogStore";
+import { setOwnedLocalStorageItem } from "../system/persistenceGate";
 import {
   formatFileSize,
   formatFileTime,
@@ -37,7 +38,7 @@ function readDetailsWidth() {
 
 function writeDetailsWidth(width: number) {
   try {
-    localStorage.setItem(DETAILS_WIDTH_KEY, String(width));
+    setOwnedLocalStorageItem(DETAILS_WIDTH_KEY, String(width));
   } catch {
     // ignore
   }

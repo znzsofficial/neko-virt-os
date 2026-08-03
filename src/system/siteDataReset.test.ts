@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   APP_STORAGE_PREFIX,
+  APP_CACHE_PREFIX,
+  removeOwnedCaches,
   removeOwnedLocalStorage,
   resetSiteData,
   type SiteDataResetStage,
@@ -40,13 +42,26 @@ describe("removeOwnedLocalStorage", () => {
   });
 });
 
+describe("removeOwnedCaches", () => {
+  it("deletes only application-owned cache buckets", async () => {
+    const cacheStorage = {
+      keys: vi.fn().mockResolvedValue([`${APP_CACHE_PREFIX}shell-v1`, "another-app-cache"]),
+      delete: vi.fn().mockResolvedValue(true),
+    };
+
+    await expect(removeOwnedCaches(cacheStorage)).resolves.toEqual([`${APP_CACHE_PREFIX}shell-v1`]);
+    expect(cacheStorage.delete).toHaveBeenCalledWith(`${APP_CACHE_PREFIX}shell-v1`);
+    expect(cacheStorage.delete).not.toHaveBeenCalledWith("another-app-cache");
+  });
+});
+
 describe("resetSiteData", () => {
   it("clears every declared data stage", async () => {
     const storage = createStorage({ [`${APP_STORAGE_PREFIX}theme.v2`]: "{}" });
     const resetVirtualFiles = vi.fn().mockResolvedValue(undefined);
     const clearMmdProjects = vi.fn().mockResolvedValue(undefined);
     const cacheStorage = {
-      keys: vi.fn().mockResolvedValue(["app-shell", "images"]),
+      keys: vi.fn().mockResolvedValue([`${APP_CACHE_PREFIX}shell`, `${APP_CACHE_PREFIX}images`, "shared"]),
       delete: vi.fn().mockResolvedValue(true),
     };
 

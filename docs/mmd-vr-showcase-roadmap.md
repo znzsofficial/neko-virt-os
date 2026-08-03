@@ -1,6 +1,6 @@
 # MMD VR 展示器 — 路线图
 
-最后更新：2026-07-31（材质面板 + 物理修复 + 坑点记录）
+最后更新：2026-08-04（参数渐进披露 + 物理恢复错误分级）
 
 > **当前产品重心**（VR 桌面已基线收尾并搁置，见 [vr-desktop-roadmap.md](./vr-desktop-roadmap.md)）
 
@@ -65,12 +65,14 @@
 | 渐变天空穹顶 (V3) | ✅ | StageSky 随灯光预设 |
 | face 动作单轨 (M11) | ✅ | 准备页选择，加载后与 body 合并 |
 | Quest 预设三档 + 明确刷新率 72/80/90/120 | ✅ | `MmdVrPrepApp` 预设 + `mmdVrQuality` |
+| 准备页参数渐进披露 | ✅ | 默认保留 Quest 预设与主题；渲染细项、移动、FPS、诊断收进“高级画面与诊断”，存储 schema 不变 |
 | 实验渲染覆盖（framebuffer scale / foveation） | ✅ 默认关；高级区显式开启后生效 | `mmdVrSession` / 准备页 |
 | 旧偏好迁移（v1 key / 旧刷新率枚举 high-mid-low） | ✅ | `settingsBackup` + `mmdVrStore` |
 | Bullet 物理开关 + 控制器碰撞（X1） | ✅ 实验，默认关 | `MmdVrControllerColliders` |
 | 物理质量档 / 时间步钳制 / 震动三档 | ✅ | low/medium/high；50ms 钳制；off/low/normal |
 | 物理参数设置（跟随度 / 碰撞摩擦 / 碰撞弹性） | ✅ 会话级三档循环 | `mmdPhysics` boneFeedbackScale / collider friction / restitution |
 | 动态衣物同组互撞 | ✅ 实验，默认关；切换时重建物理 | 为非静态刚体补上自身 collision group bit；相连刚体仍由 Bullet 排除碰撞 |
+| 物理重建恢复错误分级 | ✅ | 普通失败提示已恢复旧状态；重建与恢复双重失败使用稳定错误码，卸载失效模型并提示退出重进 |
 | 详细物理诊断 | ✅ | `physicsDebugEnabled` + HUD 叠加 |
 | 环境物件 glTF/GLB（A6） | ✅ | 轻量旁路，不进 mmdRuntime |
 | HUD 面板 billboard 跟随用户 | ✅ 默认开；`panelFollowUser` 持久化开关 | yaw-only，`MmdVrHud` useFrame |
@@ -241,6 +243,17 @@ src/mmdVrShowcase/
 | C2 | 移动方向 | 头部朝向 / 左手控制器朝向 |
 | C3 | 坐姿 / 站姿预设 | 复用现有身高补偿，不引入第二套高度状态 |
 | C4 | 移动暗角 | 仅在 M8 表明有必要时实现；必须可关 |
+
+### v0.5 — HUD 信息架构（后续）
+
+保持 `MmdVrPrefs` 扁平字段、localStorage key 和 settings backup v2 不变，只重组 XR 内呈现。该阶段必须在 Quest 上验证按钮尺寸、射线可达性和双眼可读性，不能仅按桌面截图完成。
+
+| ID | 任务 | 说明 |
+|----|------|------|
+| H1 | HUD 四分组 | 舞台 / 移动 / 物理 / 诊断；主面板只保留播放、放置、物理、重置和退出等高频操作 |
+| H2 | 参数归位 | `snapTurnDegrees` 移入移动，`exposure` 移入舞台；物理页只保留交互、模拟和重建相关参数 |
+| H3 | 文案结构化 | 将 `MmdVrScene → PlayerRig → ControlBar` 的逐项 label props 改为结构化 labels，避免每增一项修改多层签名 |
+| H4 | 操作状态 | HUD 显示 enable / disable / rebuild 进行中状态，并保持恢复失败提示优先于普通空态 |
 
 ### v1.1 — 轻量视觉效果（白名单）
 

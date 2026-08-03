@@ -126,7 +126,7 @@ const mmdVrPrefsSchema = z.strictObject({
   advancedRenderOverrides: z.boolean().default(false),
   detailedPhysicsDiagnostics: z.boolean().default(false),
   panelFollowUser: z.boolean().default(true),
-  physicsColliderRadius: z.number().default(0.08),
+  physicsColliderRadius: z.number().refine((value) => [0.04, 0.08, 0.12, 0.16].includes(value)).default(0.08),
   physicsQuality: z.enum(["low", "medium", "high"]).default("medium"),
   physicsBoneFeedback: z.enum(["soft", "normal", "hard"]).default("normal"),
   physicsColliderFriction: z.enum(["low", "medium", "high"]).default("medium"),

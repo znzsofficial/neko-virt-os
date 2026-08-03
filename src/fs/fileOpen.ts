@@ -1,4 +1,5 @@
 import type { AppId } from "../apps";
+import { removeOwnedLocalStorageItem, setOwnedLocalStorageItem } from "../system/persistenceGate";
 import type { FsFile } from "./virtualFs";
 
 const BROWSER_PENDING_URL_KEY = "neko-virt-os.browser-pending-url.v1";
@@ -36,7 +37,7 @@ export function getFileOpenLabelKey(file: Pick<FsFile, "name" | "kind">): "openF
 
 export function queueBrowserOpenUrl(url: string) {
   try {
-    localStorage.setItem(BROWSER_PENDING_URL_KEY, url);
+    setOwnedLocalStorageItem(BROWSER_PENDING_URL_KEY, url);
   } catch {
     // ignore quota / privacy mode failures
   }
@@ -46,7 +47,7 @@ export function consumeBrowserOpenUrl() {
   try {
     const url = localStorage.getItem(BROWSER_PENDING_URL_KEY);
     if (!url) return null;
-    localStorage.removeItem(BROWSER_PENDING_URL_KEY);
+    removeOwnedLocalStorageItem(BROWSER_PENDING_URL_KEY);
     return url;
   } catch {
     return null;

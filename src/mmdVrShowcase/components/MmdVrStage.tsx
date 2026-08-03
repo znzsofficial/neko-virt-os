@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import {
   createMmdRuntimeHandle,
+  isMmdRuntimeRebuildError,
   type MmdRuntimeHandle,
 } from "../../appModules/mmdStudio/mmdRuntime";
 import { useLanguageStore } from "../../languageStore";
@@ -329,11 +330,14 @@ export function MmdVrStageContent() {
   const lightingKeyRef = useRef("");
   const lifecycleGenerationRef = useRef(0);
   const physicsOperationCountRef = useRef(0);
+  const appliedPhysicsEnabledRef = useRef(false);
   const appliedSelfCollisionRef = useRef(useMmdVrStore.getState().prefs.physicsDynamicSelfCollision);
   const labelsRef = useRef({
     loading: "Loading…",
     failed: "Load failed",
     empty: "No model",
+    physicsRestored: "Physics failed; previous state restored",
+    physicsFatal: "Physics recovery failed; exit and enter again",
   });
   const placeMode = useMmdVrStore((s) => s.placeMode);
   const physicsEnabled = useMmdVrStore((s) => s.physicsEnabled);
@@ -348,6 +352,8 @@ export function MmdVrStageContent() {
       loading: t("settingsMmdVrLoading"),
       failed: t("settingsMmdVrLoadFailed"),
       empty: t("settingsMmdVrEmptyNoAssets"),
+      physicsRestored: t("settingsMmdVrPhysicsFailedRestored"),
+      physicsFatal: t("settingsMmdVrPhysicsRecoveryFailed"),
     };
   }, [language]);
 
@@ -399,16 +405,28 @@ export function MmdVrStageContent() {
   }, [runtime, setRuntimeRef]);
 
   useEffect(() => {
+    if (physicsEnabled === appliedPhysicsEnabledRef.current) return;
     let cancelled = false;
     setPhysicsBusy(true);
+    useMmdVrStore.getState().setPhysicsError(null);
     physicsOperationCountRef.current += 1;
     void runtime.setPhysicsEnabled(physicsEnabled).then(() => {
       if (!cancelled) {
+        appliedPhysicsEnabledRef.current = physicsEnabled;
         syncModelList();
       }
     }).catch((error) => {
       console.error("[mmdVr] physics toggle failed", error);
-      if (!cancelled) useMmdVrStore.getState().setPhysicsEnabled(false);
+      if (!cancelled) {
+        const fatal = isMmdRuntimeRebuildError(error);
+        syncModelList();
+        syncMaterialModels();
+        const store = useMmdVrStore.getState();
+        if (fatal) appliedPhysicsEnabledRef.current = false;
+        store.setPhysicsEnabled(fatal ? false : appliedPhysicsEnabledRef.current);
+        store.setPhysicsError(fatal ? labelsRef.current.physicsFatal : labelsRef.current.physicsRestored, fatal);
+        if (fatal) store.setPlaying(false);
+      }
     }).finally(() => {
       physicsOperationCountRef.current = Math.max(0, physicsOperationCountRef.current - 1);
       if (!cancelled && physicsOperationCountRef.current === 0) setPhysicsBusy(false);
@@ -420,8 +438,10 @@ export function MmdVrStageContent() {
 
   useEffect(() => {
     if (!useMmdVrStore.getState().physicsEnabled) return;
+    if (physicsDynamicSelfCollision === appliedSelfCollisionRef.current) return;
     let cancelled = false;
     setPhysicsBusy(true);
+    useMmdVrStore.getState().setPhysicsError(null);
     physicsOperationCountRef.current += 1;
     void runtime.rebuildPhysics().then(() => {
       if (!cancelled) {
@@ -430,9 +450,19 @@ export function MmdVrStageContent() {
       }
     }).catch((error) => {
       console.error("[mmdVr] self-collision rebuild failed", error);
-      if (!cancelled) useMmdVrStore.getState().setPrefs({
-        physicsDynamicSelfCollision: appliedSelfCollisionRef.current,
-      });
+      if (!cancelled) {
+        const fatal = isMmdRuntimeRebuildError(error);
+        syncModelList();
+        syncMaterialModels();
+        const store = useMmdVrStore.getState();
+        store.setPrefs({ physicsDynamicSelfCollision: appliedSelfCollisionRef.current });
+        store.setPhysicsError(fatal ? labelsRef.current.physicsFatal : labelsRef.current.physicsRestored, fatal);
+        if (fatal) {
+          store.setPlaying(false);
+          appliedPhysicsEnabledRef.current = false;
+          store.setPhysicsEnabled(false);
+        }
+      }
     }).finally(() => {
       physicsOperationCountRef.current = Math.max(0, physicsOperationCountRef.current - 1);
       if (!cancelled && physicsOperationCountRef.current === 0) setPhysicsBusy(false);

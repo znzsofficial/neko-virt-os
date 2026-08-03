@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { setOwnedLocalStorageItem } from "../system/persistenceGate";
 import {
   clampPanelPosition,
   clonePose,
@@ -55,7 +56,7 @@ function readLayout(): LayoutMap {
 
 function writeLayout(map: LayoutMap) {
   try {
-    localStorage.setItem(LAYOUT_KEY, JSON.stringify(map));
+    setOwnedLocalStorageItem(LAYOUT_KEY, JSON.stringify(map));
   } catch {
     // ignore
   }

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { setOwnedLocalStorageItem } from "./persistenceGate";
 
 export type DownloadEntry = {
   id: string;
@@ -34,7 +35,7 @@ function readDownloads(): DownloadEntry[] {
 function persistDownloads(entries: DownloadEntry[]) {
   const history: DownloadHistoryEntry[] = entries.map(({ url: _url, ...entry }) => entry);
   try {
-    localStorage.setItem(DOWNLOADS_STORAGE_KEY, JSON.stringify(history));
+    setOwnedLocalStorageItem(DOWNLOADS_STORAGE_KEY, JSON.stringify(history));
   } catch {
     // ignore
   }

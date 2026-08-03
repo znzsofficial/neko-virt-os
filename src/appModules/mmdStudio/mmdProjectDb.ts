@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from "dexie";
+import { runPersistedWrite } from "../../system/persistenceGate";
 import type {
   MmdCameraMode,
   MmdExportAudioBitrate,
@@ -152,10 +153,10 @@ export async function getMmdAutosave() {
 }
 
 export async function deleteMmdProject(id: string) {
-  await db.transaction("rw", db.projects, db.assets, async () => {
+  await runPersistedWrite(() => db.transaction("rw", db.projects, db.assets, async () => {
     await db.assets.where("projectId").equals(id).delete();
     await db.projects.delete(id);
-  });
+  }));
 }
 
 export async function clearAllMmdProjectData() {
@@ -203,6 +204,7 @@ export type SaveMmdProjectInput = {
 };
 
 export async function saveMmdProject(input: SaveMmdProjectInput) {
+  return runPersistedWrite(async () => {
   const projectId = input.id || (input.isAutosave ? AUTOSAVE_PROJECT_ID : `mmd-project-${Date.now()}`);
   const assets: MmdProjectAsset[] = [];
   const models: MmdProjectModelMeta[] = [];
@@ -330,6 +332,7 @@ export async function saveMmdProject(input: SaveMmdProjectInput) {
   });
 
   return record;
+  });
 }
 
 export function sunPositionFromAngles(azimuthDeg: number, elevationDeg: number, distance = 42): [number, number, number] {

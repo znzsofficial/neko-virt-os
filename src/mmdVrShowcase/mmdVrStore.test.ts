@@ -168,6 +168,7 @@ describe("MMD VR adjustments", () => {
     useMmdVrStore.getState().setPhysicsEnabled(true);
     useMmdVrStore.getState().setPhysicsDebugEnabled(true);
     useMmdVrStore.getState().setPhysicsBusy(true);
+    useMmdVrStore.getState().setPhysicsError("failed", true);
 
     useMmdVrStore.getState().closeOverlay();
 
@@ -175,6 +176,8 @@ describe("MMD VR adjustments", () => {
       physicsEnabled: false,
       physicsDebugEnabled: false,
       physicsBusy: false,
+      physicsError: null,
+      physicsFatal: false,
     });
   });
 

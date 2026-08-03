@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { apps, type AppId } from "./apps";
+import { setOwnedLocalStorageItem } from "./system/persistenceGate";
 
 const LAUNCHER_PINNED_KEY = "neko-virt-os.launcher-pinned.v1";
 const LAUNCHER_RECENT_KEY = "neko-virt-os.launcher-recent.v1";
@@ -30,13 +31,13 @@ export const useLauncherStore = create<LauncherStore>((set) => ({
       const pinnedAppIds = state.pinnedAppIds.includes(appId)
         ? state.pinnedAppIds.filter((id) => id !== appId)
         : [...state.pinnedAppIds, appId];
-      localStorage.setItem(LAUNCHER_PINNED_KEY, JSON.stringify(pinnedAppIds));
+      setOwnedLocalStorageItem(LAUNCHER_PINNED_KEY, JSON.stringify(pinnedAppIds));
       return { pinnedAppIds };
     }),
   recordAppLaunch: (appId) =>
     set((state) => {
       const recentAppIds = [appId, ...state.recentAppIds.filter((id) => id !== appId)].slice(0, 8);
-      localStorage.setItem(LAUNCHER_RECENT_KEY, JSON.stringify(recentAppIds));
+      setOwnedLocalStorageItem(LAUNCHER_RECENT_KEY, JSON.stringify(recentAppIds));
       return { recentAppIds };
     }),
 }));

@@ -9,6 +9,15 @@ export function getWallpaperFallbackId(
   return "system";
 }
 
+export function getWallpaperThumbnailUrl(url: string) {
+  const thumbnail = new URL(url);
+  thumbnail.searchParams.set("auto", "format");
+  thumbnail.searchParams.set("fit", "crop");
+  thumbnail.searchParams.set("w", "480");
+  thumbnail.searchParams.set("q", "70");
+  return thumbnail.href;
+}
+
 export function preloadWallpaperImage(
   url: string,
   timeoutMs = 15_000,

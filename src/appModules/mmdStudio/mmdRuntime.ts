@@ -213,6 +213,20 @@ function disposeEntryPhysics(entry: RuntimeEntryWithPhysics) {
   entry.physicsBackend = null;
 }
 
+export class MmdRuntimeRebuildError extends AggregateError {
+  readonly code = "MMD_RUNTIME_REBUILD_RESTORE_FAILED";
+
+  constructor(rebuildError: unknown, restoreError: unknown) {
+    super([rebuildError, restoreError], "Failed to rebuild and restore MMD models");
+    this.name = "MmdRuntimeRebuildError";
+  }
+}
+
+export function isMmdRuntimeRebuildError(error: unknown): error is MmdRuntimeRebuildError {
+  return error instanceof MmdRuntimeRebuildError
+    || (error instanceof Error && "code" in error && error.code === "MMD_RUNTIME_REBUILD_RESTORE_FAILED");
+}
+
 export type MmdRuntimeOptions = {
   /**
    * WebGPU path: prefer official `/webgpu` TSL pipeline (toon + sparse morphs).
@@ -672,7 +686,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       } catch (restoreError) {
         for (const id of [...entries.keys()]) removeEntry(id);
         lastPhysicsSeconds.clear();
-        throw new AggregateError([error, restoreError], "Failed to rebuild and restore MMD models");
+        throw new MmdRuntimeRebuildError(error, restoreError);
       }
       throw error;
     }

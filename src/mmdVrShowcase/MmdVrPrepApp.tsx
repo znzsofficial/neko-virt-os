@@ -398,6 +398,8 @@ export function MmdVrPrepApp() {
                   ))}
                 </div>
               </div>
+              <details className="mmd-vr-prep-advanced">
+                <summary>{t("settingsMmdVrAdvancedConfig")}</summary>
               <div className="mmd-vr-prep-config-row">
                 <span>{t("settingsVrDesktopQuality")}</span>
                 <OptionGroup
@@ -540,6 +542,7 @@ export function MmdVrPrepApp() {
               </label>
               {highLoadConfig ? <p className="mmd-vr-prep-warning">{t("settingsMmdVrHighLoadWarning")}</p> : null}
               <p>{t("settingsVrDesktopQualityHint")}</p>
+              </details>
             </div>
           </details>
 

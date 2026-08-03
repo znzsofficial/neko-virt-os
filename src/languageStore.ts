@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { en } from "./i18n/en";
 import { zh } from "./i18n/zh";
+import { setOwnedLocalStorageItem } from "./system/persistenceGate";
 
 export type Language = "zh" | "en";
 export type TranslationKey = keyof typeof zh;
@@ -23,7 +24,7 @@ export const useLanguageStore = create<{
 }>((set, get) => ({
   language: readLanguage(),
   setLanguage: (language) => {
-    localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+    setOwnedLocalStorageItem(LANGUAGE_STORAGE_KEY, language);
     document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
     set({ language });
   },

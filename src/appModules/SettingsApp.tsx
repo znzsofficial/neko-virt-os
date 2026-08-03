@@ -18,6 +18,7 @@ import {
   parseSettingsBackup,
 } from "../system/settingsBackup";
 import { resetSiteData } from "../system/siteDataReset";
+import { pausePersistence } from "../system/persistenceGate";
 import {
   applyThemeSettings,
   readThemeSettings,
@@ -167,9 +168,8 @@ export function SettingsApp() {
       });
       if (!ok) return;
       setCacheBusy(true);
-      const keys = await caches.keys();
-      const results = await Promise.all(keys.map((key) => caches.delete(key)));
-      if (results.some((deleted) => !deleted)) throw new Error("cache-delete-failed");
+      const { removeOwnedCaches } = await import("../system/siteDataReset");
+      const keys = await removeOwnedCaches(caches);
       navigator.storage?.estimate().then(setStorage).catch(() => setStorage(null));
       addNotification({ title: t("cacheCleared"), message: phrase(t, "cacheClearedPrefix", keys.length, "cacheClearedSuffix"), type: "success", category: "system", appId: "settings" });
     } catch {
@@ -215,6 +215,7 @@ export function SettingsApp() {
       });
       if (!ok) return;
       setSiteDataBusy(true);
+      await pausePersistence();
       const result = await resetSiteData();
       if (!result.ok) {
         const failedCount = result.stages.filter((stage) => !stage.ok).length;
@@ -225,10 +226,11 @@ export function SettingsApp() {
           category: "system",
           appId: "settings",
         });
+        window.location.reload();
         return;
       }
       addNotification({ title: t("siteDataCleared"), message: t("siteDataClearedMessage"), type: "success", category: "system", appId: "settings" });
-      window.setTimeout(() => window.location.reload(), 700);
+      window.location.reload();
     } catch {
       addNotification({
         title: t("siteDataResetFailed"),
@@ -237,6 +239,7 @@ export function SettingsApp() {
         category: "system",
         appId: "settings",
       });
+      window.location.reload();
     } finally {
       setSiteDataBusy(false);
       destructiveActionRef.current = null;

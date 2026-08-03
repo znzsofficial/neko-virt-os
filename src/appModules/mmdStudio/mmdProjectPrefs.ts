@@ -1,5 +1,6 @@
 import { createFolder, listFiles, createTextFile, updateFileContent, type FsFile } from "../../fs";
 import { findEntryByNameInFolder } from "../../fs";
+import { removeOwnedLocalStorageItem, setOwnedLocalStorageItem } from "../../system/persistenceGate";
 
 const FOLDER_KEY = "neko-virt-os.mmd-project-folder.v1";
 const DEFAULT_FOLDER_NAME = "MMD Projects";
@@ -15,8 +16,8 @@ export function getMmdProjectFolderId(): string | null {
 
 export function setMmdProjectFolderId(id: string | null) {
   try {
-    if (!id) localStorage.removeItem(FOLDER_KEY);
-    else localStorage.setItem(FOLDER_KEY, id);
+    if (!id) removeOwnedLocalStorageItem(FOLDER_KEY);
+    else setOwnedLocalStorageItem(FOLDER_KEY, id);
   } catch {
     // ignore
   }

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { setOwnedLocalStorageItem } from "../../system/persistenceGate";
 
 export type MmdRendererBackend = "webgl" | "webgpu";
 export type MmdPostFxPreset = "off" | "clean" | "soft" | "cinema" | "dreamy" | "film" | "anime" | "custom";
@@ -779,7 +780,7 @@ function loadExportSettings(): Required<ExportSettingsPersist> {
 function persistExportSettings(partial: Partial<ExportSettingsPersist>) {
   try {
     const current = loadExportSettings();
-    localStorage.setItem(EXPORT_KEY, JSON.stringify({ ...current, ...partial }));
+    setOwnedLocalStorageItem(EXPORT_KEY, JSON.stringify({ ...current, ...partial }));
   } catch {
     // ignore
   }
@@ -923,7 +924,7 @@ function clampNum(value: unknown, min: number, max: number, fallback: number) {
 
 function persistLights(lights: MmdLightSettings) {
   try {
-    localStorage.setItem(LIGHTS_KEY, JSON.stringify(lights));
+    setOwnedLocalStorageItem(LIGHTS_KEY, JSON.stringify(lights));
   } catch {
     // ignore
   }
@@ -1009,7 +1010,7 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
   setBackend: (backend) => {
     if (get().backend === backend) return;
     try {
-      localStorage.setItem(BACKEND_KEY, backend);
+      setOwnedLocalStorageItem(BACKEND_KEY, backend);
     } catch {
       // ignore
     }
@@ -1017,7 +1018,7 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
   },
   setPostFx: (postFx) => {
     try {
-      localStorage.setItem(POSTFX_KEY, postFx);
+      setOwnedLocalStorageItem(POSTFX_KEY, postFx);
     } catch {
       // ignore
     }
@@ -1027,7 +1028,7 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
     }
     const tune = { ...PRESET_TUNES[postFx] };
     try {
-      localStorage.setItem(POSTFX_TUNE_KEY, JSON.stringify(tune));
+      setOwnedLocalStorageItem(POSTFX_TUNE_KEY, JSON.stringify(tune));
     } catch {
       // ignore
     }
@@ -1040,8 +1041,8 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
       lut: partial.lut !== undefined ? sanitizeLut(partial.lut) : get().postFxTune.lut,
     };
     try {
-      localStorage.setItem(POSTFX_TUNE_KEY, JSON.stringify(postFxTune));
-      localStorage.setItem(POSTFX_KEY, "custom");
+      setOwnedLocalStorageItem(POSTFX_TUNE_KEY, JSON.stringify(postFxTune));
+      setOwnedLocalStorageItem(POSTFX_KEY, "custom");
     } catch {
       // ignore
     }
@@ -1052,8 +1053,8 @@ export const useMmdStudioStore = create<MmdStudioStore>((set, get) => {
     const nextPreset = base === "custom" || base === "off" ? "soft" : base;
     const tune = { ...PRESET_TUNES[nextPreset] };
     try {
-      localStorage.setItem(POSTFX_TUNE_KEY, JSON.stringify(tune));
-      localStorage.setItem(POSTFX_KEY, nextPreset);
+      setOwnedLocalStorageItem(POSTFX_TUNE_KEY, JSON.stringify(tune));
+      setOwnedLocalStorageItem(POSTFX_KEY, nextPreset);
     } catch {
       // ignore
     }

@@ -126,6 +126,9 @@ type MmdVrStore = {
   setLoop: (loop: boolean) => void;
   statusLine: string | null;
   setStatusLine: (line: string | null) => void;
+  physicsError: string | null;
+  physicsFatal: boolean;
+  setPhysicsError: (message: string | null, fatal?: boolean) => void;
   physicsEnabled: boolean;
   setPhysicsEnabled: (enabled: boolean) => void;
   physicsDebugEnabled: boolean;
@@ -333,6 +336,8 @@ function sessionReset() {
   return {
     playing: false,
     statusLine: null as string | null,
+    physicsError: null as string | null,
+    physicsFatal: false,
     physicsEnabled: false,
     physicsDebugEnabled: false,
     physicsControllerCollisions: true,
@@ -469,6 +474,9 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
   },
   statusLine: null,
   setStatusLine: (statusLine) => set({ statusLine }),
+  physicsError: null,
+  physicsFatal: false,
+  setPhysicsError: (physicsError, physicsFatal = false) => set({ physicsError, physicsFatal }),
   physicsEnabled: false,
   setPhysicsEnabled: (physicsEnabled) => set(physicsEnabled
     ? { physicsEnabled }

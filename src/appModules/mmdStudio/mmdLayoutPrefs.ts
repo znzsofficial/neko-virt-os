@@ -1,3 +1,5 @@
+import { setOwnedLocalStorageItem } from "../../system/persistenceGate";
+
 const STORAGE_KEY = "neko-virt-os.mmd-layout.v1";
 
 export const MMD_SIDE_WIDTH_DEFAULT = 300;
@@ -48,7 +50,7 @@ export function readMmdLayoutPrefs(): MmdLayoutPrefs {
 
 export function writeMmdLayoutPrefs(prefs: MmdLayoutPrefs) {
   try {
-    localStorage.setItem(
+    setOwnedLocalStorageItem(
       STORAGE_KEY,
       JSON.stringify({
         sideWidth: clampSideWidth(prefs.sideWidth),

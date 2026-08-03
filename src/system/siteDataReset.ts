@@ -1,4 +1,5 @@
 export const APP_STORAGE_PREFIX = "neko-virt-os.";
+export const APP_CACHE_PREFIX = "neko-virt-os-";
 
 export type SiteDataResetStage = "caches" | "mmdProjects" | "virtualFiles" | "preferences";
 
@@ -49,6 +50,16 @@ export function removeOwnedLocalStorage(
   return keys;
 }
 
+export async function removeOwnedCaches(
+  cacheStorage: Pick<CacheStorage, "keys" | "delete">,
+  prefix = APP_CACHE_PREFIX,
+) {
+  const keys = (await cacheStorage.keys()).filter((key) => key.startsWith(prefix));
+  const results = await Promise.all(keys.map((key) => cacheStorage.delete(key)));
+  if (results.some((deleted) => !deleted)) throw new Error("cache-delete-failed");
+  return keys;
+}
+
 async function runStage(
   stage: SiteDataResetStage,
   action: () => Promise<void> | void,
@@ -69,8 +80,8 @@ export async function resetSiteData(
     : getDefaultCacheStorage();
   const storage = dependencies?.storage ?? getDefaultStorage();
   const resetVirtualFiles = dependencies?.resetVirtualFiles ?? (async () => {
-    const { resetVirtualFiles } = await import("../fs/virtualFs");
-    await resetVirtualFiles();
+    const { clearVirtualFilesForSiteReset } = await import("../fs/virtualFs");
+    await clearVirtualFilesForSiteReset();
   });
   const clearMmdProjects = dependencies?.clearMmdProjects ?? (async () => {
     const { clearAllMmdProjectData } = await import("../appModules/mmdStudio/mmdProjectDb");
@@ -80,9 +91,7 @@ export async function resetSiteData(
   const stages = await Promise.all([
     runStage("caches", async () => {
       if (!cacheStorage) return;
-      const keys = await cacheStorage.keys();
-      const results = await Promise.all(keys.map((key) => cacheStorage.delete(key)));
-      if (results.some((deleted) => !deleted)) throw new Error("cache-delete-failed");
+       await removeOwnedCaches(cacheStorage);
     }),
     runStage("mmdProjects", clearMmdProjects),
     runStage("virtualFiles", resetVirtualFiles),

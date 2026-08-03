@@ -1,3 +1,5 @@
+import { setOwnedLocalStorageItem } from "../../system/persistenceGate";
+
 export const TASKS_STORAGE_KEY = "neko-virt-os.tasks.v2";
 export const TASKS_LEGACY_KEY = "neko-virt-os.tasks.v1";
 
@@ -43,7 +45,7 @@ export function readTasks(): LocalTaskItem[] {
 
 export function writeTasks(tasks: LocalTaskItem[]) {
   try {
-    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+    setOwnedLocalStorageItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
   } catch {
     // ignore
   }

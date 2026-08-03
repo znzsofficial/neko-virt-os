@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { removeOwnedLocalStorageItem, setOwnedLocalStorageItem } from "./system/persistenceGate";
 import { nanoid } from "nanoid";
 import { apps } from "./apps";
 import { initialWindows } from "./initialWindows";
@@ -257,17 +258,17 @@ export const useDesktopStore = create<DesktopStore>((set, get) => ({
   updateDesktopIconPosition: (id, x, y) =>
     set((state) => {
       const nextPositions = { ...state.desktopIconPositions, [id]: { x, y } };
-      localStorage.setItem(DESKTOP_ICON_POSITIONS_KEY, JSON.stringify(nextPositions));
+      setOwnedLocalStorageItem(DESKTOP_ICON_POSITIONS_KEY, JSON.stringify(nextPositions));
       return { desktopIconPositions: nextPositions };
     }),
   setDesktopLayoutMode: (mode) => {
-    localStorage.setItem(DESKTOP_LAYOUT_MODE_KEY, mode);
+    setOwnedLocalStorageItem(DESKTOP_LAYOUT_MODE_KEY, mode);
     set({ desktopLayoutMode: mode });
   },
   resetWindowLayout: () => {
-    localStorage.removeItem(WINDOW_LAYOUT_STORAGE_KEY);
-    localStorage.removeItem(DESKTOP_ICON_POSITIONS_KEY);
-    localStorage.removeItem(DESKTOP_LAYOUT_MODE_KEY);
+    removeOwnedLocalStorageItem(WINDOW_LAYOUT_STORAGE_KEY);
+    removeOwnedLocalStorageItem(DESKTOP_ICON_POSITIONS_KEY);
+    removeOwnedLocalStorageItem(DESKTOP_LAYOUT_MODE_KEY);
     set({
       windows: initialWindows,
       activeWindowId: initialWindows[0]?.id ?? null,
@@ -369,5 +370,5 @@ function normalizeWindowState(windowState: WindowState): WindowState | null {
 }
 
 function saveWindowSnapshot(windows: WindowState[], activeWindowId: string | null) {
-  localStorage.setItem(WINDOW_LAYOUT_STORAGE_KEY, JSON.stringify({ windows, activeWindowId }));
+  setOwnedLocalStorageItem(WINDOW_LAYOUT_STORAGE_KEY, JSON.stringify({ windows, activeWindowId }));
 }

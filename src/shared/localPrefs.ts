@@ -1,3 +1,5 @@
+import { setOwnedLocalStorageItem } from "../system/persistenceGate";
+
 /**
  * Tiny localStorage JSON prefs helper (legacy key + normalize).
  * No React; safe for stores and pure modules.
@@ -32,7 +34,7 @@ export function createLocalPrefsStorage<T extends object>(
 
   function write(value: T) {
     try {
-      localStorage.setItem(opts.key, JSON.stringify(value));
+      setOwnedLocalStorageItem(opts.key, JSON.stringify(value));
     } catch {
       // ignore quota / private mode
     }

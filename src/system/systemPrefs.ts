@@ -1,3 +1,5 @@
+import { setOwnedLocalStorageItem } from "./persistenceGate";
+
 export type AutoLockMinutes = 0 | 5 | 15 | 30;
 
 export type SystemPrefs = {
@@ -46,7 +48,7 @@ export function readSystemPrefs(): SystemPrefs {
 export function updateSystemPrefs(patch: Partial<SystemPrefs>): SystemPrefs {
   const next = normalizeSystemPrefs({ ...readSystemPrefs(), ...patch });
   try {
-    localStorage.setItem(SYSTEM_PREFS_KEY, JSON.stringify(next));
+    setOwnedLocalStorageItem(SYSTEM_PREFS_KEY, JSON.stringify(next));
   } catch {
     // ignore
   }

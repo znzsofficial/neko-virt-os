@@ -1,4 +1,5 @@
 import { BROWSER_HOME_URL } from "./urls";
+import { setOwnedLocalStorageItem } from "../../system/persistenceGate";
 
 export const BROWSER_SESSION_STORAGE_KEY = "neko-virt-os.browser-session.v1";
 export const BROWSER_RECENTS_STORAGE_KEY = "neko-virt-os.browser-recents.v1";
@@ -51,7 +52,7 @@ export function readBrowserRecents(): BrowserRecentEntry[] {
 
 export function writeBrowserRecents(entries: BrowserRecentEntry[]) {
   try {
-    localStorage.setItem(BROWSER_RECENTS_STORAGE_KEY, JSON.stringify(entries.slice(0, 8)));
+    setOwnedLocalStorageItem(BROWSER_RECENTS_STORAGE_KEY, JSON.stringify(entries.slice(0, 8)));
   } catch {
     // ignore
   }
@@ -88,7 +89,7 @@ export function readBrowserBookmarksRaw(): BrowserBookmarkEntry[] | null {
 
 export function writeBrowserBookmarks(entries: BrowserBookmarkEntry[]) {
   try {
-    localStorage.setItem(BROWSER_BOOKMARKS_STORAGE_KEY, JSON.stringify(entries));
+    setOwnedLocalStorageItem(BROWSER_BOOKMARKS_STORAGE_KEY, JSON.stringify(entries));
   } catch {
     // ignore
   }
@@ -105,7 +106,7 @@ export function readClosedTabRecords(): BrowserTabRecord[] {
 
 export function writeClosedTabRecords(tabs: BrowserTabRecord[]) {
   try {
-    localStorage.setItem(BROWSER_CLOSED_TABS_STORAGE_KEY, JSON.stringify(tabs.slice(0, 8)));
+    setOwnedLocalStorageItem(BROWSER_CLOSED_TABS_STORAGE_KEY, JSON.stringify(tabs.slice(0, 8)));
   } catch {
     // ignore
   }
@@ -142,7 +143,7 @@ export function readBrowserSessionRecords(): {
 
 export function writeBrowserSessionRecords(tabs: BrowserTabRecord[], activeTabId: string) {
   try {
-    localStorage.setItem(BROWSER_SESSION_STORAGE_KEY, JSON.stringify({ tabs, activeTabId }));
+    setOwnedLocalStorageItem(BROWSER_SESSION_STORAGE_KEY, JSON.stringify({ tabs, activeTabId }));
   } catch {
     // ignore
   }
@@ -160,7 +161,7 @@ export function readBrowserSearchEngine(): BrowserSearchEngine {
 
 export function writeBrowserSearchEngine(engine: BrowserSearchEngine) {
   try {
-    localStorage.setItem(BROWSER_SEARCH_ENGINE_STORAGE_KEY, engine);
+    setOwnedLocalStorageItem(BROWSER_SEARCH_ENGINE_STORAGE_KEY, engine);
   } catch {
     // ignore
   }

@@ -2,6 +2,7 @@ import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
 import { useHotkeys } from "react-hotkeys-hook";
 import { lazy, Suspense, useEffect, useState, type MouseEvent } from "react";
+import { setOwnedLocalStorageItem } from "./system/persistenceGate";
 import { AppDialogHost } from "./components/AppDialogHost";
 import { FpsOverlay } from "./components/FpsOverlay";
 import { Launcher } from "./components/Launcher";
@@ -74,7 +75,7 @@ export function App() {
   useEffect(() => {
     const theme = readThemeSettings();
     applyThemeSettings(theme);
-    localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(theme));
+    setOwnedLocalStorageItem(THEME_STORAGE_KEY, JSON.stringify(theme));
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const updateSystemTheme = () => {

@@ -1,3 +1,5 @@
+import { setOwnedLocalStorageItem } from "./persistenceGate";
+
 export type AnimationQuality = "fluid" | "power";
 
 export type DeveloperPrefs = {
@@ -56,7 +58,7 @@ export function applyDeveloperPrefs(prefs: DeveloperPrefs) {
 export function updateDeveloperPrefs(patch: Partial<DeveloperPrefs>): DeveloperPrefs {
   const next = normalizeDeveloperPrefs({ ...readDeveloperPrefs(), ...patch });
   try {
-    localStorage.setItem(DEVELOPER_PREFS_KEY, JSON.stringify(next));
+    setOwnedLocalStorageItem(DEVELOPER_PREFS_KEY, JSON.stringify(next));
   } catch {
     // ignore quota
   }

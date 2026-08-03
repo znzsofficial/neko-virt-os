@@ -1281,6 +1281,7 @@ export function MmdVrControlBar({
   const modelCount = useMmdVrStore((s) => s.modelCount);
   const objectCount = useMmdVrStore((s) => s.objects.length);
   const statusLine = useMmdVrStore((s) => s.statusLine);
+  const physicsError = useMmdVrStore((s) => s.physicsError);
   const placeMode = useMmdVrStore((s) => s.placeMode);
   const lightPreset = useMmdVrStore((s) => s.prefs.lightPreset);
   const prefs = useMmdVrStore((s) => s.prefs);
@@ -1326,7 +1327,7 @@ export function MmdVrControlBar({
   const themeIndex = Math.max(0, XR_THEME_COLORS.indexOf(prefs.themeColor));
 
   const status =
-    statusLine ??
+    physicsError ?? statusLine ??
     (modelCount === 0 && objectCount === 0 ? emptyHint : placeMode ? placeHint : null);
   const lightLabel =
     lightPreset === "soft"
