@@ -25,6 +25,7 @@ import {
   MMD_VR_HAPTIC_POLL_INTERVAL,
   setMmdVrHapticContacts,
 } from "../mmdVrHaptics";
+import { transformRequiresPhysicsReseed } from "../mmdVrPhysicsReseed";
 
 const STAGE_BG = "#0c1018";
 const OBJECT_DEFAULT_Z = -2.2;
@@ -51,6 +52,10 @@ const LIGHT_PRESETS: Record<
     skyHorizon: string;
     fogColor: string;
     floorColor: string;
+    rimColor: string;
+    rimIntensity: number;
+    rimPosition: [number, number, number];
+    poolColor: string;
   }
 > = {
   stage: {
@@ -66,6 +71,10 @@ const LIGHT_PRESETS: Record<
     skyHorizon: "#0e1520",
     fogColor: "#0c1018",
     floorColor: "#1a2230",
+    rimColor: "#6688bb",
+    rimIntensity: 0,
+    rimPosition: [0, 3.5, -3.5],
+    poolColor: "#6688bb",
   },
   soft: {
     ambient: 0.75,
@@ -80,6 +89,10 @@ const LIGHT_PRESETS: Record<
     skyHorizon: "#2a2c44",
     fogColor: "#282a46",
     floorColor: "#34344c",
+    rimColor: "#a891cf",
+    rimIntensity: 0.35,
+    rimPosition: [0, 3.2, -3],
+    poolColor: "#a891cf",
   },
   contrast: {
     ambient: 0.28,
@@ -94,6 +107,10 @@ const LIGHT_PRESETS: Record<
     skyHorizon: "#05080c",
     fogColor: "#0a0e15",
     floorColor: "#141a26",
+    rimColor: "#5879bb",
+    rimIntensity: 0.55,
+    rimPosition: [0, 4.5, -4],
+    poolColor: "#5879bb",
   },
   daylight: {
     ambient: 0.62,
@@ -108,6 +125,10 @@ const LIGHT_PRESETS: Record<
     skyHorizon: "#b7ccd8",
     fogColor: "#a3bccb",
     floorColor: "#5a6a76",
+    rimColor: "#b9e7ff",
+    rimIntensity: 0.2,
+    rimPosition: [-2.5, 4, -3],
+    poolColor: "#b9e7ff",
   },
   warm: {
     ambient: 0.42,
@@ -122,6 +143,10 @@ const LIGHT_PRESETS: Record<
     skyHorizon: "#9a6a70",
     fogColor: "#8a5f66",
     floorColor: "#4a3a42",
+    rimColor: "#ff8dba",
+    rimIntensity: 0.45,
+    rimPosition: [-1.5, 3.5, -3.2],
+    poolColor: "#ff8dba",
   },
   rim: {
     ambient: 0.3,
@@ -136,6 +161,10 @@ const LIGHT_PRESETS: Record<
     skyHorizon: "#24384c",
     fogColor: "#1e3142",
     floorColor: "#26303f",
+    rimColor: "#63eaff",
+    rimIntensity: 1.1,
+    rimPosition: [0, 3.8, -4.5],
+    poolColor: "#63eaff",
   },
 };
 
@@ -223,6 +252,42 @@ function StageFloor({
   );
 }
 
+function StageLightPool({ color, opacity }: { color: string; opacity: number }) {
+  const texture = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 128;
+    canvas.height = 128;
+    const context = canvas.getContext("2d");
+    if (context) {
+      const gradient = context.createRadialGradient(64, 64, 4, 64, 64, 62);
+      gradient.addColorStop(0, "#ffffff");
+      gradient.addColorStop(0.22, "#ffffff");
+      gradient.addColorStop(1, "rgba(255,255,255,0)");
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, 128, 128);
+    }
+    const map = new THREE.CanvasTexture(canvas);
+    map.colorSpace = THREE.SRGBColorSpace;
+    return map;
+  }, []);
+
+  useEffect(() => () => texture.dispose(), [texture]);
+
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, -0.35]}>
+      <planeGeometry args={[5.4, 5.4]} />
+      <meshBasicMaterial
+        map={texture}
+        color={color}
+        transparent
+        opacity={opacity}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </mesh>
+  );
+}
+
 /**
  * Owns MMD runtime (WebGL only), loads session assets once, advances timeline.
  */
@@ -263,6 +328,8 @@ export function MmdVrStageContent() {
   const lastSeekEpochRef = useRef(0);
   const lightingKeyRef = useRef("");
   const lifecycleGenerationRef = useRef(0);
+  const physicsOperationCountRef = useRef(0);
+  const appliedSelfCollisionRef = useRef(useMmdVrStore.getState().prefs.physicsDynamicSelfCollision);
   const labelsRef = useRef({
     loading: "Loading…",
     failed: "Load failed",
@@ -271,6 +338,7 @@ export function MmdVrStageContent() {
   const placeMode = useMmdVrStore((s) => s.placeMode);
   const physicsEnabled = useMmdVrStore((s) => s.physicsEnabled);
   const physicsBusy = useMmdVrStore((s) => s.physicsBusy);
+  const physicsDynamicSelfCollision = useMmdVrStore((s) => s.prefs.physicsDynamicSelfCollision);
   const setPhysicsBusy = useMmdVrStore((s) => s.setPhysicsBusy);
 
   // Keep labels current without re-running the load effect on language change.
@@ -301,6 +369,7 @@ export function MmdVrStageContent() {
       controllerCollidersEnabled: () => useMmdVrStore.getState().physicsControllerCollisions,
       controllerColliderRadius: () => useMmdVrStore.getState().prefs.physicsColliderRadius,
       physicsQuality: () => useMmdVrStore.getState().prefs.physicsQuality,
+      physicsDynamicSelfCollision: () => useMmdVrStore.getState().prefs.physicsDynamicSelfCollision,
       physicsBoneFeedbackScale: () => {
         const map = { soft: 0.35, normal: 1, hard: 1.8 } as const;
         return map[useMmdVrStore.getState().prefs.physicsBoneFeedback];
@@ -332,6 +401,7 @@ export function MmdVrStageContent() {
   useEffect(() => {
     let cancelled = false;
     setPhysicsBusy(true);
+    physicsOperationCountRef.current += 1;
     void runtime.setPhysicsEnabled(physicsEnabled).then(() => {
       if (!cancelled) {
         syncModelList();
@@ -340,12 +410,37 @@ export function MmdVrStageContent() {
       console.error("[mmdVr] physics toggle failed", error);
       if (!cancelled) useMmdVrStore.getState().setPhysicsEnabled(false);
     }).finally(() => {
-      if (!cancelled) setPhysicsBusy(false);
+      physicsOperationCountRef.current = Math.max(0, physicsOperationCountRef.current - 1);
+      if (!cancelled && physicsOperationCountRef.current === 0) setPhysicsBusy(false);
     });
     return () => {
       cancelled = true;
     };
   }, [physicsEnabled, runtime, setPhysicsBusy]);
+
+  useEffect(() => {
+    if (!useMmdVrStore.getState().physicsEnabled) return;
+    let cancelled = false;
+    setPhysicsBusy(true);
+    physicsOperationCountRef.current += 1;
+    void runtime.rebuildPhysics().then(() => {
+      if (!cancelled) {
+        appliedSelfCollisionRef.current = physicsDynamicSelfCollision;
+        syncModelList();
+      }
+    }).catch((error) => {
+      console.error("[mmdVr] self-collision rebuild failed", error);
+      if (!cancelled) useMmdVrStore.getState().setPrefs({
+        physicsDynamicSelfCollision: appliedSelfCollisionRef.current,
+      });
+    }).finally(() => {
+      physicsOperationCountRef.current = Math.max(0, physicsOperationCountRef.current - 1);
+      if (!cancelled && physicsOperationCountRef.current === 0) setPhysicsBusy(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [physicsDynamicSelfCollision, runtime, setPhysicsBusy]);
 
   useEffect(() => {
     const generation = ++lifecycleGenerationRef.current;
@@ -643,7 +738,7 @@ export function MmdVrStageContent() {
     applyLighting();
 
     const store = useMmdVrStore.getState();
-    let modelTransformChanged = false;
+    let physicsReseedNeeded = false;
     const removals = store.physicsBusy ? [] : store.takeModelRemovals();
     if (removals.length) {
       for (const id of removals) {
@@ -688,7 +783,7 @@ export function MmdVrStageContent() {
             positionY: 0,
             positionZ: place.z,
           });
-          modelTransformChanged = true;
+          physicsReseedNeeded = true;
         }
         if (store.placeModelId !== targetId) {
           store.setPlaceModelId(targetId);
@@ -726,28 +821,25 @@ export function MmdVrStageContent() {
             ...(request.scale == null ? {} : { scale: request.scale }),
             ...(request.rotationY == null ? {} : { rotationY: request.rotationY }),
           });
+          physicsReseedNeeded ||= transformRequiresPhysicsReseed(request);
           continue;
         }
         runtime.setModelTransform(request.id, {
           ...(request.scale == null ? {} : { scale: request.scale }),
           ...(request.rotationY == null ? {} : { rotationY: request.rotationY }),
         });
+        physicsReseedNeeded ||= transformRequiresPhysicsReseed(request);
       }
       syncModelList();
       syncObjects();
-      modelTransformChanged = true;
     }
-
-    if (modelTransformChanged && store.physicsEnabled && !store.physicsBusy) {
+    const physicsResetRequested = store.physicsResetEpoch !== lastPhysicsResetEpochRef.current;
+    if (physicsResetRequested) {
+      lastPhysicsResetEpochRef.current = store.physicsResetEpoch;
+    }
+    if ((physicsReseedNeeded || physicsResetRequested) && store.physicsEnabled && !store.physicsBusy) {
       runtime.resetPhysics(timeRef.current);
       physicsOnlyTimeRef.current = 0;
-    }
-    if (store.physicsResetEpoch !== lastPhysicsResetEpochRef.current) {
-      lastPhysicsResetEpochRef.current = store.physicsResetEpoch;
-      if (store.physicsEnabled && !store.physicsBusy) {
-        runtime.resetPhysics(timeRef.current);
-        physicsOnlyTimeRef.current = 0;
-      }
     }
 
     const rt = runtimeRef.current;
@@ -873,6 +965,15 @@ export function MmdVrStageContent() {
         shadow-camera-bottom={-shadowExtent}
       />
       <hemisphereLight args={[lightCfg.hemiSky, lightCfg.hemiGround, lightCfg.hemi]} />
+      {lightCfg.rimIntensity > 0 ? (
+        <pointLight
+          color={lightCfg.rimColor}
+          intensity={lightCfg.rimIntensity}
+          distance={8}
+          decay={2}
+          position={lightCfg.rimPosition}
+        />
+      ) : null}
       <StageFloor
         segments={profile.floorSegments}
         shadows={profile.shadows}
@@ -880,6 +981,9 @@ export function MmdVrStageContent() {
         themeColor={mmdPrefs.themeColor}
         floorColor={lightCfg.floorColor}
       />
+      {lightCfg.rimIntensity > 0 ? (
+        <StageLightPool color={lightCfg.poolColor} opacity={Math.min(0.14, lightCfg.rimIntensity * 0.08)} />
+      ) : null}
       {profile.showGrid ? (
         <gridHelper
           args={[12, 12, getXrAccentTokens(mmdPrefs.themeColor).gridMajor, getXrAccentTokens(mmdPrefs.themeColor).gridMinor]}

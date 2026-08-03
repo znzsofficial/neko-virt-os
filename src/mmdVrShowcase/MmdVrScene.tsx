@@ -128,6 +128,8 @@ export function MmdVrScene() {
             physicsSettingsLabel={t("settingsMmdVrPhysicsSettings")}
             physicsCollisionOnLabel={t("settingsMmdVrPhysicsCollisionOn")}
             physicsCollisionOffLabel={t("settingsMmdVrPhysicsCollisionOff")}
+            physicsSelfCollisionOnLabel={t("settingsMmdVrPhysicsSelfCollisionOn")}
+            physicsSelfCollisionOffLabel={t("settingsMmdVrPhysicsSelfCollisionOff")}
             physicsRadiusLabel={t("settingsMmdVrPhysicsRadius")}
             physicsQualityLabels={[
               t("settingsMmdVrPhysicsQualityLow"),

@@ -3,8 +3,8 @@ export const MMD_VR_MODEL_SCALE_STEPS = [
   1.25, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10,
 ] as const;
 
-export const MMD_VR_HEIGHT_OFFSET_MIN = -2;
-export const MMD_VR_HEIGHT_OFFSET_MAX = 20;
+export const MMD_VR_HEIGHT_OFFSET_MIN = -5;
+export const MMD_VR_HEIGHT_OFFSET_MAX = 50;
 export const MMD_VR_HEIGHT_OFFSET_STEP = 0.1;
 export const MMD_VR_HEIGHT_OFFSET_FINE_STEP = 0.01;
 export const MMD_VR_MODEL_SCALE_MIN = 0.01;

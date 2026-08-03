@@ -104,7 +104,7 @@ function createBackup(): SettingsBackup {
       framebufferScalePref: "1",
       foveationPref: "medium",
       shadowResolutionPref: "high",
-      heightOffset: 20,
+      heightOffset: 50,
       viewDistance: 80,
       themeColor: "purple",
       snapTurnDegrees: 45,
@@ -118,6 +118,7 @@ function createBackup(): SettingsBackup {
       physicsColliderFriction: "high",
       physicsColliderRestitution: "low",
       physicsHapticLevel: "normal",
+      physicsDynamicSelfCollision: true,
     },
   };
 }
@@ -134,7 +135,7 @@ describe("settings backup v2", () => {
     expect(storage.getItem(DESKTOP_LAYOUT_MODE_KEY)).toBe("free");
     expect(storage.getItem(VR_DESKTOP_PREFS_KEY)).toContain('"renderQuality":"high"');
     expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"shadowResolutionPref":"high"');
-    expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"heightOffset":20');
+    expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"heightOffset":50');
     expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"snapTurnDegrees":45');
   });
 

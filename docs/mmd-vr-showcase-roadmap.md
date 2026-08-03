@@ -58,7 +58,7 @@
 | 与 VR 桌面互斥 | ✅ | `requestImmersiveEnter` |
 | 点地放置模型 (M13) | ✅ | placeMode + 地面射线 |
 | 模型连续缩放 / 旋转 / 复位 | ✅ | 每模型 HUD；复位恢复初始队列位置 |
-| 用户身高补偿 | ✅ | -2m–+20m HUD 滑条 + 右摇杆纵轴连续调节 |
+| 用户身高补偿 | ✅ | -5m–+50m HUD 滑条 + 右摇杆纵轴连续调节 |
 | VR 内快速设置 | ✅ | 行走速度 / FPS / 主题色 |
 | HUD 空间拖动 | ✅ | 沿控制器射线调整三维位置 |
 | 空态 / 错误态文案 (M14) | ✅ | emptyNoAssets / loadFailed |
@@ -70,6 +70,7 @@
 | Bullet 物理开关 + 控制器碰撞（X1） | ✅ 实验，默认关 | `MmdVrControllerColliders` |
 | 物理质量档 / 时间步钳制 / 震动三档 | ✅ | low/medium/high；50ms 钳制；off/low/normal |
 | 物理参数设置（跟随度 / 碰撞摩擦 / 碰撞弹性） | ✅ 会话级三档循环 | `mmdPhysics` boneFeedbackScale / collider friction / restitution |
+| 动态衣物同组互撞 | ✅ 实验，默认关；切换时重建物理 | 为非静态刚体补上自身 collision group bit；相连刚体仍由 Bullet 排除碰撞 |
 | 详细物理诊断 | ✅ | `physicsDebugEnabled` + HUD 叠加 |
 | 环境物件 glTF/GLB（A6） | ✅ | 轻量旁路，不进 mmdRuntime |
 | HUD 面板 billboard 跟随用户 | ✅ 默认开；`panelFollowUser` 持久化开关 | yaw-only，`MmdVrHud` useFrame |
@@ -208,7 +209,7 @@ src/mmdVrShowcase/
 | S5 | 设置真实性 | ✅ 默认隐藏 framebuffer scale / foveation 控件；「实验渲染覆盖」显式开启后展示并生效，避免暴露无效设置 |
 | S6 | 物理时间步稳定 | ✅ 模拟增量钳制 50ms（`clampMmdVrSimulationDelta`，与 Studio 一致）；固定步进累加器入 X6 |
 | S7 | 物理质量档与诊断 | ✅ 会话内 低/中/高（默认中）+ HUD 碰撞诊断；自适应策略入 X9 |
-| S8 | 碰撞震动反馈 | ✅ 三档 off/low/normal（默认 off）+ 冷却/防抖 + 速度映射；冲量与连续反馈入 X10–X13 |
+| S8 | 碰撞震动反馈 | ✅ 三档 off/low/normal（默认 low）+ 冷却/防抖 + 速度映射；冲量与连续反馈入 X10–X13 |
 
 ### v1 — 观看体验
 

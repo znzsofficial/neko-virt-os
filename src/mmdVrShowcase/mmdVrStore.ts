@@ -100,6 +100,7 @@ export type MmdVrPrefs = {
   physicsColliderFriction: MmdVrColliderFriction;
   physicsColliderRestitution: MmdVrColliderRestitution;
   physicsHapticLevel: MmdVrHapticLevel;
+  physicsDynamicSelfCollision: boolean;
 };
 
 export const MMD_VR_PREFS_KEY = "neko-virt-os.mmd-vr-showcase.v2";
@@ -287,6 +288,7 @@ export function normalizeMmdVrPrefs(parsed: Partial<MmdVrPrefs> = {}): MmdVrPref
     physicsColliderFriction: normalizeColliderFriction(parsed.physicsColliderFriction),
     physicsColliderRestitution: normalizeColliderRestitution(parsed.physicsColliderRestitution),
     physicsHapticLevel: normalizeHapticLevel(parsed.physicsHapticLevel),
+    physicsDynamicSelfCollision: Boolean(parsed.physicsDynamicSelfCollision),
   };
 }
 
@@ -321,6 +323,7 @@ const prefsStorage = createLocalPrefsStorage<MmdVrPrefs>({
     physicsColliderFriction: "medium" as MmdVrColliderFriction,
     physicsColliderRestitution: "none" as MmdVrColliderRestitution,
     physicsHapticLevel: "low" as MmdVrHapticLevel,
+    physicsDynamicSelfCollision: false,
   }),
   normalize: normalizeMmdVrPrefs,
 });
@@ -389,6 +392,7 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
     if (patch.physicsColliderFriction != null) prefs.physicsColliderFriction = normalizeColliderFriction(patch.physicsColliderFriction);
     if (patch.physicsColliderRestitution != null) prefs.physicsColliderRestitution = normalizeColliderRestitution(patch.physicsColliderRestitution);
     if (patch.physicsHapticLevel != null) prefs.physicsHapticLevel = normalizeHapticLevel(patch.physicsHapticLevel);
+    if (patch.physicsDynamicSelfCollision != null) prefs.physicsDynamicSelfCollision = Boolean(patch.physicsDynamicSelfCollision);
     prefsStorage.write(prefs);
     set({ prefs, loop: prefs.loop });
   },

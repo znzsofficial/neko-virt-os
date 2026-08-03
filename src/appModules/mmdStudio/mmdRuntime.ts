@@ -106,6 +106,7 @@ export type MmdRuntimeHandle = {
     envMap?: THREE.Texture | null;
   }) => void;
   setPhysicsEnabled: (enabled: boolean) => Promise<void>;
+  rebuildPhysics: () => Promise<void>;
   /** Re-seed soft-body pose from current animation (fix floating / stuck cloth). */
   resetPhysics: (seconds?: number) => void;
   getControllerContactCount: (controllerIndex?: number) => number;
@@ -225,6 +226,7 @@ export type MmdRuntimeOptions = {
   controllerColliderRestitution?: () => number;
   physicsQuality?: () => MmdPhysicsQuality;
   physicsBoneFeedbackScale?: () => number;
+  physicsDynamicSelfCollision?: () => boolean;
   prepareModel?: (root: THREE.Object3D) => void;
 };
 
@@ -253,6 +255,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
   const controllerCollidersEnabled = options.controllerCollidersEnabled;
   const controllerColliderRadius = options.controllerColliderRadius;
   const physicsQuality = options.physicsQuality;
+  let physicsDynamicSelfCollision = options.physicsDynamicSelfCollision?.() ?? false;
   const prepareModel = options.prepareModel;
   let tslPipeline: import("./mmdTslPipeline").MmdTslPipeline | null = null;
 
@@ -448,6 +451,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
           boneFeedbackScale: options.physicsBoneFeedbackScale,
           controllerFriction: options.controllerColliderFriction,
           controllerRestitution: options.controllerColliderRestitution,
+          dynamicSelfCollision: physicsDynamicSelfCollision,
         })
       : null;
     if (disposed) {
@@ -603,7 +607,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
     };
   }
 
-  async function rebuildAllModels(withPhysics: boolean) {
+  async function rebuildAllModels(withPhysics: boolean, beforeRestore?: () => void) {
     const snapshots = [...entries.values()].map((entry) => ({
       id: entry.id,
       bodyAnimation: entry.bodyAnimation,
@@ -617,6 +621,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       cameraMotionFile: entry.cameraMotionFile,
       visible: entry.visible,
       morphWeights: { ...entry.morphWeights },
+      morphFavorites: [...entry.morphFavorites],
       materialVisible: { ...entry.materialVisible },
       materialOverrides: { ...entry.materialOverrides },
       modelFile: entry.modelFile,
@@ -640,6 +645,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
         entry.cameraMotionFile = snap.cameraMotionFile;
         entry.visible = snap.visible;
         entry.morphWeights = snap.morphWeights;
+        entry.morphFavorites = snap.morphFavorites;
         entry.materialVisible = { ...entry.materialVisible, ...snap.materialVisible };
         entry.materialOverrides = { ...entry.materialOverrides, ...snap.materialOverrides };
         recomputeEntryAnimation(entry);
@@ -660,6 +666,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
     } catch (error) {
       for (const id of [...entries.keys()]) removeEntry(id);
       lastPhysicsSeconds.clear();
+      beforeRestore?.();
       try {
         await restoreSnapshots(previousPhysics);
       } catch (restoreError) {
@@ -846,6 +853,7 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
         }
         const previousPhysicsWanted = physicsWanted;
         physicsWanted = enabled;
+        if (enabled) physicsDynamicSelfCollision = options.physicsDynamicSelfCollision?.() ?? false;
         lastPhysicsSeconds.clear();
         if (!entries.size) return;
         try {
@@ -854,6 +862,20 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
           physicsWanted = previousPhysicsWanted;
           throw error;
         }
+      });
+      physicsTransition = transition.catch(() => undefined);
+      await transition;
+    },
+    async rebuildPhysics() {
+      const transition = physicsTransition.then(async () => {
+        if (!physicsWanted || !entries.size) return;
+        const previousSelfCollision = physicsDynamicSelfCollision;
+        physicsDynamicSelfCollision = options.physicsDynamicSelfCollision?.() ?? false;
+        if (physicsDynamicSelfCollision === previousSelfCollision) return;
+        lastPhysicsSeconds.clear();
+        await rebuildAllModels(true, () => {
+          physicsDynamicSelfCollision = previousSelfCollision;
+        });
       });
       physicsTransition = transition.catch(() => undefined);
       await transition;

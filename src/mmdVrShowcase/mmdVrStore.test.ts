@@ -32,10 +32,12 @@ describe("MMD VR adjustments", () => {
   it("clamps model scale and user height", () => {
     expect(normalizeMmdVrModelScale(0.001)).toBe(0.01);
     expect(normalizeMmdVrModelScale(12)).toBe(10);
-    expect(normalizeMmdVrHeightOffset(-3)).toBe(-2);
-    expect(normalizeMmdVrHeightOffset(21)).toBe(20);
+    expect(normalizeMmdVrHeightOffset(-6)).toBe(-5);
+    expect(normalizeMmdVrHeightOffset(51)).toBe(50);
     expect(normalizeMmdVrPrefs({ viewDistance: 2 }).viewDistance).toBe(10);
     expect(normalizeMmdVrPrefs({ viewDistance: 120 }).viewDistance).toBe(100);
+    expect(normalizeMmdVrPrefs().physicsDynamicSelfCollision).toBe(false);
+    expect(normalizeMmdVrPrefs({ physicsDynamicSelfCollision: true }).physicsDynamicSelfCollision).toBe(true);
     expect(normalizeMmdVrPrefs({ snapTurnDegrees: 45, exposure: 2 })).toMatchObject({
       snapTurnDegrees: 45,
       exposure: 1.3,
@@ -59,8 +61,8 @@ describe("MMD VR adjustments", () => {
     expect(mmdVrSliderToModelScale(0)).toBe(0.01);
     expect(mmdVrSliderToModelScale(1)).toBe(10);
     expect(mmdVrModelScaleToSlider(1)).toBeCloseTo(2 / 3);
-    expect(mmdVrSliderToHeightOffset(0)).toBe(-2);
-    expect(mmdVrSliderToHeightOffset(1)).toBe(20);
+    expect(mmdVrSliderToHeightOffset(0)).toBe(-5);
+    expect(mmdVrSliderToHeightOffset(1)).toBe(50);
     expect(mmdVrHeightOffsetToSlider(0)).toBeCloseTo(1 / 11);
     expect(fineTuneMmdVrModelScale(1, -1)).toBe(0.952);
     expect(fineTuneMmdVrModelScale(1, 1)).toBe(1.05);
@@ -228,6 +230,7 @@ describe("MMD VR adjustments", () => {
       physicsColliderRadius: 0.08,
       physicsQuality: "medium",
       physicsHapticLevel: "low",
+      physicsDynamicSelfCollision: false,
     });
   });
 

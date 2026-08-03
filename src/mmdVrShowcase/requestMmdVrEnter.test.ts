@@ -80,6 +80,7 @@ describe("requestMmdVrEnter", () => {
         physicsColliderFriction: "medium",
         physicsColliderRestitution: "none",
         physicsHapticLevel: "low",
+        physicsDynamicSelfCollision: false,
       },
       phase: "idle",
       errorMessage: null,

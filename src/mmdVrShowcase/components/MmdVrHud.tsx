@@ -25,7 +25,7 @@ export function clampMmdVrHudPosition(position: THREE.Vector3): [number, number,
   return [
     Math.min(1.8, Math.max(-1.8, position.x)),
     Math.min(2.25, Math.max(0.65, position.y)),
-    Math.min(-0.75, Math.max(-2.4, position.z)),
+    Math.min(-0.5, Math.max(-5, position.z)),
   ];
 }
 
@@ -945,6 +945,8 @@ function MaterialPanel({
 function PhysicsSettingsPanel({
   collisionOnLabel,
   collisionOffLabel,
+  selfCollisionOnLabel,
+  selfCollisionOffLabel,
   radiusLabel,
   qualityLabels,
   hapticLevelLabels,
@@ -960,6 +962,8 @@ function PhysicsSettingsPanel({
 }: {
   collisionOnLabel: string;
   collisionOffLabel: string;
+  selfCollisionOnLabel: string;
+  selfCollisionOffLabel: string;
   radiusLabel: string;
   qualityLabels: [string, string, string];
   hapticLevelLabels: [string, string, string];
@@ -1013,6 +1017,16 @@ function PhysicsSettingsPanel({
         disabled={physicsControlsDisabled}
         onPress={() => setCollisions(!useMmdVrStore.getState().physicsControllerCollisions)}
       />
+      <HudButton
+        position={[0.87, -0.1, 0]}
+        label={prefs.physicsDynamicSelfCollision ? selfCollisionOnLabel : selfCollisionOffLabel}
+        size={[0.46, 0.11]}
+        active={prefs.physicsDynamicSelfCollision}
+        disabled={physicsBusy}
+        onPress={() => setPrefs({
+          physicsDynamicSelfCollision: !useMmdVrStore.getState().prefs.physicsDynamicSelfCollision,
+        })}
+      />
       <HudButton position={[-0.2, 0.14, 0]} label={`${radiusLabel}:${Math.round(radius * 100)}cm`} size={[0.52, 0.11]} disabled={physicsControlsDisabled} onPress={cycleRadius} />
       <HudButton position={[0.38, 0.14, 0]} label={qualityLabel} size={[0.52, 0.11]} disabled={physicsControlsDisabled} onPress={cycleQuality} />
       <HudButton
@@ -1023,19 +1037,19 @@ function PhysicsSettingsPanel({
         disabled={physicsControlsDisabled}
         onPress={cycleHapticLevel}
       />
-      <HudButton position={[-0.58, -0.1, 0]} label={resetPhysicsLabel} size={[0.52, 0.11]} disabled={physicsControlsDisabled} onPress={requestReset} />
+      <HudButton position={[-0.87, -0.1, 0]} label={resetPhysicsLabel} size={[0.46, 0.11]} disabled={physicsControlsDisabled} onPress={requestReset} />
       <HudButton
-        position={[0, -0.1, 0]}
+        position={[-0.29, -0.1, 0]}
         label={`${snapTurnLabel}:${prefs.snapTurnDegrees}°`}
-        size={[0.52, 0.11]}
+        size={[0.46, 0.11]}
         onPress={() => setPrefs({
           snapTurnDegrees: prefs.snapTurnDegrees === 15 ? 30 : prefs.snapTurnDegrees === 30 ? 45 : 15,
         })}
       />
       <HudButton
-        position={[0.58, -0.1, 0]}
+        position={[0.29, -0.1, 0]}
         label={`${exposureLabel}:${prefs.exposure.toFixed(1)}`}
-        size={[0.52, 0.11]}
+        size={[0.46, 0.11]}
         onPress={() => setPrefs({ exposure: prefs.exposure >= 1.3 ? 0.7 : prefs.exposure + 0.1 })}
       />
       <HudButton
@@ -1170,6 +1184,8 @@ export function MmdVrControlBar({
   physicsSettingsLabel,
   physicsCollisionOnLabel,
   physicsCollisionOffLabel,
+  physicsSelfCollisionOnLabel,
+  physicsSelfCollisionOffLabel,
   physicsRadiusLabel,
   physicsQualityLabels,
   physicsHapticLevelLabels,
@@ -1234,6 +1250,8 @@ export function MmdVrControlBar({
   physicsSettingsLabel: string;
   physicsCollisionOnLabel: string;
   physicsCollisionOffLabel: string;
+  physicsSelfCollisionOnLabel: string;
+  physicsSelfCollisionOffLabel: string;
   physicsRadiusLabel: string;
   physicsQualityLabels: [string, string, string];
   physicsHapticLevelLabels: [string, string, string];
@@ -1470,6 +1488,8 @@ export function MmdVrControlBar({
         <PhysicsSettingsPanel
           collisionOnLabel={physicsCollisionOnLabel}
           collisionOffLabel={physicsCollisionOffLabel}
+          selfCollisionOnLabel={physicsSelfCollisionOnLabel}
+          selfCollisionOffLabel={physicsSelfCollisionOffLabel}
           radiusLabel={physicsRadiusLabel}
           qualityLabels={physicsQualityLabels}
           hapticLevelLabels={physicsHapticLevelLabels}

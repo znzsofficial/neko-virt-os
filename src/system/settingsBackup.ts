@@ -118,7 +118,7 @@ const mmdVrPrefsSchema = z.strictObject({
   framebufferScalePref: z.enum(["auto", "0.7", "0.85", "1"]),
   foveationPref: z.enum(["auto", "off", "medium", "high"]),
   shadowResolutionPref: z.enum(["auto", "low", "medium", "high"]),
-  heightOffset: z.number().min(-2).max(20).default(0),
+  heightOffset: z.number().min(-5).max(50).default(0),
   viewDistance: z.number().min(10).max(100).default(40),
   themeColor: z.enum(["blue", "cyan", "purple", "green", "red"]).default("blue"),
   snapTurnDegrees: z.union([z.literal(15), z.literal(30), z.literal(45)]).default(30),
@@ -132,6 +132,7 @@ const mmdVrPrefsSchema = z.strictObject({
   physicsColliderFriction: z.enum(["low", "medium", "high"]).default("medium"),
   physicsColliderRestitution: z.enum(["none", "low", "high"]).default("none"),
   physicsHapticLevel: z.enum(["off", "low", "normal"]).default("low"),
+  physicsDynamicSelfCollision: z.boolean().default(false),
 });
 
 const settingsBackupV2Schema = z.strictObject({
