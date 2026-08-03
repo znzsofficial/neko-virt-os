@@ -81,6 +81,7 @@ export function MmdVrPrepApp() {
   const questPreset = getQuestPreset(prefs);
   const highLoadConfig = prefs.frameRatePref === "120"
     || (prefs.advancedRenderOverrides && prefs.framebufferScalePref === "1" && prefs.foveationPref === "off");
+  const selectedMotionCount = Number(Boolean(bodyMotionPath)) + Number(Boolean(faceMotionPath));
 
   function applyQuestPreset(preset: Exclude<QuestPreset, "custom">) {
     if (preset === "safe") {
@@ -201,17 +202,44 @@ export function MmdVrPrepApp() {
           <Icon icon="solar:arrow-left-linear" width={18} height={18} />
           {t("mmdVrPrepBack")}
         </a>
-        <span className="mmd-vr-prep-mark">NekoVirtOS / XR</span>
+        <div className="mmd-vr-prep-system-id">
+          <span className="mmd-vr-prep-system-dot" />
+          <span>NekoVirtOS</span>
+          <span className="mmd-vr-prep-system-divider">/</span>
+          <span>{t("mmdVrPrepSystem")}</span>
+        </div>
       </header>
 
       <section className="mmd-vr-prep-layout">
         <div className="mmd-vr-prep-intro">
-          <span className="mmd-vr-prep-kicker">MMD VR</span>
+          <div className="mmd-vr-prep-brandmark" aria-hidden="true">
+            <Icon icon="boxicons:vr-headset" width={30} height={30} />
+          </div>
+          <span className="mmd-vr-prep-kicker">{t("mmdVrPrepEyebrow")}</span>
           <h1>{t("mmdVrPrepTitle")}</h1>
           <p>{t("mmdVrPrepLead")}</p>
-          <div className="mmd-vr-prep-signal">
-            <span />
-            {phase === "entering" ? t("settingsMmdVrEntering") : t("mmdVrPrepReady")}
+          <div className="mmd-vr-prep-status-card">
+            <div className="mmd-vr-prep-status-head">
+              <span>{t("mmdVrPrepStatusLabel")}</span>
+              <Icon icon="solar:shield-check-bold-duotone" width={18} height={18} />
+            </div>
+            <div className="mmd-vr-prep-signal">
+              <span className={phase === "entering" ? "is-busy" : ""} />
+              {phase === "entering" ? t("mmdVrPrepEntering") : t("mmdVrPrepReady")}
+            </div>
+            <div className="mmd-vr-prep-steps">
+              <span className={files.length ? "is-complete" : "is-current"}><b>1</b>{t("mmdVrPrepStepImport")}</span>
+              <span className={selectedModels.length || selectedObjects.length ? "is-current" : ""}><b>2</b>{t("mmdVrPrepStepSelect")}</span>
+              <span className="is-last"><b>3</b>{t("mmdVrPrepStepConfigure")}</span>
+            </div>
+          </div>
+          <div className="mmd-vr-prep-asset-summary">
+            <span>{t("mmdVrPrepAssetLabel")}</span>
+            <div>
+              <strong><Icon icon="solar:user-bold-duotone" width={16} height={16} />{selectedModels.length}<small>{t("mmdVrPrepModelCount")}</small></strong>
+              <strong><Icon icon="solar:box-bold-duotone" width={16} height={16} />{selectedObjects.length}<small>{t("mmdVrPrepObjectCount")}</small></strong>
+              <strong><Icon icon="solar:playlist-2-bold-duotone" width={16} height={16} />{selectedMotionCount}<small>{t("mmdVrPrepMotionCount")}</small></strong>
+            </div>
           </div>
         </div>
 
@@ -229,6 +257,7 @@ export function MmdVrPrepApp() {
               <Icon icon="solar:folder-with-files-bold-duotone" width={30} height={30} />
             </div>
             <div>
+              <div className="mmd-vr-prep-section-eyebrow">01 / {t("mmdVrPrepSectionAssets")}</div>
               <strong>{t("mmdVrPrepImport")}</strong>
               <p>{t("mmdVrPrepImportHint")}</p>
             </div>
@@ -241,6 +270,7 @@ export function MmdVrPrepApp() {
           <section className="mmd-vr-prep-section">
             <div className="mmd-vr-prep-section-head">
               <div>
+                <div className="mmd-vr-prep-section-eyebrow">02 / {t("mmdVrPrepSectionCharacters")}</div>
                 <strong>{t("mmdVrPrepModels")}</strong>
                 <span>{t("mmdVrPrepModelLimit").replace("{count}", String(MMD_VR_MAX_MODELS))}</span>
               </div>
@@ -274,6 +304,7 @@ export function MmdVrPrepApp() {
           <section className="mmd-vr-prep-section">
             <div className="mmd-vr-prep-section-head">
               <div>
+                <div className="mmd-vr-prep-section-eyebrow">03 / {t("mmdVrPrepSectionEnvironment")}</div>
                 <strong>{t("mmdVrPrepObjects")}</strong>
                 <span>{t("mmdVrPrepObjectLimit").replace("{count}", String(MMD_VR_MAX_OBJECTS))}</span>
               </div>
@@ -305,6 +336,10 @@ export function MmdVrPrepApp() {
           </section>
 
           <section className="mmd-vr-prep-motion-grid">
+            <div className="mmd-vr-prep-motion-heading">
+              <div className="mmd-vr-prep-section-eyebrow">04 / {t("mmdVrPrepSectionPlayback")}</div>
+              <strong>{t("mmdVrPrepMotionHint")}</strong>
+            </div>
             <label>
               <span>{t("mmdVrPrepBodyMotion")}</span>
               <select value={bodyMotionPath} onChange={(event) => setBodyMotionPath(event.target.value)}>
@@ -508,14 +543,15 @@ export function MmdVrPrepApp() {
             </div>
           </details>
 
-          {errorMessage ? <p className="mmd-vr-prep-error">{errorMessage}</p> : null}
+          {errorMessage ? <p className="mmd-vr-prep-error"><Icon icon="solar:danger-triangle-bold" width={17} height={17} />{errorMessage}</p> : null}
+          <p className="mmd-vr-prep-enter-hint"><Icon icon="solar:info-circle-linear" width={16} height={16} />{t("mmdVrPrepEnterHint")}</p>
           <button
             type="button"
             className="mmd-vr-prep-enter"
             disabled={(!selectedModels.length && !selectedObjects.length) || phase === "entering" || phase === "active"}
             onClick={enterVr}
           >
-            <Icon icon="solar:glasses-bold-duotone" width={22} height={22} />
+            <Icon icon="boxicons:vr-headset-filled" width={22} height={22} />
             <span>{phase === "entering" ? t("settingsMmdVrEntering") : t("settingsMmdVrEnter")}</span>
             <Icon icon="solar:arrow-right-linear" width={20} height={20} />
           </button>
