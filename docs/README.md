@@ -1,12 +1,13 @@
 # NekoVirtOS — 文档索引
 
-最后更新：2026-07-31
+最后更新：2026-08-03
 
 **当前重心：** [MMD VR 展示器](./mmd-vr-showcase-roadmap.md) · **VR 桌面：** [基线收尾 / 搁置](./vr-desktop-roadmap.md)
 
 | 文档 | 内容 |
 |------|------|
 | [mmd-studio.md](./mmd-studio.md) | MMD 工作室：能力、约定、WebGL/WebGPU TSL、Gizmo、物理、后处理 |
+| [three-mmd-loader-maintenance.md](./three-mmd-loader-maintenance.md) | three-mmd-loader 本地补丁、根因、上游 Issue/PR 与升级收尾步骤 |
 | [mmd-vr-showcase-roadmap.md](./mmd-vr-showcase-roadmap.md) | **优先** · MMD 独立 WebGL XR 展示器 |
 | [settings-roadmap.md](./settings-roadmap.md) | 系统设置分区与进度 |
 | [vr-desktop-roadmap.md](./vr-desktop-roadmap.md) | VR 工作台基线（**暂缓新功能**） |

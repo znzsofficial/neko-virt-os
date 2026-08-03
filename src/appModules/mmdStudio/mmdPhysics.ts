@@ -32,9 +32,10 @@ async function loadBulletModule() {
     modulePromise = (async () => {
       const { loadCustomBulletMmdModule } = await import("@yohawing/three-mmd-loader/physics");
       const base = import.meta.env.BASE_URL || "/";
-      // Same layout as three-mmd-loader viewer: js + wasm side-by-side under /mmd/.
-      const scriptUrl = new URL("mmd/mmd_bullet.js", window.location.origin + base).href;
-      return loadCustomBulletMmdModule({ scriptUrl, timeoutMs: 30_000 });
+      // Keep the ABI-coupled JS and WASM in the same versioned directory. The
+      // Emscripten factory resolves mmd_bullet.wasm relative to this script URL.
+      const scriptUrl = new URL("mmd/0.8.1/mmd_bullet.js", window.location.origin + base);
+      return loadCustomBulletMmdModule({ scriptUrl: scriptUrl.href, timeoutMs: 30_000 });
     })().catch((error) => {
       modulePromise = null;
       throw error;
@@ -57,6 +58,7 @@ export async function createBulletPhysicsBackend(options: {
   boneFeedbackScale?: () => number;
   controllerFriction?: () => number;
   controllerRestitution?: () => number;
+  dynamicSelfCollision?: boolean;
 } = {}): Promise<MmdPhysicsBackend> {
   const { createCustomBulletMmdPhysicsBackend } = await import("@yohawing/three-mmd-loader/physics");
   const module = await loadBulletModule();
@@ -70,10 +72,13 @@ export async function createBulletPhysicsBackend(options: {
     splitImpulse: true,
     splitImpulsePenetrationThreshold: -0.04,
   };
-  const backend = createCustomBulletMmdPhysicsBackend(
+  const bulletBackend = createCustomBulletMmdPhysicsBackend(
     module as Parameters<typeof createCustomBulletMmdPhysicsBackend>[0],
     backendOptions,
   );
+  const backend = options.dynamicSelfCollision
+    ? createDynamicSelfCollisionPhysicsBackend(bulletBackend)
+    : bulletBackend;
   return options.controllerColliders
     ? createControllerColliderPhysicsBackend(
         backend,
@@ -89,6 +94,58 @@ export async function createBulletPhysicsBackend(options: {
         options.controllerRestitution,
       )
     : backend;
+}
+
+export function createDynamicSelfCollisionPhysicsBackend(backend: MmdPhysicsBackend): MmdPhysicsBackend {
+  let sourceRigidBodies: MmdPhysicsStepContext["rigidBodies"];
+  let collisionRigidBodies: MmdPhysicsStepContext["rigidBodies"];
+
+  const wrapper: MmdPhysicsBackend = {
+    get name() {
+      return `${backend.name}+dynamic-self-collision`;
+    },
+    get disabled() {
+      return backend.disabled;
+    },
+    get disposed() {
+      return backend.disposed;
+    },
+    step(context) {
+      if (!context.rigidBodies) return backend.step(context);
+      if (sourceRigidBodies !== context.rigidBodies) {
+        sourceRigidBodies = context.rigidBodies;
+        collisionRigidBodies = context.rigidBodies.map((body) => {
+          if (body.motionType === "static") return body;
+          const group = Math.min(15, Math.max(0, Math.trunc(body.collisionGroup ?? 0)));
+          return {
+            ...body,
+            collisionMask: (body.collisionMask ?? 0xffff) | (1 << group),
+          };
+        });
+      }
+      return backend.step({ ...context, rigidBodies: collisionRigidBodies });
+    },
+    reset: (context) => backend.reset?.(context),
+    dispose: () => backend.dispose?.(),
+    diagnostics: () => backend.diagnostics?.() ?? [],
+    debugRigidBodyWorldTransformsColumnMajor: () => backend.debugRigidBodyWorldTransformsColumnMajor?.() ?? [],
+  };
+
+  if (isDirectBufferBackend(backend)) {
+    (wrapper as MmdDirectBufferPhysicsBackend).acquireStepBuffers = (layout) => backend.acquireStepBuffers(layout);
+  }
+  const debugBackend = backend as MmdPhysicsBackend & {
+    debugContactCount?: () => number;
+    debugPhysicsContacts?: () => readonly MmdDebugContact[];
+  };
+  const debugWrapper = wrapper as MmdPhysicsBackend & {
+    debugContactCount?: () => number;
+    debugPhysicsContacts?: () => readonly MmdDebugContact[];
+  };
+  if (debugBackend.debugContactCount) debugWrapper.debugContactCount = () => debugBackend.debugContactCount!();
+  if (debugBackend.debugPhysicsContacts) debugWrapper.debugPhysicsContacts = () => debugBackend.debugPhysicsContacts!();
+
+  return wrapper;
 }
 
 export function createControllerColliderPhysicsBackend(
