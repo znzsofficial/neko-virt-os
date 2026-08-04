@@ -897,10 +897,8 @@ export function MmdVrStageContent() {
     // No-motion physics: let Bullet settle for a few seconds (gravity sags
     // clothes), then freeze the timeline so deltaSeconds=0 — Bullet stops
     // stepping and the bone-feedback loop can't sustain oscillation.
-    // Matches the official viewer pattern (pause freezes elapsedSeconds).
     // Exception: when controller collisions are on, keep stepping so the
-    // user can interact with cloth — Bullet needs deltaSeconds>0 to resolve
-    // controller penetration.
+    // user can interact with cloth.
     const controllerCollisionsActive = store.physicsEnabled
       && !store.physicsBusy
       && store.physicsControllerCollisions;

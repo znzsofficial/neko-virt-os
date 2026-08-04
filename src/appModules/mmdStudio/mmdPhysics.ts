@@ -12,6 +12,16 @@ export type MmdControllerColliderProvider = () => readonly MmdControllerCollider
 export type MmdPhysicsQuality = "low" | "medium" | "high";
 type MmdDebugContact = { rigidBodyIndexA: number; rigidBodyIndexB: number };
 const MAX_DEBUG_CONTACTS = 256;
+type MmdDebugPhysicsBackend = MmdPhysicsBackend & {
+  debugContactCount?: () => number;
+  debugPhysicsContacts?: () => readonly MmdDebugContact[];
+  debugPhysicsContactsForRigidBodyRange?: (firstRigidBodyIndex: number, rigidBodyCount: number) => readonly MmdDebugContact[];
+};
+type MmdRuntimePhysicsDiagnostics = {
+  debugRigidBodyCount: () => number;
+  debugDynamicRigidBodyCount: () => number;
+  debugStepCount: () => number;
+};
 
 const PHYSICS_QUALITY_OPTIONS: Record<MmdPhysicsQuality, { maxSubSteps: number; solverIterations: number }> = {
   low: { maxSubSteps: 3, solverIterations: 15 },
@@ -76,9 +86,10 @@ export async function createBulletPhysicsBackend(options: {
     module as Parameters<typeof createCustomBulletMmdPhysicsBackend>[0],
     backendOptions,
   );
+  const diagnosticBackend = createPhysicsDiagnosticsBackend(bulletBackend);
   const backend = options.dynamicSelfCollision
-    ? createDynamicSelfCollisionPhysicsBackend(bulletBackend)
-    : bulletBackend;
+    ? createDynamicSelfCollisionPhysicsBackend(diagnosticBackend)
+    : diagnosticBackend;
   return options.controllerColliders
     ? createControllerColliderPhysicsBackend(
         backend,
@@ -94,6 +105,46 @@ export async function createBulletPhysicsBackend(options: {
         options.controllerRestitution,
       )
     : backend;
+}
+
+export function createPhysicsDiagnosticsBackend(backend: MmdPhysicsBackend): MmdPhysicsBackend & MmdRuntimePhysicsDiagnostics {
+  let rigidBodyCount = 0;
+  let dynamicRigidBodyCount = 0;
+  let stepCount = 0;
+  const wrapper: MmdPhysicsBackend & MmdRuntimePhysicsDiagnostics = {
+    get name() {
+      return `${backend.name}+diagnostics`;
+    },
+    get disabled() {
+      return backend.disabled;
+    },
+    get disposed() {
+      return backend.disposed;
+    },
+    step(context) {
+      stepCount += 1;
+      rigidBodyCount = context.rigidBodies?.length ?? 0;
+      dynamicRigidBodyCount = 0;
+      for (const body of context.rigidBodies ?? []) {
+        if (body.motionType !== "static") dynamicRigidBodyCount += 1;
+      }
+      return backend.step(context);
+    },
+    reset: (context) => backend.reset?.(context),
+    dispose: () => backend.dispose?.(),
+    diagnostics: () => backend.diagnostics?.() ?? [],
+    debugRigidBodyWorldTransformsColumnMajor: () => backend.debugRigidBodyWorldTransformsColumnMajor?.() ?? [],
+    debugRigidBodyCount: () => rigidBodyCount,
+    debugDynamicRigidBodyCount: () => dynamicRigidBodyCount,
+    debugStepCount: () => stepCount,
+  };
+
+  if (isDirectBufferBackend(backend)) {
+    (wrapper as MmdPhysicsBackend & Partial<MmdDirectBufferPhysicsBackend>).acquireStepBuffers =
+      (layout) => backend.acquireStepBuffers(layout);
+  }
+  forwardContactDiagnostics(wrapper, backend);
+  return wrapper;
 }
 
 export function createDynamicSelfCollisionPhysicsBackend(backend: MmdPhysicsBackend): MmdPhysicsBackend {
@@ -134,16 +185,12 @@ export function createDynamicSelfCollisionPhysicsBackend(backend: MmdPhysicsBack
   if (isDirectBufferBackend(backend)) {
     (wrapper as MmdDirectBufferPhysicsBackend).acquireStepBuffers = (layout) => backend.acquireStepBuffers(layout);
   }
-  const debugBackend = backend as MmdPhysicsBackend & {
-    debugContactCount?: () => number;
-    debugPhysicsContacts?: () => readonly MmdDebugContact[];
-  };
-  const debugWrapper = wrapper as MmdPhysicsBackend & {
-    debugContactCount?: () => number;
-    debugPhysicsContacts?: () => readonly MmdDebugContact[];
-  };
-  if (debugBackend.debugContactCount) debugWrapper.debugContactCount = () => debugBackend.debugContactCount!();
-  if (debugBackend.debugPhysicsContacts) debugWrapper.debugPhysicsContacts = () => debugBackend.debugPhysicsContacts!();
+  forwardContactDiagnostics(wrapper, backend);
+  const runtimeDiagnostics = backend as MmdPhysicsBackend & Partial<MmdRuntimePhysicsDiagnostics>;
+  const runtimeWrapper = wrapper as MmdPhysicsBackend & Partial<MmdRuntimePhysicsDiagnostics>;
+  if (runtimeDiagnostics.debugRigidBodyCount) runtimeWrapper.debugRigidBodyCount = () => runtimeDiagnostics.debugRigidBodyCount!();
+  if (runtimeDiagnostics.debugDynamicRigidBodyCount) runtimeWrapper.debugDynamicRigidBodyCount = () => runtimeDiagnostics.debugDynamicRigidBodyCount!();
+  if (runtimeDiagnostics.debugStepCount) runtimeWrapper.debugStepCount = () => runtimeDiagnostics.debugStepCount!();
 
   return wrapper;
 }
@@ -168,6 +215,7 @@ export function createControllerColliderPhysicsBackend(
   let directBuffers: ReturnType<MmdDirectBufferPhysicsBackend["acquireStepBuffers"]>;
   let directColliderCount: number | undefined;
   let sourceRigidBodyCount = 0;
+  let controllerBodyCount = 0;
   let dynamicRigidBodyCount = 0;
   let stepCount = 0;
   let debugContactsStep = -1;
@@ -192,6 +240,7 @@ export function createControllerColliderPhysicsBackend(
       const boneCount = context.skeleton.bones.length;
       const colliderCount = matrices.length;
       sourceRigidBodyCount = context.rigidBodies.length;
+      controllerBodyCount = colliderCount;
       dynamicRigidBodyCount = context.rigidBodies.filter((body) => body.motionType !== "static").length;
       if (directColliderCount !== undefined && colliderCount !== directColliderCount) {
         throw new Error("Controller collider count changed after direct buffers were acquired");
@@ -200,7 +249,7 @@ export function createControllerColliderPhysicsBackend(
       const colliderFriction = Math.max(0, Math.min(1, typeof friction === "function" ? friction() : friction));
       const colliderRestitution = Math.max(0, Math.min(1, typeof restitution === "function" ? restitution() : restitution));
       const controllerGroup = chooseControllerCollisionGroup(context.rigidBodies);
-      const controllerGroupMask = 1 << controllerGroup;
+      const controllerGroupMask = controllerGroup < 0 ? 0 : 1 << controllerGroup;
       if (
         sourceSkeleton !== context.skeleton ||
         sourceRigidBodies !== context.rigidBodies ||
@@ -230,7 +279,7 @@ export function createControllerColliderPhysicsBackend(
           ],
         };
         augmentedRigidBodies = [
-          ...context.rigidBodies.map((body) => ({
+          ...context.rigidBodies.map((body) => controllerGroupMask === 0 ? body : ({
             ...body,
             collisionMask: (body.collisionMask ?? 0xffff) | controllerGroupMask,
           })),
@@ -245,8 +294,8 @@ export function createControllerColliderPhysicsBackend(
             mass: 0,
             friction: colliderFriction,
             restitution: colliderRestitution,
-            collisionGroup: controllerGroup,
-            collisionMask: 0xffff,
+            collisionGroup: controllerGroup < 0 ? 15 : controllerGroup,
+            collisionMask: controllerGroup < 0 ? 0 : 0xffff,
           })),
         ];
       }
@@ -303,14 +352,18 @@ export function createControllerColliderPhysicsBackend(
     diagnostics: () => backend.diagnostics?.() ?? [],
     debugRigidBodyWorldTransformsColumnMajor: () => backend.debugRigidBodyWorldTransformsColumnMajor?.() ?? [],
     debugControllerContactCount: (controllerIndex) => {
-      const debugBackend = backend as MmdPhysicsBackend & {
-        debugContactCount?: () => number;
-        debugPhysicsContacts?: () => readonly MmdDebugContact[];
-      };
-      const total = debugBackend.debugContactCount?.() ?? 0;
-      if (total > MAX_DEBUG_CONTACTS) return 0;
+      if (controllerBodyCount === 0) return 0;
+      const debugBackend = backend as MmdDebugPhysicsBackend;
       if (debugContactsStep !== stepCount) {
-        debugContacts = debugBackend.debugPhysicsContacts?.() ?? [];
+        if (debugBackend.debugPhysicsContactsForRigidBodyRange) {
+          debugContacts = debugBackend.debugPhysicsContactsForRigidBodyRange(
+            sourceRigidBodyCount,
+            controllerBodyCount,
+          );
+        } else {
+          const total = debugBackend.debugContactCount?.() ?? 0;
+          debugContacts = total <= MAX_DEBUG_CONTACTS ? debugBackend.debugPhysicsContacts?.() ?? [] : [];
+        }
         debugContactsStep = stepCount;
       }
       const contacts = debugContacts;
@@ -322,9 +375,11 @@ export function createControllerColliderPhysicsBackend(
       return contacts.filter((contact) =>
         contact.rigidBodyIndexA >= sourceRigidBodyCount || contact.rigidBodyIndexB >= sourceRigidBodyCount).length;
     },
-    debugRigidBodyCount: () => sourceRigidBodyCount,
-    debugDynamicRigidBodyCount: () => dynamicRigidBodyCount,
-    debugStepCount: () => stepCount,
+    debugRigidBodyCount: () => (backend as Partial<MmdRuntimePhysicsDiagnostics>).debugRigidBodyCount?.()
+      ?? sourceRigidBodyCount + controllerBodyCount,
+    debugDynamicRigidBodyCount: () => (backend as Partial<MmdRuntimePhysicsDiagnostics>).debugDynamicRigidBodyCount?.()
+      ?? dynamicRigidBodyCount,
+    debugStepCount: () => (backend as Partial<MmdRuntimePhysicsDiagnostics>).debugStepCount?.() ?? stepCount,
   };
 
   if (isDirectBufferBackend(backend)) {
@@ -353,11 +408,22 @@ function chooseControllerCollisionGroup(rigidBodies: readonly NonNullable<MmdPhy
   for (let group = 15; group >= 0; group -= 1) {
     if ((usedGroups & (1 << group)) === 0) return group;
   }
-  return 15;
+  return -1;
 }
 
 function isDirectBufferBackend(backend: MmdPhysicsBackend): backend is MmdDirectBufferPhysicsBackend {
   return typeof (backend as Partial<MmdDirectBufferPhysicsBackend>).acquireStepBuffers === "function";
+}
+
+function forwardContactDiagnostics(wrapper: MmdPhysicsBackend, backend: MmdPhysicsBackend) {
+  const source = backend as MmdDebugPhysicsBackend;
+  const target = wrapper as MmdDebugPhysicsBackend;
+  if (source.debugContactCount) target.debugContactCount = () => source.debugContactCount!();
+  if (source.debugPhysicsContacts) target.debugPhysicsContacts = () => source.debugPhysicsContacts!();
+  if (source.debugPhysicsContactsForRigidBodyRange) {
+    target.debugPhysicsContactsForRigidBodyRange = (firstRigidBodyIndex, rigidBodyCount) =>
+      source.debugPhysicsContactsForRigidBodyRange!(firstRigidBodyIndex, rigidBodyCount);
+  }
 }
 
 function writeControllerInputs(
@@ -373,7 +439,7 @@ function writeControllerInputs(
     translations.fill(0, boneIndex * 3, boneIndex * 3 + 3);
     rotations.fill(0, boneIndex * 4, boneIndex * 4 + 4);
     rotations[boneIndex * 4 + 3] = 1;
-    worldMatrices.set(matrices[index], boneIndex * 16);
+    writeRigidMatrix(worldMatrices, boneIndex * 16, matrices[index]);
     toggles[boneIndex] = 1;
   }
 }
@@ -414,10 +480,26 @@ function appendMatrices(
   const result = appendBuffer(source, matrices.length * 16);
   let offset = source?.length ?? 0;
   for (const matrix of matrices) {
-    result.set(matrix, offset);
+    writeRigidMatrix(result, offset, matrix);
     offset += 16;
   }
   return result;
+}
+
+function writeRigidMatrix(
+  target: Float32Array,
+  offset: number,
+  source: MmdControllerColliderMatrix,
+) {
+  target.set(source, offset);
+  for (let column = 0; column < 3; column += 1) {
+    const base = offset + column * 4;
+    const length = Math.hypot(target[base], target[base + 1], target[base + 2]);
+    if (length <= 1e-8) continue;
+    target[base] /= length;
+    target[base + 1] /= length;
+    target[base + 2] /= length;
+  }
 }
 
 function appendToggles(source: readonly boolean[] | Uint8Array | undefined, count: number) {

@@ -7,7 +7,7 @@ import type {
   MmdPhysicsStepContext,
 } from "@yohawing/three-mmd-loader/physics";
 import { createCustomBulletMmdPhysicsBackend } from "@yohawing/three-mmd-loader/physics";
-import { createControllerColliderPhysicsBackend, createDynamicSelfCollisionPhysicsBackend } from "./mmdPhysics";
+import { createControllerColliderPhysicsBackend, createDynamicSelfCollisionPhysicsBackend, createPhysicsDiagnosticsBackend } from "./mmdPhysics";
 
 describe("dynamic rigid-body self-collision backend", () => {
   it("adds each dynamic body's own group to its collision mask", () => {
@@ -31,6 +31,34 @@ describe("dynamic rigid-body self-collision backend", () => {
     expect(passed[1].collisionMask).toBe(0xff9f);
     expect(passed[2].collisionMask).toBe(0xffff);
     expect(rigidBodies[1].collisionMask).toBe(0xff97);
+  });
+});
+
+describe("physics diagnostics backend", () => {
+  it("counts the exact rigid-body context forwarded to Bullet", () => {
+    const base = {
+      name: "fake-bullet",
+      disabled: false,
+      disposed: false,
+      step: () => ({ simulated: true }),
+    } satisfies MmdPhysicsBackend;
+    const backend = createPhysicsDiagnosticsBackend(base);
+
+    backend.step({
+      seconds: 1,
+      deltaSeconds: 1 / 60,
+      frame: 30,
+      frameRate: 30,
+      rigidBodies: [
+        { index: 0, motionType: "dynamic", shape: { type: "sphere", size: [1, 1, 1] } },
+        { index: 1, motionType: "static", shape: { type: "sphere", size: [1, 1, 1] } },
+      ],
+      joints: [],
+    });
+
+    expect(backend.debugRigidBodyCount()).toBe(2);
+    expect(backend.debugDynamicRigidBodyCount()).toBe(1);
+    expect(backend.debugStepCount()).toBe(1);
   });
 });
 
@@ -106,7 +134,7 @@ describe("controller collider physics backend", () => {
     });
     const step = vi.fn((context: MmdPhysicsStepContext) => {
       expect(context.inputWorldMatricesColumnMajor).toBe(buffers?.inputWorldMatricesColumnMajor);
-      expect(context.inputWorldMatricesColumnMajor?.slice(16, 32)).toEqual(Float32Array.from(controller));
+      expect(context.inputWorldMatricesColumnMajor?.slice(16, 32)).toEqual(Float32Array.from(rigidController));
       expect(context.bonePhysicsToggles?.[1]).toBe(1);
       const indices = context.output?.updatedBoneIndices as Uint32Array;
       indices[0] = 0;
@@ -120,7 +148,8 @@ describe("controller collider physics backend", () => {
       acquireStepBuffers,
       step,
     } satisfies MmdDirectBufferPhysicsBackend;
-    const controller = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2, 3, 4, 1] as const;
+    const controller = [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 2, 3, 4, 1] as const;
+    const rigidController = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2, 3, 4, 1] as const;
     const backend = createControllerColliderPhysicsBackend(base, () => [controller]) as MmdDirectBufferPhysicsBackend;
     const direct = backend.acquireStepBuffers({
       boneCount: 1,
@@ -159,6 +188,114 @@ describe("controller collider physics backend", () => {
     expect(direct.updatedBoneIndices?.[0]).toBe(0);
   });
 
+  it("does not alter model masks when every collision group is occupied", () => {
+    let passedBodies: MmdPhysicsStepContext["rigidBodies"];
+    const base = {
+      name: "all-groups",
+      disabled: false,
+      disposed: false,
+      step: (context: MmdPhysicsStepContext) => {
+        passedBodies = context.rigidBodies;
+        return { simulated: true };
+      },
+    } satisfies MmdPhysicsBackend;
+    const backend = createControllerColliderPhysicsBackend(base, () => [
+      [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    ]);
+    const rigidBodies = Array.from({ length: 16 }, (_, collisionGroup) => ({
+      index: collisionGroup,
+      motionType: "dynamic" as const,
+      collisionGroup,
+      collisionMask: 0,
+      shape: { type: "sphere" as const, size: [1, 1, 1] as const },
+    }));
+
+    backend.step({
+      seconds: 1,
+      deltaSeconds: 1 / 60,
+      frame: 30,
+      frameRate: 30,
+      skeleton: { bones: rigidBodies.map((body) => ({ index: body.index })) },
+      rigidBodies,
+      joints: [],
+    });
+
+    expect(passedBodies?.slice(0, 16)).toEqual(rigidBodies);
+    expect(passedBodies?.[16]).toMatchObject({ collisionMask: 0 });
+  });
+
+  it("removes scale from production controller matrices without changing translation", () => {
+    let passedContext: MmdPhysicsStepContext | undefined;
+    const base = {
+      name: "controller-rigid-matrix",
+      disabled: false,
+      disposed: false,
+      step: (context: MmdPhysicsStepContext) => {
+        passedContext = context;
+        return { simulated: true };
+      },
+    } satisfies MmdPhysicsBackend;
+    const controller = [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 7, 8, 9, 1] as const;
+    const backend = createControllerColliderPhysicsBackend(base, () => [controller]);
+
+    backend.step({
+      seconds: 1,
+      deltaSeconds: 1 / 60,
+      frame: 30,
+      frameRate: 30,
+      skeleton: { bones: [{ index: 0 }] },
+      rigidBodies: [{ index: 0, boneIndex: 0, motionType: "dynamic", shape: { type: "sphere", size: [1, 1, 1] } }],
+      joints: [],
+      inputTranslations: new Float32Array(3),
+      inputRotations: new Float32Array([0, 0, 0, 1]),
+      inputWorldMatricesColumnMajor: new Float32Array(16),
+      output: {
+        translations: new Float32Array(3),
+        rotations: new Float32Array(4),
+        worldMatricesColumnMajor: new Float32Array(16),
+        updatedBoneIndices: [],
+      },
+      bonePhysicsToggles: new Uint8Array([1]),
+    });
+
+    expect(passedContext?.inputWorldMatricesColumnMajor?.slice(16, 32)).toEqual(
+      Float32Array.from([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 7, 8, 9, 1]),
+    );
+    expect(passedContext?.rigidBodies).toHaveLength(2);
+    expect(passedContext?.rigidBodies?.[1]).toMatchObject({ motionType: "static", boneIndex: 1 });
+  });
+
+  it("moves a controller from its hidden position without resetting the model world", () => {
+    const reset = vi.fn();
+    const step = vi.fn(() => ({ simulated: true }));
+    const matrix = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -1_000, 0, 1]);
+    const backend = createControllerColliderPhysicsBackend({
+      name: "teleport",
+      disabled: false,
+      disposed: false,
+      reset,
+      step,
+    }, () => [matrix]);
+    const context: MmdPhysicsStepContext = {
+      seconds: 1,
+      deltaSeconds: 1 / 60,
+      frame: 30,
+      frameRate: 30,
+      skeleton: { bones: [{ index: 0 }] },
+      rigidBodies: [{ index: 0, motionType: "dynamic", shape: { type: "sphere", size: [1, 1, 1] } }],
+      joints: [],
+    };
+
+    backend.step(context);
+    matrix[13] = 1;
+    backend.step(context);
+    matrix[12] = 0.1;
+    backend.step(context);
+
+    expect(reset).not.toHaveBeenCalled();
+    expect(step).toHaveBeenCalledTimes(3);
+  });
+
   it("reports contacts involving appended controller rigid bodies", () => {
     const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] as const;
     const base = {
@@ -192,7 +329,7 @@ describe("controller collider physics backend", () => {
 
     expect(backend.debugControllerContactCount()).toBe(2);
     expect(backend.debugControllerContactCount(0)).toBe(1);
-    expect(backend.debugRigidBodyCount()).toBe(2);
+    expect(backend.debugRigidBodyCount()).toBe(3);
     expect(backend.debugDynamicRigidBodyCount()).toBe(2);
     expect(backend.debugStepCount()).toBe(1);
   });
@@ -226,8 +363,11 @@ describe("controller collider physics backend", () => {
     expect(backend.debugControllerContactCount(0)).toBe(1);
   });
 
-  it("does not materialize an excessive contact list for HUD diagnostics", () => {
+  it("collects controller contacts without materializing an excessive world contact list", () => {
     const debugPhysicsContacts = vi.fn(() => []);
+    const debugPhysicsContactsForRigidBodyRange = vi.fn(() => [
+      { rigidBodyIndexA: 0, rigidBodyIndexB: 2 },
+    ]);
     const base = {
       name: "debug-overflow",
       disabled: false,
@@ -235,13 +375,30 @@ describe("controller collider physics backend", () => {
       step: () => ({ simulated: true }),
       debugContactCount: () => 257,
       debugPhysicsContacts,
+      debugPhysicsContactsForRigidBodyRange,
     } satisfies MmdPhysicsBackend & {
       debugContactCount: () => number;
       debugPhysicsContacts: () => { rigidBodyIndexA: number; rigidBodyIndexB: number }[];
+      debugPhysicsContactsForRigidBodyRange: (firstRigidBodyIndex: number, rigidBodyCount: number) => { rigidBodyIndexA: number; rigidBodyIndexB: number }[];
     };
-    const backend = createControllerColliderPhysicsBackend(base, () => []);
+    const backend = createControllerColliderPhysicsBackend(base, () => [
+      [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    ]);
+    backend.step({
+      seconds: 1,
+      deltaSeconds: 1 / 60,
+      frame: 30,
+      frameRate: 30,
+      skeleton: { bones: [{ index: 0 }, { index: 1 }] },
+      rigidBodies: [
+        { index: 0, motionType: "dynamic", shape: { type: "sphere", size: [1, 1, 1] } },
+        { index: 1, motionType: "dynamic", shape: { type: "sphere", size: [1, 1, 1] } },
+      ],
+      joints: [],
+    });
 
-    expect(backend.debugControllerContactCount()).toBe(0);
+    expect(backend.debugControllerContactCount()).toBe(1);
+    expect(debugPhysicsContactsForRigidBodyRange).toHaveBeenCalledWith(2, 1);
     expect(debugPhysicsContacts).not.toHaveBeenCalled();
   });
 });
@@ -305,6 +462,64 @@ describe("patched mmd-anim Bullet backend", () => {
         normalWorldOnB: [0, 1, 0],
       },
     ]);
+    backend.dispose?.();
+  });
+
+  it("filters a large Bullet contact buffer to a rigid-body range", () => {
+    const contactCount = 300;
+    const memory = new ArrayBuffer(32_768);
+    const heapF32 = new Float32Array(memory);
+    const heapU8 = new Uint8Array(memory);
+    const heapU32 = new Uint32Array(memory);
+    const heapI32 = new Int32Array(memory);
+    let nextPointer = 256;
+    const module = {
+      HEAPF32: heapF32,
+      HEAPU8: heapU8,
+      HEAPU32: heapU32,
+      _malloc: (bytes: number) => {
+        const pointer = nextPointer;
+        nextPointer += Math.ceil(bytes / 8) * 8;
+        return pointer;
+      },
+      _free: () => undefined,
+      _mmd_anim_bullet_world_create: (outWorld: number) => {
+        heapU32[outWorld >>> 2] = 1;
+        return 0;
+      },
+      _mmd_anim_bullet_world_destroy: () => undefined,
+      _mmd_anim_bullet_world_reset: () => 0,
+      _mmd_anim_bullet_world_settle_to_current: () => 0,
+      _mmd_anim_bullet_world_step: () => 0,
+      _mmd_anim_bullet_world_add_rigidbody: () => 0,
+      _mmd_anim_bullet_world_get_rigidbody_transform: () => 0,
+      _mmd_anim_bullet_world_set_rigidbody_transform: () => 0,
+      _mmd_anim_bullet_world_add_6dof_spring_joint: () => 0,
+      _mmd_anim_bullet_world_collect_contacts: (
+        _world: number,
+        contacts: number,
+        capacity: number,
+        outCount: number,
+      ) => {
+        heapU32[outCount >>> 2] = contactCount;
+        for (let index = 0; index < Math.min(capacity, contactCount); index += 1) {
+          const base = (contacts + index * 48) >>> 2;
+          heapI32[base] = index === contactCount - 1 ? 0 : 1;
+          heapI32[base + 1] = index === contactCount - 1 ? 343 : 2;
+        }
+        return 0;
+      },
+      refreshMemoryViews: () => undefined,
+    } as Parameters<typeof createCustomBulletMmdPhysicsBackend>[0];
+    const backend = createCustomBulletMmdPhysicsBackend(module) as ReturnType<typeof createCustomBulletMmdPhysicsBackend> & {
+      debugPhysicsContactsForRigidBodyRange: (firstRigidBodyIndex: number, rigidBodyCount: number) => { rigidBodyIndexA: number; rigidBodyIndexB: number }[];
+    };
+
+    expect(backend.debugPhysicsContactsForRigidBodyRange(343, 2)).toHaveLength(1);
+    expect(backend.debugPhysicsContactsForRigidBodyRange(343, 2)[0]).toMatchObject({
+      rigidBodyIndexA: 0,
+      rigidBodyIndexB: 343,
+    });
     backend.dispose?.();
   });
 

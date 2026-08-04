@@ -1,6 +1,6 @@
 # three-mmd-loader 近期维护记录
 
-最后更新：2026-08-03
+最后更新：2026-08-04
 
 文档索引：[docs/README.md](./README.md)
 
@@ -135,8 +135,97 @@
 
 - 控制器碰撞后有震动。
 - 开启物理后可以调整模型大小，模型和面板不会消失。
-- 缩小模型后衣服不再向上漂。
-- 当前模型缩放、物理和触觉行为正常。
+- `dynamicWithBone` 平移反馈修复改善了使用该模式的衣物缩放漂移。
+- controller matrix rigid 化后，多个复杂纯动态裙子模型在缩放和启用控制器碰撞时均正常下落。
+- 主动控制器碰撞、contact 计数和震动正常。
+
+## 已解决：缩小模型后的纯动态裙子上漂
+
+### 稳定复现条件
+
+- 模型显示缩放小于 `1`。
+- 开启控制器碰撞。
+- 多个模型均可复现，不是 `sample/珠霜舒芙蕾` 的特例。
+- 主要影响裙子；身体、头发和其他可碰撞部位通常表现正常。
+- 控制器不接触裙子、远离裙子或移动到其他位置时，裙子表现基本不变。
+- 缩放停止后裙子立即稳定，不会继续堆高；关闭控制器碰撞后会恢复正常。
+- 将控制器碰撞半径调到最小没有消除问题。
+- 关闭控制器碰撞后不出现同样的上漂。
+- 默认测试模型仍可能表现正常，因此不能用单个正常模型否定问题。
+
+### 与 loader 版本的关系
+
+- `0.8.0 -> 0.8.1` 没有物理 backend、runtime 物理流程或 Bullet WASM 改动。
+- `0.8.1` 仅包含 TSL Viewer、self-shadow shader 预编译和 release CI 修复，因此不是该问题的直接版本分界。
+- 需要关注的是 `0.7.0 -> 0.8.0`：loader 删除旧 `AmmoMmdPhysicsBackend`，改用 mmd-anim v0.3.3 Bullet backend，并替换 Bullet JS/WASM。
+- NekoVirtOS 在提交 `7dd6962` 中从 `^0.7.0` 直接升级到固定的 `0.8.1`，因此没有在项目内单独验证 `0.8.0`。
+- 最终根因位于 NekoVirtOS controller world-to-model 映射产生的非刚体矩阵，不是 loader 版本变化本身。
+
+### 已排除或证据不足的方向
+
+| 方向 | 结论 |
+|------|------|
+| 控制器实际碰到裙子 | 排除；控制器远离且没有接触时仍复现 |
+| 控制器球半径过大 | 排除；最小半径及修改模型空间半径换算均未改善 |
+| 单个 PMX 模型异常 | 排除；多个模型的裙子均可复现 |
+| `dynamicWithBone` 平移覆盖 | 不能解释当前问题；问题裙子主体可由纯 `dynamic` 刚体组成 |
+| 弹簧关节参数 | 珠霜 A/B 关闭弹簧后行为几乎不变 |
+| contact 查询和触觉采样 | 排除；这些路径只读取 Bullet contact，不参与求解 |
+| 瞬时控制器接触漏采样 | 排除；逐帧峰值锁存测试中 `C` 始终为 `0`，只有主动接触才变化 |
+| 控制器 proximity / 按需唤醒 | 未改善，已撤回 |
+| 开启碰撞后持续推进无动作物理 | 单独限制推进没有改善，不能作为根因 |
+| 动态衣物自碰撞 | 默认关闭；没有证据表明它是当前根因 |
+
+### 离线诊断结果
+
+- 珠霜裙子主要由第 6 组的 `288` 个纯动态刚体组成，PMX mask 原本禁止同组互撞。
+- 珠霜有 `78` 个弹簧关节；默认模型没有弹簧关节，但关闭弹簧未消除差异。
+- Bullet 仿真 3 秒后，珠霜 `288` 个裙子刚体中约 `238` 个向下、`28` 个小幅向上，离线环境没有复现真机中的整体上漂。
+- 首帧 seed 姿态与 PMX 原始姿态一致。
+- Bullet world 变换、局部骨骼回写和 Three.js world 变换闭环误差接近零。
+- 重力方向、关节索引、PMX 欧拉转换和坐标轴翻转未发现明确错误。
+
+### 排查中踩过的坑
+
+1. 不要因为现象只在开启控制器碰撞时出现，就直接断定控制器球正在碰裙子。开关还可能改变刚体数组、collision mask、静态刚体更新和物理时间策略。
+2. 不要用控制器中心位置代替球体边界判断接触，但也不要在没有 contact 证据时持续调整半径。
+3. PMX `localTranslation` 是相对骨骼的局部偏移，不能直接用于控制器到刚体的模型空间 proximity 判断。需要使用 Bullet 当前刚体 world transform。
+4. 冻结显示时间不一定等于完全绕过 runtime；应确认传入 backend 的 `deltaSeconds`。当前 loader 在时间不变时传入 `0`，但仍会执行 backend step 和输出读取。
+5. 不要用控制器从隐藏位置 `Y=-1000` 到手部的跳变去 reset 整个 backend。`backend.reset()` 会重置全部模型刚体，而不是只重置控制器。
+6. 控制器碰撞组必须优先使用模型未占用的 group。若 16 组全部占用，不能回退到已有组并将该组 bit OR 到所有模型 mask，否则可能意外开启模型内部碰撞。
+7. contact 总数超过 HUD 上限时不能直接返回零。密集裙子会产生数百个 world contact，从而让真实控制器 contact 被误报为 `C=0`。
+8. `debugPhysicsContactsForRigidBodyRange()` 当前仍让 native 写入完整 contact buffer，只减少 JS contact 对象物化；它不是真正的 native filtered query。
+9. 本机没有 Emscripten，`npm run build:bullet:mmd` 会因 `spawn em++ ENOENT` 失败。没有工具链时不要设计必须修改 Bullet ABI 才能验证的方案。
+10. 单个默认模型正常不代表实现正确。问题与裙子刚体模式、数量、层级和约束拓扑有关，必须至少使用一个纯动态密集裙子模型做回归。
+11. mmd-anim backend 的 `copyDynamicOutputs()` 已分两阶段读取所有 Bullet world pose，再使用同帧 physics parent world 转换子骨骼 local pose；现有父子纯动态链测试也覆盖该行为。没有反例前不要改写该层级转换。
+12. 默认模型主要使用 `dynamicWithBone`，复杂问题模型主要使用深层纯 `dynamic` 链；默认模型正常不能排除 synthetic controller bone 中非单位 scale 对纯动态链的影响。
+
+### 已撤回的实验性改动
+
+- 缩小模型时禁止控制器模型空间半径按 `1 / scale` 增大：真机无改善，已撤回。
+- 根据控制器移动版本和刚体 proximity 按需唤醒无动作物理：真机无改善，已撤回。
+- 控制器 tracking 大位移时调用整个 Bullet backend reset：会影响全部裙子刚体，已撤回。
+- proximity 直接读取 PMX `localTranslation`：坐标空间错误，已撤回。
+- 调试 HUD 的逐帧 contact 峰值锁存：确认无瞬时接触后已撤回，避免保留临时代码。
+
+### 根因定位 A/B 记录
+
+- scale-only transform 恢复非破坏性 `resetPhysics()` 无改善。
+- 完全跳过 controller wrapper 时复杂裙子正常，且物理时钟仍持续推进，将范围限定到 controller wrapper。
+- 保留 synthetic controller 骨骼和刚体但禁用 collision mask 时仍异常，排除了 contact、collision filter 和 broadphase pair。
+- 只扩展 synthetic skeleton/direct buffers、不追加 controller 刚体时仍异常，排除了额外 Bullet body。
+- extra world-matrix slots 固定为单位矩阵时正常，确认扩展 buffer 布局本身无问题。
+- 保留真实平移和旋转方向、仅归一化矩阵前三列时正常，最终确认触发条件是 controller matrix 中的 `1 / modelScale` 线性缩放。
+- 临时 A/B 查询模式和 HUD 标签在结论确认后已删除。
+- 初版 A/B 的 `R/D/S` 全为 `0` 是诊断 wrapper 耦合造成的假象；统计现已移到实际 Bullet context 前，能独立显示真实 `R/D/S`。
+
+### 已确认根因与生产修复
+
+- controller world matrix 通过 `unitRoot * inverseVisualRoot * worldMatrix` 映射到模型单位物理空间。该乘积会正确缩放平移，但也会把 `1 / modelScale` 写入矩阵的三个旋转基向量，使其成为非刚体变换。
+- mmd-anim external physics 接口的 bone world matrices 预期是平移加旋转的刚体矩阵。复杂纯 `dynamic` 父子链对 synthetic bone slot 中的非单位 scale 敏感，表现为缩小时裙子向骨盆后上方堆积；以 `dynamicWithBone` 为主的默认模型可能不受影响。
+- 生产 controller wrapper 现在写入矩阵前归一化前三列，保留模型空间平移和旋转方向，只移除 scale。controller sphere 半径仍独立通过 `/ modelScale` 换算，因此碰撞体大小和位置语义不变。
+- 最终真机确认：正常生产模式下复杂模型缩放、裙子下落、主动控制器碰撞、contact 计数和震动均正常。
+- 该问题属于 NekoVirtOS controller integration，不应混入 loader PR #38 或 PR #40。
 
 ## 已执行验证
 
@@ -146,11 +235,12 @@
 pnpm install --frozen-lockfile
 pnpm exec tsc -b --pretty false
 pnpm test -- src/appModules/mmdStudio/mmdPhysics.test.ts src/mmdVrShowcase/mmdVrHaptics.test.ts src/mmdVrShowcase/mmdVrStore.test.ts src/appModules/mmdStudio/mmdRuntime.test.ts
+pnpm test
 pnpm build
 git diff --check
 ```
 
-验证结果：4 个指定测试文件、30 项测试通过；TypeScript 和生产构建通过。`git diff --check` 仅有 Windows CRLF 提示。
+验证结果：完整测试共 `44` 个文件、`167` 项通过；TypeScript 和生产构建通过。`git diff --check` 仅有 Windows CRLF 提示。
 
 ### loader PR #38
 
@@ -209,11 +299,11 @@ git push fork main
 
 - 保留 NekoVirtOS pnpm patch。
 - 不要仅因 PR merged 就把依赖指向任意 Git commit。
-- 等待包含两个修复的正式 npm 版本，除非有明确需求提前使用 commit/预发布版本。
+- 等待包含三个 patch 行为的正式 npm 版本，除非有明确需求提前使用 commit/预发布版本。
 
 ### 新版本发布后
 
-1. 确认 release/npm 包同时包含 PR #38 和 PR #40。
+1. 确认 release/npm 包同时包含 PR #38、PR #40 和 rigid-body range contact 查询。
 2. 在独立分支更新 `@yohawing/three-mmd-loader` 版本。
 3. 检查新版本是否仍需要 patch 中的其他内容。
 4. 仅当发布包已覆盖全部 patch 行为时，删除 `patchedDependencies` 条目和 patch 文件。
@@ -221,7 +311,7 @@ git push fork main
 6. 重跑 TypeScript、指定物理/触觉测试、完整测试和 build。
 7. 再次进行真机回归：模型缩放、衣服物理、面板存续、左右控制器碰撞和震动。
 
-不要直接删除整个 patch。当前 patch 同时包含 `dynamicWithBone` 和 contact API 两部分；如果上游只合并或发布其中一个，应重新生成只保留未发布修复的最小 patch。
+不要直接删除整个 patch。当前 patch 同时包含 `dynamicWithBone`、contact API 和 rigid-body range contact 查询三部分；如果上游只合并或发布其中一部分，应重新生成只保留未发布修复的最小 patch。
 
 ## 本地分支保留策略
 
@@ -229,6 +319,7 @@ git push fork main
 
 - `fix/dynamic-with-bone-translation`，跟踪 `fork/fix/dynamic-with-bone-translation`
 - `fix/bullet-contact-debug-api`，跟踪 `fork/fix/bullet-contact-debug-api`
+- `feat/bullet-contact-range-query`，跟踪 `fork/feat/bullet-contact-range-query`，整合 PR #38、PR #40 和 range query
 
 PR 合并且 NekoVirtOS 已升级到包含修复的正式版本后，才考虑删除本地和 fork 分支。删除前确认没有待处理 review、未发布 commit 或回归修复。
 

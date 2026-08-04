@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@yohawing/three-mmd-loader@0.8.1': 4ae21dfc73e3a1817a9bc8cc487f8c1d9c36b4da9c86a64af4d8dae37457cfce
+  '@yohawing/three-mmd-loader@0.8.1': c00e8e81f38ff9b48410cce12a110eb6e9cf681d7c3b23d9759368508ea9f542
 
 importers:
 
@@ -28,7 +28,7 @@ importers:
         version: 6.6.30(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       '@yohawing/three-mmd-loader':
         specifier: 0.8.1
-        version: 0.8.1(patch_hash=4ae21dfc73e3a1817a9bc8cc487f8c1d9c36b4da9c86a64af4d8dae37457cfce)(three@0.185.1)
+        version: 0.8.1(patch_hash=c00e8e81f38ff9b48410cce12a110eb6e9cf681d7c3b23d9759368508ea9f542)(three@0.185.1)
       clsx:
         specifier: latest
         version: 2.1.1
@@ -39,8 +39,8 @@ importers:
         specifier: latest
         version: 4.4.4
       dompurify:
-        specifier: ^3.4.12
-        version: 3.4.12
+        specifier: ^3.4.13
+        version: 3.4.13
       fuse.js:
         specifier: ^7.5.0
         version: 7.5.0
@@ -48,14 +48,14 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
       marked:
-        specifier: ^18.0.7
-        version: 18.0.7
+        specifier: ^18.0.9
+        version: 18.0.9
       mediabunny:
-        specifier: ^1.52.2
-        version: 1.52.2
+        specifier: ^1.52.3
+        version: 1.52.3
       nanoid:
-        specifier: ^6.0.0
-        version: 6.0.0
+        specifier: ^6.0.1
+        version: 6.0.1
       postprocessing:
         specifier: ^6.39.4
         version: 6.39.4(three@0.185.1)
@@ -1053,8 +1053,8 @@ packages:
   dom-accessibility-api@0.6.3:
     resolution: {integrity: sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w==}
 
-  dompurify@3.4.12:
-    resolution: {integrity: sha512-zQvGet8Z2sWbQhCmfFz/T5QWH2oBmjnqK3qvOjaqaNLrLEF912WamU+ohnTp0TCep/MFVHpdJuCZEdFOdTnEFg==}
+  dompurify@3.4.13:
+    resolution: {integrity: sha512-2vmYIoqjze2d+kakP8S/nS5shfsl587kzwEjcGlTdiksUVgFHnFCsLYDVj/JNqJVOQZGSYBTmuycv0PodwmnMQ==}
 
   dprint-node@1.0.8:
     resolution: {integrity: sha512-iVKnUtYfGrYcW1ZAlfR/F59cUVL8QIhWoBJoSjkkdua/dkWIgjZfiLMeTjiB06X0ZLkQ0M2C1VbUj/CxkIf1zg==}
@@ -1370,16 +1370,16 @@ packages:
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
-  marked@18.0.7:
-    resolution: {integrity: sha512-iDVQ5ldaiKXn6b2JroX5kgRfmwgqolW7NpaEzTl1k/2Zh1njIEN9yniyLV/mOvWwtsE8OGgkjsCYvijuPk1dtA==}
+  marked@18.0.9:
+    resolution: {integrity: sha512-/Sa4qiiHZxf0/FQdBBowr9q4r10krCwMvpK48FUBdXdUXScDxiQGR9zCPrFgRVR5LU3iySOiIjy09ZQvADir1w==}
     engines: {node: '>= 20'}
     hasBin: true
 
   mdn-data@2.27.1:
     resolution: {integrity: sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ==}
 
-  mediabunny@1.52.2:
-    resolution: {integrity: sha512-HIgqL2BAWsWJtaqZRrqcrv7cEajQtCT9noR0dO8cGLKZKML9mmL4BjZOtm6j5I9qAp0v/hr/NmRZhuR6HZyQ7Q==}
+  mediabunny@1.52.3:
+    resolution: {integrity: sha512-rMGwH5fykDCSA55LG9aWkE433wwHrycq3J5mRf+djBnHBZzmJGvIwg6Qfcfr4rRkzkmrdmewxQozLkOM1H1C6Q==}
 
   meshline@3.3.1:
     resolution: {integrity: sha512-/TQj+JdZkeSUOl5Mk2J7eLcYTLiQm2IDzmlSvYm7ov15anEcDJ92GHqqazxTSreeNgfnYu24kiEvvv0WlbCdFQ==}
@@ -1405,8 +1405,8 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
-  nanoid@6.0.0:
-    resolution: {integrity: sha512-mkUH+rPkwU2qPadJ0oJZOjeZ5Mxn8Q1UhevwkTRWNuUZzyia3h4rhzK39hxaHTk0o2OxB8W2SQ6A8k23ZDi1pQ==}
+  nanoid@6.0.1:
+    resolution: {integrity: sha512-3wVS3i51pE2pi1k5FFL/95BGfVS0kSsvDVuGXHOtxox/TywUmtgq+3qiTOTbs9J7KfHaXPiN171k/A6dBnaXFw==}
     engines: {node: ^22 || ^24 || >=26}
     hasBin: true
 
@@ -2634,7 +2634,7 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
-  '@yohawing/three-mmd-loader@0.8.1(patch_hash=4ae21dfc73e3a1817a9bc8cc487f8c1d9c36b4da9c86a64af4d8dae37457cfce)(three@0.185.1)':
+  '@yohawing/three-mmd-loader@0.8.1(patch_hash=c00e8e81f38ff9b48410cce12a110eb6e9cf681d7c3b23d9759368508ea9f542)(three@0.185.1)':
     dependencies:
       '@types/three': 0.185.3
       three: 0.185.1
@@ -2759,7 +2759,7 @@ snapshots:
 
   dom-accessibility-api@0.6.3: {}
 
-  dompurify@3.4.12:
+  dompurify@3.4.13:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
@@ -3055,11 +3055,11 @@ snapshots:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  marked@18.0.7: {}
+  marked@18.0.9: {}
 
   mdn-data@2.27.1: {}
 
-  mediabunny@1.52.2:
+  mediabunny@1.52.3:
     dependencies:
       '@types/dom-mediacapture-transform': 0.1.12
       '@types/dom-webcodecs': 0.1.13
@@ -3080,7 +3080,7 @@ snapshots:
 
   nanoid@3.3.16: {}
 
-  nanoid@6.0.0: {}
+  nanoid@6.0.1: {}
 
   natural-compare@1.4.0: {}
 
