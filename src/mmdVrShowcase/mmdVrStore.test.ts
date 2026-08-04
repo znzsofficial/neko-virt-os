@@ -269,7 +269,7 @@ describe("MMD VR adjustments", () => {
   it("clears material state for removed models", () => {
     const store = useMmdVrStore.getState();
     store.setMaterialModels({
-      "model-1": [{ name: "Body", visible: true, opacity: 1, roughness: 0.55, metallic: 0 }],
+      "model-1": [{ name: "Body", visible: true, opacity: 1, roughness: 0.55, metallic: 0, emission: 0 }],
     });
     store.setMaterialPanelModelId("model-1");
 
@@ -277,5 +277,26 @@ describe("MMD VR adjustments", () => {
 
     expect(useMmdVrStore.getState().materialModels).toEqual({});
     expect(useMmdVrStore.getState().materialPanelModelId).toBeNull();
+  });
+
+  it("forwards clamped material emission to the runtime and panel state", () => {
+    const calls: unknown[] = [];
+    useMmdVrStore.setState({
+      materialModels: {
+        "model-1": [{ name: "Body", visible: true, opacity: 1, roughness: 0.55, metallic: 0, emission: 0 }],
+      },
+      runtimeRef: {
+        setMaterialVisible: () => undefined,
+        setMaterialOverride: (...args) => calls.push(args),
+      },
+    });
+
+    useMmdVrStore.getState().setMaterialParam("model-1", "Body", "emission", 3);
+
+    expect(calls).toEqual([["model-1", "Body", { emission: 2 }]]);
+    expect(useMmdVrStore.getState().materialModels["model-1"]?.[0]?.emission).toBe(2);
+
+    useMmdVrStore.getState().setMaterialParam("model-1", "Body", "emission", Number.NaN);
+    expect(useMmdVrStore.getState().materialModels["model-1"]?.[0]?.emission).toBe(0);
   });
 });

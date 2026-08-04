@@ -270,6 +270,7 @@ export const zh = {
   settingsMmdVrMaterialOpacity: "透明",
   settingsMmdVrMaterialRoughness: "粗糙",
   settingsMmdVrMaterialMetallic: "金属",
+  settingsMmdVrMaterialEmission: "自发光",
   settingsMmdVrPhysicsCollisionOn: "手碰撞:开",
   settingsMmdVrPhysicsCollisionOff: "手碰撞:关",
   settingsMmdVrPhysicsSelfCollisionOn: "衣物互撞:开",

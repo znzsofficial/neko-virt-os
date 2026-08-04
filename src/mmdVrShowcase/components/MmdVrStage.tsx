@@ -413,7 +413,12 @@ export function MmdVrStageContent() {
     void runtime.setPhysicsEnabled(physicsEnabled).then(() => {
       if (!cancelled) {
         appliedPhysicsEnabledRef.current = physicsEnabled;
+        if (physicsEnabled) {
+          appliedSelfCollisionRef.current = useMmdVrStore.getState().prefs.physicsDynamicSelfCollision;
+        }
         syncModelList();
+        syncMaterialModels();
+        lastEvaluatedTimeRef.current = -Infinity;
       }
     }).catch((error) => {
       console.error("[mmdVr] physics toggle failed", error);
@@ -421,6 +426,7 @@ export function MmdVrStageContent() {
         const fatal = isMmdRuntimeRebuildError(error);
         syncModelList();
         syncMaterialModels();
+        lastEvaluatedTimeRef.current = -Infinity;
         const store = useMmdVrStore.getState();
         if (fatal) appliedPhysicsEnabledRef.current = false;
         store.setPhysicsEnabled(fatal ? false : appliedPhysicsEnabledRef.current);
@@ -447,6 +453,8 @@ export function MmdVrStageContent() {
       if (!cancelled) {
         appliedSelfCollisionRef.current = physicsDynamicSelfCollision;
         syncModelList();
+        syncMaterialModels();
+        lastEvaluatedTimeRef.current = -Infinity;
       }
     }).catch((error) => {
       console.error("[mmdVr] self-collision rebuild failed", error);
@@ -454,6 +462,7 @@ export function MmdVrStageContent() {
         const fatal = isMmdRuntimeRebuildError(error);
         syncModelList();
         syncMaterialModels();
+        lastEvaluatedTimeRef.current = -Infinity;
         const store = useMmdVrStore.getState();
         store.setPrefs({ physicsDynamicSelfCollision: appliedSelfCollisionRef.current });
         store.setPhysicsError(fatal ? labelsRef.current.physicsFatal : labelsRef.current.physicsRestored, fatal);
@@ -559,6 +568,7 @@ export function MmdVrStageContent() {
           opacity: override?.opacity ?? 1,
           roughness: override?.roughness ?? 0.55,
           metallic: override?.metallic ?? 0,
+          emission: Math.min(2, Math.max(0, override?.emission ?? 0)),
         };
       });
       materialModels[model.id] = materials;

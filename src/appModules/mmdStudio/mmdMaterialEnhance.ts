@@ -164,6 +164,8 @@ export function attachMmdMaterialEnhance(material: THREE.Material) {
     if (!typed.userData.mmdMaterialFactorShader) {
       typed.userData.mmdMaterialFactorShader = shader;
     }
+    const currentState = typed.userData.mmdEnhanceState as MmdMaterialEnhanceState | undefined;
+    if (currentState) syncMmdMaterialEnhance(typed, currentState);
 
     shader.fragmentShader = shader.fragmentShader.replace(
       PARS_MARKER,
@@ -308,6 +310,7 @@ const _lightColor = new THREE.Color(1, 1, 1);
 
 export function syncMmdMaterialEnhance(material: THREE.Material, state: MmdMaterialEnhanceState) {
   const mat = material as THREE.MeshToonMaterial;
+  mat.userData.mmdEnhanceState = state;
   const shader = (mat.userData.mmdEnhanceShader ?? mat.userData.mmdMaterialFactorShader) as EnhanceShader | undefined;
   if (!shader?.uniforms) return;
 

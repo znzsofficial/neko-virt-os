@@ -12,6 +12,7 @@ import { DefaultMmdRuntime } from "@yohawing/three-mmd-loader/runtime";
 import * as THREE from "three";
 import { createBulletPhysicsBackend, type MmdPhysicsQuality } from "./mmdPhysics";
 import {
+  applyMaterialOverride,
   applyMaterialOverrides,
   applyMaterialVisibility,
   createDefaultMaterialOverrides,
@@ -797,8 +798,10 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
       if (!entry) return;
       entry.materialOverrides[materialName] = mergeMaterialOverride(entry.materialOverrides[materialName], patch);
       if (!entry.tslAttached) {
-        applyMaterialOverrides(entry, lightingContext());
-        refreshMaterialTextures(entry);
+        applyMaterialOverride(entry, materialName, lightingContext());
+        if ("aoMapFile" in patch || "emissionMapFile" in patch || "maskMapFile" in patch) {
+          refreshMaterialTextures(entry);
+        }
       }
     },
     setLighting(options) {

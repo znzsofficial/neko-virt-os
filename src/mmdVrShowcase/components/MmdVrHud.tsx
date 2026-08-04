@@ -252,7 +252,7 @@ function DragHandle({
   );
 
   useEffect(() => () => texture.dispose(), [texture]);
-  useEffect(() => () => onDragChange(false), [onDragChange]);
+  useEffect(() => () => finish(), [onDragChange]);
 
   function finish(pointerId?: number) {
     const drag = dragRef.current;
@@ -268,6 +268,7 @@ function DragHandle({
     const parent = panel?.parent;
     if (!panel || !parent) return;
     e.stopPropagation();
+    if (dragRef.current) return;
     const localHit = parent.worldToLocal(e.point.clone());
     dragRef.current = {
       pointerId: e.pointerId,
@@ -362,14 +363,17 @@ function HudSlider({
   onChange,
   onInteractionChange,
   width = 0.74,
+  disabled = false,
 }: {
   position: [number, number, number];
   value: number;
   onChange: (value: number) => void;
   onInteractionChange: (active: boolean) => void;
   width?: number;
+  disabled?: boolean;
 }) {
   const pointerRef = useRef<number | null>(null);
+  const pointerTargetRef = useRef<{ releasePointerCapture?: (id: number) => void } | null>(null);
   const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
   const accent = getXrAccentTokens(themeColor);
   const ratio = Math.min(1, Math.max(0, value));
@@ -381,7 +385,9 @@ function HudSlider({
 
   function begin(event: ThreeEvent<PointerEvent>) {
     event.stopPropagation();
+    if (disabled || pointerRef.current != null) return;
     pointerRef.current = event.pointerId;
+    pointerTargetRef.current = event.target as unknown as { releasePointerCapture?: (id: number) => void };
     onInteractionChange(true);
     update(event);
     try {
@@ -394,38 +400,50 @@ function HudSlider({
   function move(event: ThreeEvent<PointerEvent>) {
     if (pointerRef.current !== event.pointerId) return;
     event.stopPropagation();
+    if (disabled) return;
     update(event);
+  }
+
+  function finish(pointerId?: number) {
+    if (pointerRef.current == null || (pointerId != null && pointerRef.current !== pointerId)) return;
+    const activePointerId = pointerRef.current;
+    pointerRef.current = null;
+    onInteractionChange(false);
+    try {
+      pointerTargetRef.current?.releasePointerCapture?.(activePointerId);
+    } catch {
+      // Pointer capture is optional in WebXR implementations.
+    }
+    pointerTargetRef.current = null;
   }
 
   function end(event: ThreeEvent<PointerEvent>) {
     if (pointerRef.current !== event.pointerId) return;
     event.stopPropagation();
-    pointerRef.current = null;
-    onInteractionChange(false);
-    try {
-      (event.target as unknown as { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(event.pointerId);
-    } catch {
-      // Pointer capture is optional in WebXR implementations.
-    }
+    finish(event.pointerId);
   }
 
-  useEffect(() => () => onInteractionChange(false), [onInteractionChange]);
+  useEffect(() => {
+    if (disabled) finish();
+  }, [disabled]);
+
+  useEffect(() => () => finish(), [onInteractionChange]);
 
   return (
     <group position={position}>
       <mesh position={[0, 0, -0.004]} renderOrder={30} raycast={() => null}>
         <planeGeometry args={[width, 0.035]} />
-        <meshBasicMaterial color="#4b4248" transparent opacity={1} toneMapped={false} depthWrite={false} depthTest={false} />
+        <meshBasicMaterial color="#4b4248" transparent opacity={disabled ? 0.45 : 1} toneMapped={false} depthWrite={false} depthTest={false} />
       </mesh>
       {ratio > 0 ? (
         <mesh position={[-width / 2 + (width * ratio) / 2, 0, 0]} renderOrder={31} raycast={() => null}>
           <planeGeometry args={[width * ratio, 0.035]} />
-          <meshBasicMaterial color={accent.primary} transparent opacity={1} toneMapped={false} depthWrite={false} depthTest={false} />
+          <meshBasicMaterial color={accent.primary} transparent opacity={disabled ? 0.45 : 1} toneMapped={false} depthWrite={false} depthTest={false} />
         </mesh>
       ) : null}
       <mesh position={[-width / 2 + width * ratio, 0, 0.006]} renderOrder={32} raycast={() => null}>
         <circleGeometry args={[0.055, 24]} />
-        <meshBasicMaterial color={accent.marker} transparent opacity={1} toneMapped={false} depthWrite={false} depthTest={false} />
+        <meshBasicMaterial color={accent.marker} transparent opacity={disabled ? 0.45 : 1} toneMapped={false} depthWrite={false} depthTest={false} />
       </mesh>
       <mesh
         position={[0, 0, 0.012]}
@@ -486,7 +504,7 @@ function StatusPlane({ text }: { text: string }) {
   );
 }
 
-function ProgressBar() {
+function ProgressBar({ onInteractionChange }: { onInteractionChange: (active: boolean) => void }) {
   const duration = useMmdVrStore((s) => s.duration);
   const modelCount = useMmdVrStore((s) => s.modelCount);
   const requestSeek = useMmdVrStore((s) => s.requestSeek);
@@ -518,6 +536,7 @@ function ProgressBar() {
 
   const lastPaintVersionRef = useRef(-1);
   const pointerRef = useRef<number | null>(null);
+  const pointerTargetRef = useRef<{ releasePointerCapture?: (id: number) => void } | null>(null);
 
   function updateSeek(event: ThreeEvent<PointerEvent>) {
     const uv = event.uv;
@@ -530,7 +549,10 @@ function ProgressBar() {
 
   function beginSeek(event: ThreeEvent<PointerEvent>) {
     event.stopPropagation();
+    if (pointerRef.current != null) return;
     pointerRef.current = event.pointerId;
+    pointerTargetRef.current = event.target as unknown as { releasePointerCapture?: (id: number) => void };
+    onInteractionChange(true);
     updateSeek(event);
     try {
       (event.target as unknown as { setPointerCapture?: (id: number) => void }).setPointerCapture?.(event.pointerId);
@@ -545,15 +567,23 @@ function ProgressBar() {
     updateSeek(event);
   }
 
-  function endSeek(event: ThreeEvent<PointerEvent>) {
-    if (pointerRef.current !== event.pointerId) return;
-    event.stopPropagation();
+  function finishSeek(pointerId?: number) {
+    if (pointerRef.current == null || (pointerId != null && pointerRef.current !== pointerId)) return;
+    const activePointerId = pointerRef.current;
     pointerRef.current = null;
+    onInteractionChange(false);
     try {
-      (event.target as unknown as { releasePointerCapture?: (id: number) => void }).releasePointerCapture?.(event.pointerId);
+      pointerTargetRef.current?.releasePointerCapture?.(activePointerId);
     } catch {
       // Pointer capture is optional in WebXR implementations.
     }
+    pointerTargetRef.current = null;
+  }
+
+  function endSeek(event: ThreeEvent<PointerEvent>) {
+    if (pointerRef.current !== event.pointerId) return;
+    event.stopPropagation();
+    finishSeek(event.pointerId);
   }
 
   useEffect(
@@ -562,6 +592,10 @@ function ProgressBar() {
     },
     [texture],
   );
+  useEffect(() => () => finishSeek(), [onInteractionChange]);
+  useEffect(() => {
+    if (modelCount === 0 || duration <= 0) finishSeek();
+  }, [duration, modelCount]);
 
   useFrame(() => {
     if (modelCount === 0) return;
@@ -858,7 +892,10 @@ function MaterialPanel({
   opacityLabel,
   roughnessLabel,
   metallicLabel,
+  emissionLabel,
   closeLabel,
+  disabled,
+  onInteractionChange,
 }: {
   hideLabel: string;
   showLabel: string;
@@ -866,7 +903,10 @@ function MaterialPanel({
   opacityLabel: string;
   roughnessLabel: string;
   metallicLabel: string;
+  emissionLabel: string;
   closeLabel: string;
+  disabled: boolean;
+  onInteractionChange: (active: boolean) => void;
 }) {
   const modelId = useMmdVrStore((s) => s.materialPanelModelId);
   const setModelId = useMmdVrStore((s) => s.setMaterialPanelModelId);
@@ -908,6 +948,7 @@ function MaterialPanel({
                   label={mat.visible ? hideLabel : showLabel}
                   size={[0.14, 0.07]}
                   active={mat.visible}
+                  disabled={disabled}
                   onPress={() => setMaterialVisible(modelId, mat.name, !mat.visible)}
                 />
                 <HudButton
@@ -929,13 +970,15 @@ function MaterialPanel({
         </>
       ) : selectedState ? (
         <>
-          <ValueLabel position={[-0.5, 0.22, 0]} label={opacityLabel} value={selectedState.opacity.toFixed(2)} />
-          <HudSlider position={[0.1, 0.22, 0]} width={0.6} value={selectedState.opacity} onChange={(v) => setMaterialParam(modelId, selectedState.name, "opacity", v)} onInteractionChange={() => {}} />
-          <ValueLabel position={[-0.5, 0.04, 0]} label={roughnessLabel} value={selectedState.roughness.toFixed(2)} />
-          <HudSlider position={[0.1, 0.04, 0]} width={0.6} value={selectedState.roughness} onChange={(v) => setMaterialParam(modelId, selectedState.name, "roughness", v)} onInteractionChange={() => {}} />
-          <ValueLabel position={[-0.5, -0.14, 0]} label={metallicLabel} value={selectedState.metallic.toFixed(2)} />
-          <HudSlider position={[0.1, -0.14, 0]} width={0.6} value={selectedState.metallic} onChange={(v) => setMaterialParam(modelId, selectedState.name, "metallic", v)} onInteractionChange={() => {}} />
-          <HudButton position={[-0.3, -0.4, 0]} label={selectedState.visible ? hideLabel : showLabel} size={[0.22, 0.08]} active={selectedState.visible} onPress={() => setMaterialVisible(modelId, selectedState.name, !selectedState.visible)} />
+          <ValueLabel position={[-0.5, 0.25, 0]} label={opacityLabel} value={selectedState.opacity.toFixed(2)} />
+          <HudSlider position={[0.1, 0.25, 0]} width={0.6} value={selectedState.opacity} onChange={(v) => setMaterialParam(modelId, selectedState.name, "opacity", v)} onInteractionChange={onInteractionChange} disabled={disabled} />
+          <ValueLabel position={[-0.5, 0.09, 0]} label={roughnessLabel} value={selectedState.roughness.toFixed(2)} />
+          <HudSlider position={[0.1, 0.09, 0]} width={0.6} value={selectedState.roughness} onChange={(v) => setMaterialParam(modelId, selectedState.name, "roughness", v)} onInteractionChange={onInteractionChange} disabled={disabled} />
+          <ValueLabel position={[-0.5, -0.07, 0]} label={metallicLabel} value={selectedState.metallic.toFixed(2)} />
+          <HudSlider position={[0.1, -0.07, 0]} width={0.6} value={selectedState.metallic} onChange={(v) => setMaterialParam(modelId, selectedState.name, "metallic", v)} onInteractionChange={onInteractionChange} disabled={disabled} />
+          <ValueLabel position={[-0.5, -0.23, 0]} label={emissionLabel} value={selectedState.emission.toFixed(2)} />
+          <HudSlider position={[0.1, -0.23, 0]} width={0.6} value={Math.min(1, selectedState.emission / 2)} onChange={(v) => setMaterialParam(modelId, selectedState.name, "emission", v * 2)} onInteractionChange={onInteractionChange} disabled={disabled} />
+          <HudButton position={[-0.3, -0.48, 0]} label={selectedState.visible ? hideLabel : showLabel} size={[0.22, 0.08]} active={selectedState.visible} disabled={disabled} onPress={() => setMaterialVisible(modelId, selectedState.name, !selectedState.visible)} />
         </>
       ) : null}
     </group>
@@ -1203,6 +1246,7 @@ export function MmdVrControlBar({
   materialOpacityLabel,
   materialRoughnessLabel,
   materialMetallicLabel,
+  materialEmissionLabel,
   themeLabels,
   walkLabels,
   walkSpeedLabel,
@@ -1269,6 +1313,7 @@ export function MmdVrControlBar({
   materialOpacityLabel: string;
   materialRoughnessLabel: string;
   materialMetallicLabel: string;
+  materialEmissionLabel: string;
   themeLabels: [string, string, string, string, string];
   walkLabels: [string, string, string];
   walkSpeedLabel: string;
@@ -1374,7 +1419,7 @@ export function MmdVrControlBar({
         onPress={() => setPrefs({ panelFollowUser: !useMmdVrStore.getState().prefs.panelFollowUser })}
       />
       {status ? <StatusPlane text={status} /> : null}
-      <ProgressBar />
+      <ProgressBar onInteractionChange={onDragChange} />
       <HudButton
         position={[-1.18, 0.05, 0]}
         label={playing ? pauseLabel : playLabel}
@@ -1485,7 +1530,7 @@ export function MmdVrControlBar({
         active={physicsPanelOpen}
         onPress={() => setPhysicsPanelOpen((open) => !open)}
       />
-      {physicsPanelOpen ? (
+      {!materialPanelOpen && (physicsPanelOpen ? (
         <PhysicsSettingsPanel
           collisionOnLabel={physicsCollisionOnLabel}
           collisionOffLabel={physicsCollisionOffLabel}
@@ -1532,7 +1577,7 @@ export function MmdVrControlBar({
             onInteractionChange={onDragChange}
           />
         </>
-      )}
+      ))}
       {materialPanelOpen ? (
         <MaterialPanel
           hideLabel={hideLabel}
@@ -1541,7 +1586,10 @@ export function MmdVrControlBar({
           opacityLabel={materialOpacityLabel}
           roughnessLabel={materialRoughnessLabel}
           metallicLabel={materialMetallicLabel}
+          emissionLabel={materialEmissionLabel}
           closeLabel={exitLabel}
+          disabled={busy || physicsBusy}
+          onInteractionChange={onDragChange}
         />
       ) : null}
       <FpsBadge />

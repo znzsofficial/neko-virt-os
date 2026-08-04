@@ -262,6 +262,41 @@ export type MaterialLightingContext = {
   lightColor?: THREE.Color | null;
 };
 
+function applyMaterialOverrideToMaterial(
+  material: THREE.Material,
+  modelId: string,
+  name: string,
+  override: MaterialOverride,
+  ctx: MaterialLightingContext,
+) {
+  // Official TSL materials (WebGPU pipeline) — do not inject classic enhance.
+  if (material.userData?.mmdTslMaterialUniforms || material.userData?.mmdTslOutlineMaterial) return;
+  // Skip WebGL-only enhance injection on WebGPU MeshStandard fallback.
+  if (material.userData?.mmdWebGpuStripped) {
+    const std = material as THREE.MeshStandardMaterial;
+    if ("roughness" in std) {
+      std.roughness = override.roughness;
+      std.metalness = override.metallic;
+      std.envMapIntensity = Math.max(0, override.envInfluence) * (ctx.envIntensity ?? 0);
+      if (std.envMap) std.envMap = null;
+      std.needsUpdate = true;
+    }
+    return;
+  }
+  attachMmdMaterialEnhance(material);
+  syncMmdMaterialEnhance(material, {
+    modelId,
+    materialName: name,
+    override,
+    envIntensity: ctx.envIntensity ?? 0,
+    ambientIntensity: ctx.ambientIntensity ?? 0.55,
+    envMap: ctx.envMap ?? null,
+    lightDirection: ctx.lightDirection ?? null,
+    lightIntensity: ctx.lightIntensity,
+    lightColor: ctx.lightColor ?? null,
+  });
+}
+
 export function applyMaterialOverrides(
   entry: MaterialPipelineEntry,
   envIntensityOrCtx: number | MaterialLightingContext = 0,
@@ -271,43 +306,28 @@ export function applyMaterialOverrides(
     typeof envIntensityOrCtx === "number"
       ? { envIntensity: envIntensityOrCtx, ambientIntensity }
       : { ambientIntensity: 0.55, ...envIntensityOrCtx };
-  const envIntensity = ctx.envIntensity ?? 0;
-  const ambient = ctx.ambientIntensity ?? ambientIntensity;
 
   const materials = getMeshMaterials(entry.model.mesh);
   materials.forEach((material, index) => {
     if (!material) return;
     const name = entry.materialNames[index] ?? `Material ${index + 1}`;
     const override = entry.materialOverrides[name] ?? DEFAULT_MATERIAL_OVERRIDE;
-    // Official TSL materials (WebGPU pipeline) — do not inject classic enhance.
-    if (material.userData?.mmdTslMaterialUniforms || material.userData?.mmdTslOutlineMaterial) {
-      return;
-    }
-    // Skip WebGL-only enhance injection on WebGPU MeshStandard fallback.
-    if (material.userData?.mmdWebGpuStripped) {
-      // MeshStandard uses scene.environment (equirect) — do not assign CubeUV PMREM to envMap.
-      const std = material as THREE.MeshStandardMaterial;
-      if ("roughness" in std) {
-        std.roughness = override.roughness;
-        std.metalness = override.metallic;
-        std.envMapIntensity = Math.max(0, override.envInfluence) * envIntensity;
-        if (std.envMap) std.envMap = null;
-        std.needsUpdate = true;
-      }
-      return;
-    }
-    attachMmdMaterialEnhance(material);
-    syncMmdMaterialEnhance(material, {
-      modelId: entry.id,
-      materialName: name,
-      override,
-      envIntensity,
-      ambientIntensity: ambient,
-      envMap: ctx.envMap ?? null,
-      lightDirection: ctx.lightDirection ?? null,
-      lightIntensity: ctx.lightIntensity,
-      lightColor: ctx.lightColor ?? null,
-    });
+    applyMaterialOverrideToMaterial(material, entry.id, name, override, ctx);
+  });
+}
+
+export function applyMaterialOverride(
+  entry: MaterialPipelineEntry,
+  materialName: string,
+  ctx: MaterialLightingContext,
+) {
+  const materials = getMeshMaterials(entry.model.mesh);
+  materials.forEach((material, index) => {
+    if (!material) return;
+    const name = entry.materialNames[index] ?? `Material ${index + 1}`;
+    if (name !== materialName) return;
+    const override = entry.materialOverrides[name] ?? DEFAULT_MATERIAL_OVERRIDE;
+    applyMaterialOverrideToMaterial(material, entry.id, name, override, ctx);
   });
 }
 

@@ -272,6 +272,7 @@ export const en: Record<keyof ZhMessages, string> = {
   settingsMmdVrMaterialOpacity: "Opacity",
   settingsMmdVrMaterialRoughness: "Rough",
   settingsMmdVrMaterialMetallic: "Metal",
+  settingsMmdVrMaterialEmission: "Glow",
   settingsMmdVrPhysicsCollisionOn: "Hands:On",
   settingsMmdVrPhysicsCollisionOff: "Hands:Off",
   settingsMmdVrPhysicsSelfCollisionOn: "Cloth collide:On",

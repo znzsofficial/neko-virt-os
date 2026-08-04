@@ -57,11 +57,12 @@ export type MmdVrMaterialState = {
   opacity: number;
   roughness: number;
   metallic: number;
+  emission: number;
 };
 
 export type MmdVrRuntimeRef = {
   setMaterialVisible: (modelId: string, materialName: string, visible: boolean) => void;
-  setMaterialOverride: (modelId: string, materialName: string, patch: { opacity?: number; roughness?: number; metallic?: number }) => void;
+  setMaterialOverride: (modelId: string, materialName: string, patch: { opacity?: number; roughness?: number; metallic?: number; emission?: number }) => void;
 };
 
 export type MmdVrObjectEntry = {
@@ -162,7 +163,7 @@ type MmdVrStore = {
   runtimeRef: MmdVrRuntimeRef | null;
   setRuntimeRef: (ref: MmdVrRuntimeRef | null) => void;
   setMaterialVisible: (modelId: string, materialName: string, visible: boolean) => void;
-  setMaterialParam: (modelId: string, materialName: string, param: "opacity" | "roughness" | "metallic", value: number) => void;
+  setMaterialParam: (modelId: string, materialName: string, param: "opacity" | "roughness" | "metallic" | "emission", value: number) => void;
   materialPanelModelId: string | null;
   setMaterialPanelModelId: (id: string | null) => void;
   objects: MmdVrObjectEntry[];
@@ -553,13 +554,17 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
   },
   setMaterialParam: (modelId, materialName, param, value) => {
     const state = get();
-    state.runtimeRef?.setMaterialOverride(modelId, materialName, { [param]: value });
+    const finiteValue = Number.isFinite(value) ? value : 0;
+    const normalizedValue = param === "emission"
+      ? Math.min(2, Math.max(0, finiteValue))
+      : Math.min(1, Math.max(0, finiteValue));
+    state.runtimeRef?.setMaterialOverride(modelId, materialName, { [param]: normalizedValue });
     const mats = state.materialModels[modelId];
     if (!mats) return;
     set({
       materialModels: {
         ...state.materialModels,
-        [modelId]: mats.map((m) => m.name === materialName ? { ...m, [param]: value } : m),
+        [modelId]: mats.map((m) => m.name === materialName ? { ...m, [param]: normalizedValue } : m),
       },
     });
   },

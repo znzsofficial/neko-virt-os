@@ -1,6 +1,6 @@
 import { useFrame } from "@react-three/fiber";
 import { useXRControllerLocomotion, useXRInputSourceState, XROrigin } from "@react-three/xr";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type * as THREE from "three";
 import {
   MMD_VR_HEIGHT_OFFSET_MAX,
@@ -75,6 +75,7 @@ export function MmdVrPlayerRig({
   materialOpacityLabel,
   materialRoughnessLabel,
   materialMetallicLabel,
+  materialEmissionLabel,
   themeLabels,
   walkLabels,
   walkSpeedLabel,
@@ -140,6 +141,7 @@ export function MmdVrPlayerRig({
   materialOpacityLabel: string;
   materialRoughnessLabel: string;
   materialMetallicLabel: string;
+  materialEmissionLabel: string;
   themeLabels: [string, string, string, string, string];
   walkLabels: [string, string, string];
   walkSpeedLabel: string;
@@ -151,14 +153,22 @@ export function MmdVrPlayerRig({
   const mmdPrefs = useMmdVrStore((s) => s.prefs);
   const speed = getMmdVrRenderProfile(mmdPrefs).walkSpeed;
   const heightOffset = mmdPrefs.heightOffset;
-  const [panelDragging, setPanelDragging] = useState(false);
+  const [activePanelInteractions, setActivePanelInteractions] = useState(0);
+  const [snapTurnReady, setSnapTurnReady] = useState(true);
+  const panelDragging = activePanelInteractions > 0;
+  const setPanelDragging = useCallback((active: boolean) => {
+    if (active) setSnapTurnReady(false);
+    setActivePanelInteractions((count) => Math.max(0, count + (active ? 1 : -1)));
+  }, []);
   const rightController = useXRInputSourceState("controller", "right");
   const stickHeightRef = useRef({ value: heightOffset, elapsed: 0, active: false });
 
   useXRControllerLocomotion(
     originRef,
     { speed: panelDragging ? 0 : speed },
-    { type: "snap", degrees: mmdPrefs.snapTurnDegrees, deadZone: 0.65 },
+    panelDragging || !snapTurnReady
+      ? false
+      : { type: "snap", degrees: mmdPrefs.snapTurnDegrees, deadZone: 0.65 },
   );
 
   useEffect(() => {
@@ -180,6 +190,9 @@ export function MmdVrPlayerRig({
 
   useFrame((_, delta) => {
     const stick = rightController?.gamepad["xr-standard-thumbstick"];
+    if (!panelDragging && !snapTurnReady && Math.abs(stick?.xAxis ?? 0) < 0.65) {
+      setSnapTurnReady(true);
+    }
     const axis = stick?.yAxis ?? 0;
     if (panelDragging || Math.abs(axis) < 0.18) {
       if (stickHeightRef.current.active) {
@@ -268,6 +281,7 @@ export function MmdVrPlayerRig({
         materialOpacityLabel={materialOpacityLabel}
         materialRoughnessLabel={materialRoughnessLabel}
         materialMetallicLabel={materialMetallicLabel}
+        materialEmissionLabel={materialEmissionLabel}
         themeLabels={themeLabels}
         walkLabels={walkLabels}
         walkSpeedLabel={walkSpeedLabel}

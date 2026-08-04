@@ -167,6 +167,7 @@ export function MmdVrScene() {
             materialOpacityLabel={t("settingsMmdVrMaterialOpacity")}
             materialRoughnessLabel={t("settingsMmdVrMaterialRoughness")}
             materialMetallicLabel={t("settingsMmdVrMaterialMetallic")}
+            materialEmissionLabel={t("settingsMmdVrMaterialEmission")}
             themeLabels={[
               t("settingsMmdVrThemeBlue"),
               t("settingsMmdVrThemeCyan"),
