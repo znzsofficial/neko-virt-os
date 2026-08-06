@@ -401,6 +401,49 @@ describe("controller collider physics backend", () => {
     expect(debugPhysicsContactsForRigidBodyRange).toHaveBeenCalledWith(2, 1);
     expect(debugPhysicsContacts).not.toHaveBeenCalled();
   });
+
+  it("reports controller contacts through a layered hand wrapper", () => {
+    const debugPhysicsContactsForRigidBodyRange = vi.fn((firstRigidBodyIndex: number) => {
+      if (firstRigidBodyIndex === 2) return [{ rigidBodyIndexA: 2, rigidBodyIndexB: 0 }];
+      if (firstRigidBodyIndex === 4) return [{ rigidBodyIndexA: 4, rigidBodyIndexB: 0 }];
+      return [];
+    });
+    const base = {
+      name: "layered-debug",
+      disabled: false,
+      disposed: false,
+      step: () => ({ simulated: true }),
+      debugContactCount: () => 1,
+      debugPhysicsContacts: () => [{ rigidBodyIndexA: 0, rigidBodyIndexB: 1 }],
+      debugPhysicsContactsForRigidBodyRange,
+    } satisfies MmdPhysicsBackend & {
+      debugContactCount: () => number;
+      debugPhysicsContacts: () => { rigidBodyIndexA: number; rigidBodyIndexB: number }[];
+      debugPhysicsContactsForRigidBodyRange: (firstRigidBodyIndex: number, rigidBodyCount: number) => { rigidBodyIndexA: number; rigidBodyIndexB: number }[];
+    };
+    const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] as const;
+    const handWrapper = createControllerColliderPhysicsBackend(base, () => Array.from({ length: 12 }, () => identity));
+    const controllerWrapper = createControllerColliderPhysicsBackend(handWrapper, () => Array.from({ length: 2 }, () => identity));
+    controllerWrapper.step({
+      seconds: 1,
+      deltaSeconds: 1 / 60,
+      frame: 30,
+      frameRate: 30,
+      skeleton: { bones: [{ index: 0 }, { index: 1 }] },
+      rigidBodies: [
+        { index: 0, motionType: "dynamic", shape: { type: "sphere", size: [1, 1, 1] } },
+        { index: 1, motionType: "dynamic", shape: { type: "sphere", size: [1, 1, 1] } },
+      ],
+      joints: [],
+    });
+
+    expect(controllerWrapper.debugControllerContactCount()).toBe(1);
+    expect(controllerWrapper.debugControllerContactCount(0)).toBe(1);
+    expect(controllerWrapper.debugControllerContactCount(1)).toBe(0);
+    expect(debugPhysicsContactsForRigidBodyRange).toHaveBeenCalledWith(2, 2);
+    expect(handWrapper.debugControllerContactCount()).toBe(1);
+    expect(debugPhysicsContactsForRigidBodyRange).toHaveBeenCalledWith(4, 12);
+  });
 });
 
 describe("patched mmd-anim Bullet backend", () => {

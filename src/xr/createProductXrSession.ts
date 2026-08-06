@@ -9,7 +9,7 @@ export type ProductXrSession<Q> = {
   slot: PendingSessionSlot;
   peek: () => XRSession | null;
   clear: () => void;
-  beginFromClick: () => Promise<XRSession>;
+  beginFromClick: (init?: XRSessionInit) => Promise<XRSession>;
   applyFrameRate: (quality: Q) => void;
   attachToRenderer: (gl: WebGLRenderer, quality?: Q) => Promise<boolean>;
   end: () => Promise<void>;
@@ -40,7 +40,7 @@ export function createProductXrSession<Q>(opts: {
     slot,
     peek: () => slot.peek(),
     clear: () => slot.clear(),
-    beginFromClick: () => slot.beginFromClick(),
+    beginFromClick: (init) => slot.beginFromClick(init),
     applyFrameRate,
     attachToRenderer: (gl, quality) => {
       if (quality !== undefined && !gl.xr.isPresenting) opts.configureRenderer?.(gl, quality);

@@ -11,6 +11,7 @@ import { getMmdVrRenderProfile } from "../mmdVrQuality";
 import { useMmdVrStore } from "../mmdVrStore";
 import { MmdVrControlBar } from "./MmdVrHud";
 import { MmdVrControllerColliders } from "./MmdVrControllerColliders";
+import { MmdVrHandColliders } from "./MmdVrHandColliders";
 
 /**
  * Smooth walk + snap turn. viewEpoch zeros origin (reset view).
@@ -63,6 +64,8 @@ export function MmdVrPlayerRig({
   rimLightOffLabel,
   lightPoolOnLabel,
   lightPoolOffLabel,
+  handTrackingOnLabel,
+  handTrackingOffLabel,
   physicsCollisionOnLabel,
   physicsCollisionOffLabel,
   physicsSelfCollisionOnLabel,
@@ -138,6 +141,8 @@ export function MmdVrPlayerRig({
   rimLightOffLabel: string;
   lightPoolOnLabel: string;
   lightPoolOffLabel: string;
+  handTrackingOnLabel: string;
+  handTrackingOffLabel: string;
   physicsCollisionOnLabel: string;
   physicsCollisionOffLabel: string;
   physicsSelfCollisionOnLabel: string;
@@ -239,6 +244,7 @@ export function MmdVrPlayerRig({
   return (
     <XROrigin ref={originRef}>
       <MmdVrControllerColliders />
+      <MmdVrHandColliders />
       <MmdVrControlBar
         playLabel={playLabel}
         pauseLabel={pauseLabel}
@@ -287,6 +293,8 @@ export function MmdVrPlayerRig({
         rimLightOffLabel={rimLightOffLabel}
         lightPoolOnLabel={lightPoolOnLabel}
         lightPoolOffLabel={lightPoolOffLabel}
+        handTrackingOnLabel={handTrackingOnLabel}
+        handTrackingOffLabel={handTrackingOffLabel}
         physicsCollisionOnLabel={physicsCollisionOnLabel}
         physicsCollisionOffLabel={physicsCollisionOffLabel}
         physicsSelfCollisionOnLabel={physicsSelfCollisionOnLabel}

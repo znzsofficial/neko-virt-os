@@ -239,6 +239,9 @@ export type MmdRuntimeOptions = {
   controllerColliderRadius?: () => number;
   controllerColliderFriction?: () => number;
   controllerColliderRestitution?: () => number;
+  handColliders?: () => readonly THREE.Matrix4[];
+  handCollidersEnabled?: () => boolean;
+  handColliderRadius?: () => number;
   physicsQuality?: () => MmdPhysicsQuality;
   physicsBoneFeedbackScale?: () => number;
   physicsDynamicSelfCollision?: () => boolean;
@@ -269,6 +272,9 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
   const controllerColliders = options.controllerColliders;
   const controllerCollidersEnabled = options.controllerCollidersEnabled;
   const controllerColliderRadius = options.controllerColliderRadius;
+  const handColliders = options.handColliders;
+  const handCollidersEnabled = options.handCollidersEnabled;
+  const handColliderRadius = options.handColliderRadius;
   const physicsQuality = options.physicsQuality;
   let physicsDynamicSelfCollision = options.physicsDynamicSelfCollision?.() ?? false;
   const prepareModel = options.prepareModel;
@@ -416,44 +422,52 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
     assertActive();
     const textureMap = buildTextureMap(modelFile, companionFiles);
     let colliderRoot: THREE.Object3D | null = null;
-    const colliderMatrices = [
-      new Float32Array(16),
-      new Float32Array(16),
-    ];
     const unitRoot = new THREE.Matrix4();
     const inverseVisualRoot = new THREE.Matrix4();
-    const mappedController = new THREE.Matrix4();
+    const mappedCollider = new THREE.Matrix4();
     const visualRoot = new THREE.Matrix4();
     const visualScale = new THREE.Vector3();
-    const colliderProvider = controllerColliders
-      ? () => {
-          const root = colliderRoot;
-          const worldMatrices = controllerColliders();
-          if (!root || worldMatrices.length !== colliderMatrices.length) return [];
-          root.updateWorldMatrix(true, false);
-          unitRoot.copy(root.matrixWorld);
-          const scale = Math.min(10, Math.max(0.01, Number(root.userData.mmdVisualScale) || 1));
-          visualRoot.copy(unitRoot).scale(visualScale.setScalar(scale));
-          inverseVisualRoot.copy(visualRoot).invert();
-          for (let index = 0; index < colliderMatrices.length; index += 1) {
-            if (controllerCollidersEnabled?.() === false) {
-              mappedController.makeTranslation(0, -1_000, 0);
-            } else {
-              mappedController.multiplyMatrices(unitRoot, inverseVisualRoot).multiply(worldMatrices[index]);
-            }
-            const source = mappedController.elements;
-            const target = colliderMatrices[index];
-            for (let column = 0; column < 4; column += 1) {
-              for (let row = 0; row < 4; row += 1) {
-                const rowSign = row === 2 ? -1 : 1;
-                const columnSign = column === 2 ? -1 : 1;
-                target[column * 4 + row] = rowSign * source[column * 4 + row] * columnSign;
-              }
+    const createMappedColliderProvider = (
+      getWorldMatrices: (() => readonly THREE.Matrix4[]) | undefined,
+      getEnabled: (() => boolean) | undefined,
+      slotCount: number,
+    ) => {
+      if (!getWorldMatrices) return undefined;
+      const colliderMatrices = Array.from({ length: slotCount }, () => new Float32Array(16));
+      return () => {
+        const root = colliderRoot;
+        const worldMatrices = getWorldMatrices();
+        if (!root || worldMatrices.length !== colliderMatrices.length) return [];
+        root.updateWorldMatrix(true, false);
+        unitRoot.copy(root.matrixWorld);
+        const scale = Math.min(10, Math.max(0.01, Number(root.userData.mmdVisualScale) || 1));
+        visualRoot.copy(unitRoot).scale(visualScale.setScalar(scale));
+        inverseVisualRoot.copy(visualRoot).invert();
+        for (let index = 0; index < colliderMatrices.length; index += 1) {
+          if (getEnabled?.() === false) {
+            mappedCollider.makeTranslation(0, -1_000, 0);
+          } else {
+            mappedCollider.multiplyMatrices(unitRoot, inverseVisualRoot).multiply(worldMatrices[index]);
+          }
+          const source = mappedCollider.elements;
+          const target = colliderMatrices[index];
+          for (let column = 0; column < 4; column += 1) {
+            for (let row = 0; row < 4; row += 1) {
+              const rowSign = row === 2 ? -1 : 1;
+              const columnSign = column === 2 ? -1 : 1;
+              target[column * 4 + row] = rowSign * source[column * 4 + row] * columnSign;
             }
           }
-          return colliderMatrices;
         }
-      : undefined;
+        return colliderMatrices;
+      };
+    };
+    const colliderProvider = createMappedColliderProvider(controllerColliders, controllerCollidersEnabled, 2);
+    const handColliderProvider = createMappedColliderProvider(
+      handColliders,
+      handCollidersEnabled,
+      handColliders?.().length ?? 0,
+    );
     // One Bullet world per model (library world holds a single uploaded model identity).
     const physicsBackend = withPhysics
       ? await createBulletPhysicsBackend({
@@ -461,6 +475,11 @@ export function createMmdRuntimeHandle(scene: THREE.Scene, options: MmdRuntimeOp
           controllerRadius: () => {
             const scale = Math.min(10, Math.max(0.01, Number(colliderRoot?.userData.mmdVisualScale) || transform.scale));
             return (controllerColliderRadius?.() ?? 0.08) / scale;
+          },
+          handColliders: handColliderProvider,
+          handRadius: () => {
+            const scale = Math.min(10, Math.max(0.01, Number(colliderRoot?.userData.mmdVisualScale) || transform.scale));
+            return (handColliderRadius?.() ?? 0.035) / scale;
           },
           quality: physicsQuality,
           boneFeedbackScale: options.physicsBoneFeedbackScale,

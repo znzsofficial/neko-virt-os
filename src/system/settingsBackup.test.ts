@@ -113,6 +113,7 @@ function createBackup(): SettingsBackup {
       stageFogEnabled: false,
       stageRimLightEnabled: false,
       stageLightPoolEnabled: false,
+      handTracking: true,
       advancedRenderOverrides: true,
       detailedPhysicsDiagnostics: true,
       panelFollowUser: true,
@@ -141,6 +142,7 @@ describe("settings backup v2", () => {
     expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"shadowResolutionPref":"high"');
     expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"heightOffset":50');
     expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"snapTurnDegrees":45');
+    expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"handTracking":true');
   });
 
   it("rejects malformed fields and unknown v2 keys", () => {

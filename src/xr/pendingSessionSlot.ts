@@ -9,7 +9,7 @@ export type PendingSessionSlot = {
   peek: () => XRSession | null;
   clear: () => void;
   /** MUST run synchronously from a click handler (no await before this call). */
-  beginFromClick: () => Promise<XRSession>;
+  beginFromClick: (init?: XRSessionInit) => Promise<XRSession>;
   /**
    * Bind pending XRSession to this renderer's WebXRManager.
    * Keeps pending for remount re-bind; cleared only on session end / end().
@@ -30,7 +30,7 @@ export function createPendingSessionSlot(): PendingSessionSlot {
     pendingSession = null;
   }
 
-  function beginFromClick(): Promise<XRSession> {
+  function beginFromClick(init?: XRSessionInit): Promise<XRSession> {
     const xr = getXrSystem();
     if (!xr) {
       return Promise.reject(new Error(`WebXR missing (${getXrDiagnostics().summary})`));
@@ -56,7 +56,7 @@ export function createPendingSessionSlot(): PendingSessionSlot {
       pendingSession = null;
     }
 
-    return xr.requestSession("immersive-vr", buildQuestVrSessionInit()).then((session) => {
+    return xr.requestSession("immersive-vr", init ?? buildQuestVrSessionInit()).then((session) => {
       pendingSession = session;
       session.addEventListener(
         "end",

@@ -34,12 +34,19 @@ export function getXrDiagnostics(): XrDiagnostics {
   };
 }
 
-/** Minimal init for Meta Quest Browser. */
-export function buildQuestVrSessionInit(): XRSessionInit {
+/**
+ * Minimal init for Meta Quest Browser.
+ * `handTracking` requests the `hand-tracking` optional feature so the app can
+ * receive finger joints; it is harmless when OS hand tracking is off.
+ */
+export function buildQuestVrSessionInit(opts: { handTracking?: boolean } = {}): XRSessionInit {
   return {
     requiredFeatures: ["local-floor"],
-    // No hand-tracking optional — we don't use hands and it can add cost on Quest.
-    optionalFeatures: ["bounded-floor"],
+    optionalFeatures: [
+      "bounded-floor",
+      // Finger joint data is only exposed once this feature is granted.
+      ...(opts.handTracking ? (["hand-tracking"] as const) : []),
+    ],
   };
 }
 

@@ -135,6 +135,8 @@ export function MmdVrScene() {
             rimLightOffLabel={t("settingsMmdVrRimLightOff")}
             lightPoolOnLabel={t("settingsMmdVrLightPoolOn")}
             lightPoolOffLabel={t("settingsMmdVrLightPoolOff")}
+            handTrackingOnLabel={t("settingsMmdVrHandTrackingOn")}
+            handTrackingOffLabel={t("settingsMmdVrHandTrackingOff")}
             physicsCollisionOnLabel={t("settingsMmdVrPhysicsCollisionOn")}
             physicsCollisionOffLabel={t("settingsMmdVrPhysicsCollisionOff")}
             physicsSelfCollisionOnLabel={t("settingsMmdVrPhysicsSelfCollisionOn")}

@@ -36,6 +36,7 @@ NekoVirtOS combines a desktop-style local workspace with MMD production tools an
 
 - Standalone WebGL + WebXR entry designed around Meta Quest constraints.
 - In-headset HUD, quality presets, model transform controls, height adjustment, snap turning, and exposure/lighting looks.
+- Meta Quest hand tracking with articulated hands, pinch-based HUD interaction, and hand-to-model physics collision.
 - Optional controller collision, contact haptics, physics quality controls, and session-safe model disposal.
 - Independent renderer and XR session: the showcase does not load the desktop or Studio UI into VR.
 
@@ -82,6 +83,7 @@ CI runs a frozen install, the complete test suite, and the production build on p
 - Immersive VR requires a browser and device supporting WebXR `immersive-vr`.
 - Production XR must run from a secure HTTPS origin; supported browsers generally allow `localhost` during development.
 - Quest behavior, controller haptics, tracking, thermals, and mobile GPU limits require validation on the target headset.
+- Hand tracking is requested as an optional WebXR capability. Its availability depends on the headset and browser; the in-headset HUD can enable or disable its visuals, interaction, and physics collision.
 - Desktop browser tests cannot replace headset testing. Current validation items are tracked in the [MMD VR roadmap](./docs/mmd-vr-showcase-roadmap.md).
 
 ## Local Data

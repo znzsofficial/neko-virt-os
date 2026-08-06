@@ -1,7 +1,7 @@
 import type { WebGLRenderer } from "three";
-import { createProductXrSession } from "../xr";
+import { buildQuestVrSessionInit, createProductXrSession } from "../xr";
 import { getMmdVrRenderProfile, type MmdVrQualityInput } from "./mmdVrQuality";
-import type { MmdVrRenderQuality } from "./mmdVrStore";
+import { useMmdVrStore, type MmdVrRenderQuality } from "./mmdVrStore";
 
 export type MmdVrAttachQuality = MmdVrRenderQuality | MmdVrQualityInput;
 
@@ -24,6 +24,31 @@ const session = createProductXrSession<MmdVrAttachQuality>({
 
 export const mmdVrXrStore = session.xrStore;
 
+/**
+ * Applies the hand-tracking pref to the XR store: enables the articulated hand
+ * implementation (with a reachable ray pointer) or falls back to controllers.
+ * Hand states only exist while hand tracking is active, so this has no effect
+ * when controllers are used.
+ */
+let appliedHandTracking: boolean | undefined;
+function applyHandTracking(handTracking: boolean) {
+  if (handTracking === appliedHandTracking) return;
+  appliedHandTracking = handTracking;
+  session.xrStore.setHand(
+    handTracking
+      ? {
+          rayPointer: {
+            rayModel: { color: "#9fd9ff", opacity: 0.62, maxLength: 1.2 },
+            cursorModel: { color: "#ffffff", opacity: 0.95, size: 0.014, renderOrder: 100 },
+          },
+          touchPointer: { hoverRadius: 0.16 },
+        }
+      : false,
+  );
+}
+applyHandTracking(useMmdVrStore.getState().prefs.handTracking);
+useMmdVrStore.subscribe((state) => applyHandTracking(state.prefs.handTracking));
+
 export function peekPendingMmdVrSession() {
   return session.peek();
 }
@@ -33,7 +58,9 @@ export function clearPendingMmdVrSession() {
 }
 
 export function beginMmdVrSessionFromClick() {
-  return session.beginFromClick();
+  // WebXR features are fixed for a session. Always request this optional
+  // capability so the HUD toggle can enable hand tracking after entering VR.
+  return session.beginFromClick(buildQuestVrSessionInit({ handTracking: true }));
 }
 
 export function applyMmdVrFrameRate(quality: MmdVrAttachQuality) {

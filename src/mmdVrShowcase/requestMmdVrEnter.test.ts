@@ -75,6 +75,7 @@ describe("requestMmdVrEnter", () => {
         stageFogEnabled: true,
         stageRimLightEnabled: false,
         stageLightPoolEnabled: false,
+        handTracking: true,
         advancedRenderOverrides: false,
         detailedPhysicsDiagnostics: false,
         panelFollowUser: true,

@@ -127,6 +127,7 @@ const mmdVrPrefsSchema = z.strictObject({
   stageFogEnabled: z.boolean().default(true),
   stageRimLightEnabled: z.boolean().optional(),
   stageLightPoolEnabled: z.boolean().optional(),
+  handTracking: z.boolean().default(true),
   advancedRenderOverrides: z.boolean().default(false),
   detailedPhysicsDiagnostics: z.boolean().default(false),
   panelFollowUser: z.boolean().default(true),

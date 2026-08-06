@@ -64,6 +64,8 @@ async function loadBulletModule() {
 export async function createBulletPhysicsBackend(options: {
   controllerColliders?: MmdControllerColliderProvider;
   controllerRadius?: number | (() => number);
+  handColliders?: MmdControllerColliderProvider;
+  handRadius?: number | (() => number);
   quality?: () => MmdPhysicsQuality;
   boneFeedbackScale?: () => number;
   controllerFriction?: () => number;
@@ -90,21 +92,32 @@ export async function createBulletPhysicsBackend(options: {
   const backend = options.dynamicSelfCollision
     ? createDynamicSelfCollisionPhysicsBackend(diagnosticBackend)
     : diagnosticBackend;
-  return options.controllerColliders
+  const refreshStepOptions = () => {
+    const next = PHYSICS_QUALITY_OPTIONS[options.quality?.() ?? "medium"];
+    backendOptions.maxSubSteps = next.maxSubSteps;
+    backendOptions.solverIterations = next.solverIterations;
+    backendOptions.dynamicWithBoneRotationFeedbackScale = options.boneFeedbackScale?.() ?? 1;
+  };
+  const colliderBackend = options.handColliders
     ? createControllerColliderPhysicsBackend(
         backend,
-        options.controllerColliders,
-        options.controllerRadius,
-        () => {
-          const next = PHYSICS_QUALITY_OPTIONS[options.quality?.() ?? "medium"];
-          backendOptions.maxSubSteps = next.maxSubSteps;
-          backendOptions.solverIterations = next.solverIterations;
-          backendOptions.dynamicWithBoneRotationFeedbackScale = options.boneFeedbackScale?.() ?? 1;
-        },
+        options.handColliders,
+        options.handRadius,
+        undefined,
         options.controllerFriction,
         options.controllerRestitution,
       )
     : backend;
+  return options.controllerColliders
+    ? createControllerColliderPhysicsBackend(
+        colliderBackend,
+        options.controllerColliders,
+        options.controllerRadius,
+        refreshStepOptions,
+        options.controllerFriction,
+        options.controllerRestitution,
+      )
+    : colliderBackend;
 }
 
 export function createPhysicsDiagnosticsBackend(backend: MmdPhysicsBackend): MmdPhysicsBackend & MmdRuntimePhysicsDiagnostics {
@@ -354,10 +367,13 @@ export function createControllerColliderPhysicsBackend(
     debugControllerContactCount: (controllerIndex) => {
       if (controllerBodyCount === 0) return 0;
       const debugBackend = backend as MmdDebugPhysicsBackend;
+      // This wrapper appends its bodies before delegating to inner wrappers.
+      // Their colliders therefore follow this wrapper's range in Bullet's array.
+      const firstBodyIndex = sourceRigidBodyCount;
       if (debugContactsStep !== stepCount) {
         if (debugBackend.debugPhysicsContactsForRigidBodyRange) {
           debugContacts = debugBackend.debugPhysicsContactsForRigidBodyRange(
-            sourceRigidBodyCount,
+            firstBodyIndex,
             controllerBodyCount,
           );
         } else {
@@ -368,12 +384,12 @@ export function createControllerColliderPhysicsBackend(
       }
       const contacts = debugContacts;
       if (controllerIndex != null) {
-        const controllerBodyIndex = sourceRigidBodyCount + controllerIndex;
+        const controllerBodyIndex = firstBodyIndex + controllerIndex;
         return contacts.filter((contact) =>
           contact.rigidBodyIndexA === controllerBodyIndex || contact.rigidBodyIndexB === controllerBodyIndex).length;
       }
       return contacts.filter((contact) =>
-        contact.rigidBodyIndexA >= sourceRigidBodyCount || contact.rigidBodyIndexB >= sourceRigidBodyCount).length;
+        contact.rigidBodyIndexA >= firstBodyIndex || contact.rigidBodyIndexB >= firstBodyIndex).length;
     },
     debugRigidBodyCount: () => (backend as Partial<MmdRuntimePhysicsDiagnostics>).debugRigidBodyCount?.()
       ?? sourceRigidBodyCount + controllerBodyCount,
@@ -395,6 +411,8 @@ export function createControllerColliderPhysicsBackend(
       return directBuffers;
     };
   }
+
+  forwardContactDiagnostics(wrapper, backend);
 
   return wrapper;
 }

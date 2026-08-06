@@ -38,6 +38,8 @@ describe("MMD VR adjustments", () => {
     expect(normalizeMmdVrPrefs({ viewDistance: 120 }).viewDistance).toBe(100);
     expect(normalizeMmdVrPrefs().physicsDynamicSelfCollision).toBe(false);
     expect(normalizeMmdVrPrefs({ physicsDynamicSelfCollision: true }).physicsDynamicSelfCollision).toBe(true);
+    expect(normalizeMmdVrPrefs().handTracking).toBe(true);
+    expect(normalizeMmdVrPrefs({ handTracking: false }).handTracking).toBe(false);
     expect(normalizeMmdVrPrefs()).toMatchObject({
       stageSkyEnabled: true,
       stageFogEnabled: true,

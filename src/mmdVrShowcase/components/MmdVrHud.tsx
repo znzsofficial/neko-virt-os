@@ -1017,6 +1017,8 @@ function VisualSettingsPanel({
   rimLightOffLabel,
   lightPoolOnLabel,
   lightPoolOffLabel,
+  handTrackingOnLabel,
+  handTrackingOffLabel,
   onInteractionChange,
 }: {
   lightStageLabel: string;
@@ -1035,6 +1037,8 @@ function VisualSettingsPanel({
   rimLightOffLabel: string;
   lightPoolOnLabel: string;
   lightPoolOffLabel: string;
+  handTrackingOnLabel: string;
+  handTrackingOffLabel: string;
   onInteractionChange: (active: boolean) => void;
 }) {
   const prefs = useMmdVrStore((s) => s.prefs);
@@ -1054,7 +1058,7 @@ function VisualSettingsPanel({
 
   return (
     <group position={[0.16, -1.08, 0.02]}>
-      <group scale={[2.35, 0.9, 1]}>
+      <group scale={[2.35, 1.2, 1]}>
         <ModelPanelBackdrop />
       </group>
       <HudButton position={[-0.72, 0.17, 0]} label={lightLabel} size={[0.7, 0.11]} onPress={cycleLightPreset} />
@@ -1104,6 +1108,13 @@ function VisualSettingsPanel({
         size={[0.62, 0.11]}
         active={prefs.stageLightPoolEnabled}
         onPress={() => setPrefs({ stageLightPoolEnabled: !useMmdVrStore.getState().prefs.stageLightPoolEnabled })}
+      />
+      <HudButton
+        position={[0, -0.54, 0]}
+        label={prefs.handTracking ? handTrackingOnLabel : handTrackingOffLabel}
+        size={[0.8, 0.11]}
+        active={prefs.handTracking}
+        onPress={() => setPrefs({ handTracking: !useMmdVrStore.getState().prefs.handTracking })}
       />
     </group>
   );
@@ -1350,6 +1361,8 @@ export function MmdVrControlBar({
   rimLightOffLabel,
   lightPoolOnLabel,
   lightPoolOffLabel,
+  handTrackingOnLabel,
+  handTrackingOffLabel,
   physicsCollisionOnLabel,
   physicsCollisionOffLabel,
   physicsSelfCollisionOnLabel,
@@ -1426,6 +1439,8 @@ export function MmdVrControlBar({
   rimLightOffLabel: string;
   lightPoolOnLabel: string;
   lightPoolOffLabel: string;
+  handTrackingOnLabel: string;
+  handTrackingOffLabel: string;
   physicsCollisionOnLabel: string;
   physicsCollisionOffLabel: string;
   physicsSelfCollisionOnLabel: string;
@@ -1677,6 +1692,8 @@ export function MmdVrControlBar({
           rimLightOffLabel={rimLightOffLabel}
           lightPoolOnLabel={lightPoolOnLabel}
           lightPoolOffLabel={lightPoolOffLabel}
+          handTrackingOnLabel={handTrackingOnLabel}
+          handTrackingOffLabel={handTrackingOffLabel}
           onInteractionChange={onDragChange}
         />
       ) : physicsPanelOpen ? (

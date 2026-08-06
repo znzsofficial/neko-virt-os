@@ -96,6 +96,8 @@ export type MmdVrPrefs = {
   stageFogEnabled: boolean;
   stageRimLightEnabled: boolean;
   stageLightPoolEnabled: boolean;
+  /** Enables articulated hand rendering, interaction, and collision when available. */
+  handTracking: boolean;
   advancedRenderOverrides: boolean;
   detailedPhysicsDiagnostics: boolean;
   panelFollowUser: boolean;
@@ -297,6 +299,7 @@ export function normalizeMmdVrPrefs(parsed: Partial<MmdVrPrefs> = {}): MmdVrPref
     stageLightPoolEnabled: typeof parsed.stageLightPoolEnabled === "boolean"
       ? parsed.stageLightPoolEnabled
       : legacyPresetEffectsEnabled,
+    handTracking: parsed.handTracking !== false,
     advancedRenderOverrides: Boolean(parsed.advancedRenderOverrides),
     detailedPhysicsDiagnostics: Boolean(parsed.detailedPhysicsDiagnostics),
     panelFollowUser: parsed.panelFollowUser !== false,
@@ -336,6 +339,7 @@ const prefsStorage = createLocalPrefsStorage<MmdVrPrefs>({
     stageFogEnabled: true,
     stageRimLightEnabled: false,
     stageLightPoolEnabled: false,
+    handTracking: true,
     advancedRenderOverrides: false,
     detailedPhysicsDiagnostics: false,
     panelFollowUser: true,
@@ -411,6 +415,7 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
     if (patch.stageFogEnabled != null) prefs.stageFogEnabled = Boolean(patch.stageFogEnabled);
     if (patch.stageRimLightEnabled != null) prefs.stageRimLightEnabled = Boolean(patch.stageRimLightEnabled);
     if (patch.stageLightPoolEnabled != null) prefs.stageLightPoolEnabled = Boolean(patch.stageLightPoolEnabled);
+    if (patch.handTracking != null) prefs.handTracking = Boolean(patch.handTracking);
     if (patch.advancedRenderOverrides != null) prefs.advancedRenderOverrides = Boolean(patch.advancedRenderOverrides);
     if (patch.detailedPhysicsDiagnostics != null) prefs.detailedPhysicsDiagnostics = Boolean(patch.detailedPhysicsDiagnostics);
     if (patch.panelFollowUser != null) prefs.panelFollowUser = Boolean(patch.panelFollowUser);
