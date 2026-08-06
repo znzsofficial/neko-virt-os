@@ -298,6 +298,7 @@ export function MmdVrStageContent() {
   const profile = getMmdVrRenderProfile(mmdPrefs);
   const lightPreset = mmdPrefs.lightPreset;
   const lightCfg = LIGHT_PRESETS[lightPreset] ?? LIGHT_PRESETS.stage;
+  const rimIntensity = lightCfg.rimIntensity > 0 ? lightCfg.rimIntensity : 0.28;
   const viewDistance = mmdPrefs.viewDistance;
   const shadowExtent = profile.quality === "high" ? 6 : profile.quality === "balanced" ? 5 : 4;
   const shadowFar = profile.quality === "high" ? 24 : profile.quality === "balanced" ? 20 : 16;
@@ -984,8 +985,12 @@ export function MmdVrStageContent() {
   return (
     <>
       <color attach="background" args={[STAGE_BG]} />
-      <fog attach="fog" args={[lightCfg.fogColor, Math.min(10, viewDistance * 0.45), viewDistance]} />
-      <StageSky zenith={lightCfg.skyZenith} horizon={lightCfg.skyHorizon} bottom={lightCfg.fogColor} />
+      {mmdPrefs.stageFogEnabled ? (
+        <fog attach="fog" args={[lightCfg.fogColor, Math.min(10, viewDistance * 0.45), viewDistance]} />
+      ) : null}
+      {mmdPrefs.stageSkyEnabled ? (
+        <StageSky zenith={lightCfg.skyZenith} horizon={lightCfg.skyHorizon} bottom={lightCfg.fogColor} />
+      ) : null}
       <ambientLight color={lightCfg.ambientColor} intensity={lightCfg.ambient} />
       <directionalLight
         ref={sunRef}
@@ -1003,10 +1008,10 @@ export function MmdVrStageContent() {
         shadow-camera-bottom={-shadowExtent}
       />
       <hemisphereLight args={[lightCfg.hemiSky, lightCfg.hemiGround, lightCfg.hemi]} />
-      {lightCfg.rimIntensity > 0 ? (
+      {mmdPrefs.stageRimLightEnabled ? (
         <pointLight
           color={lightCfg.rimColor}
-          intensity={lightCfg.rimIntensity}
+          intensity={rimIntensity}
           distance={8}
           decay={2}
           position={lightCfg.rimPosition}
@@ -1019,8 +1024,8 @@ export function MmdVrStageContent() {
         themeColor={mmdPrefs.themeColor}
         floorColor={lightCfg.floorColor}
       />
-      {lightCfg.rimIntensity > 0 ? (
-        <StageLightPool color={lightCfg.poolColor} opacity={Math.min(0.14, lightCfg.rimIntensity * 0.08)} />
+      {mmdPrefs.stageLightPoolEnabled ? (
+        <StageLightPool color={lightCfg.poolColor} opacity={Math.min(0.14, rimIntensity * 0.08)} />
       ) : null}
       {profile.showGrid ? (
         <gridHelper

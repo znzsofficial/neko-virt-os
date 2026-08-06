@@ -123,6 +123,10 @@ const mmdVrPrefsSchema = z.strictObject({
   themeColor: z.enum(["blue", "cyan", "purple", "green", "red"]).default("blue"),
   snapTurnDegrees: z.union([z.literal(15), z.literal(30), z.literal(45)]).default(30),
   exposure: z.number().min(0.7).max(1.3).default(1),
+  stageSkyEnabled: z.boolean().default(true),
+  stageFogEnabled: z.boolean().default(true),
+  stageRimLightEnabled: z.boolean().optional(),
+  stageLightPoolEnabled: z.boolean().optional(),
   advancedRenderOverrides: z.boolean().default(false),
   detailedPhysicsDiagnostics: z.boolean().default(false),
   panelFollowUser: z.boolean().default(true),
@@ -133,7 +137,7 @@ const mmdVrPrefsSchema = z.strictObject({
   physicsColliderRestitution: z.enum(["none", "low", "high"]).default("none"),
   physicsHapticLevel: z.enum(["off", "low", "normal"]).default("low"),
   physicsDynamicSelfCollision: z.boolean().default(false),
-});
+}).transform((prefs) => normalizeMmdVrPrefs(prefs));
 
 const settingsBackupV2Schema = z.strictObject({
   version: z.literal(SETTINGS_BACKUP_VERSION),

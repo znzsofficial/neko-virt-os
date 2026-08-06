@@ -126,6 +126,15 @@ export function MmdVrScene() {
             physicsDebugOnLabel={t("settingsMmdVrPhysicsDebugOn")}
             physicsDebugOffLabel={t("settingsMmdVrPhysicsDebugOff")}
             physicsSettingsLabel={t("settingsMmdVrPhysicsSettings")}
+            visualSettingsLabel={t("settingsMmdVrVisualSettings")}
+            skyOnLabel={t("settingsMmdVrSkyOn")}
+            skyOffLabel={t("settingsMmdVrSkyOff")}
+            fogOnLabel={t("settingsMmdVrFogOn")}
+            fogOffLabel={t("settingsMmdVrFogOff")}
+            rimLightOnLabel={t("settingsMmdVrRimLightOn")}
+            rimLightOffLabel={t("settingsMmdVrRimLightOff")}
+            lightPoolOnLabel={t("settingsMmdVrLightPoolOn")}
+            lightPoolOffLabel={t("settingsMmdVrLightPoolOff")}
             physicsCollisionOnLabel={t("settingsMmdVrPhysicsCollisionOn")}
             physicsCollisionOffLabel={t("settingsMmdVrPhysicsCollisionOff")}
             physicsSelfCollisionOnLabel={t("settingsMmdVrPhysicsSelfCollisionOn")}

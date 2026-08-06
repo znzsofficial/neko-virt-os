@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { createPanelTexture, roundRectPath } from "../../shared/panelTexture";
 import { getMmdVrClock } from "../mmdVrClock";
 import { getMmdVrRenderProfile } from "../mmdVrQuality";
-import { useMmdVrStore } from "../mmdVrStore";
+import { normalizeMmdVrExposure, useMmdVrStore } from "../mmdVrStore";
 import {
   formatMmdVrModelScale,
   MMD_VR_HEIGHT_OFFSET_FINE_STEP,
@@ -324,11 +324,24 @@ function DragHandle({
   );
 }
 
-function ValueLabel({ position, label, value }: { position: [number, number, number]; label: string; value: string }) {
+function ValueLabel({
+  position,
+  label,
+  value,
+  size = [0.58, 0.11],
+  centered = false,
+}: {
+  position: [number, number, number];
+  label: string;
+  value: string;
+  size?: [number, number];
+  centered?: boolean;
+}) {
   const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
   const accent = getXrAccentTokens(themeColor);
+  const textureWidth = Math.max(256, Math.round(88 * size[0] / size[1]));
   const texture = useMemo(
-    () => createPanelTexture(440, 88, ({ ctx, width, height }) => {
+    () => createPanelTexture(textureWidth, 88, ({ ctx, width, height }) => {
       ctx.clearRect(0, 0, width, height);
       roundRectPath(ctx, 2, 2, width - 4, height - 4, 16);
       ctx.fillStyle = accent.soft;
@@ -337,21 +350,23 @@ function ValueLabel({ position, label, value }: { position: [number, number, num
       ctx.lineWidth = 3;
       ctx.stroke();
       ctx.fillStyle = "#c8bcc1";
-      ctx.font = "600 23px system-ui, sans-serif";
-      ctx.textAlign = "left";
+      ctx.font = centered ? "700 30px system-ui, sans-serif" : "600 23px system-ui, sans-serif";
+      ctx.textAlign = centered ? "center" : "left";
       ctx.textBaseline = "middle";
-      ctx.fillText(label, 20, height / 2);
-      ctx.fillStyle = "#f2eaed";
-      ctx.font = "700 30px system-ui, sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText(value, width - 20, height / 2);
+      ctx.fillText(label, centered ? width / 2 : 20, height / 2);
+      if (!centered) {
+        ctx.fillStyle = "#f2eaed";
+        ctx.font = "700 30px system-ui, sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText(value, width - 20, height / 2);
+      }
     }, "en"),
-    [accent.border, accent.soft, label, value],
+    [accent.border, accent.soft, centered, label, textureWidth, value],
   );
   useEffect(() => () => texture.dispose(), [texture]);
   return (
     <mesh position={position} renderOrder={30} raycast={() => null}>
-      <planeGeometry args={[0.58, 0.11]} />
+      <planeGeometry args={size} />
       <meshBasicMaterial map={texture} toneMapped={false} transparent depthWrite={false} depthTest={false} fog={false} />
     </mesh>
   );
@@ -962,9 +977,9 @@ function MaterialPanel({
           })}
           {pageCount > 1 ? (
             <>
-              <HudButton position={[-0.3, -0.68, 0]} label="‹" size={[0.16, 0.07]} disabled={curPage === 0} onPress={() => setPage(Math.max(0, curPage - 1))} />
-              <ValueLabel position={[-0.05, -0.67, 0]} label={`${curPage + 1}/${pageCount}`} value="" />
-              <HudButton position={[0.2, -0.68, 0]} label="›" size={[0.16, 0.07]} disabled={curPage >= pageCount - 1} onPress={() => setPage(Math.min(pageCount - 1, curPage + 1))} />
+              <HudButton position={[-0.26, -0.68, 0]} label="‹" size={[0.16, 0.07]} disabled={curPage === 0} onPress={() => setPage(Math.max(0, curPage - 1))} />
+              <ValueLabel position={[0, -0.68, 0]} label={`${curPage + 1}/${pageCount}`} value="" size={[0.22, 0.07]} centered />
+              <HudButton position={[0.26, -0.68, 0]} label="›" size={[0.16, 0.07]} disabled={curPage >= pageCount - 1} onPress={() => setPage(Math.min(pageCount - 1, curPage + 1))} />
             </>
           ) : null}
         </>
@@ -985,6 +1000,115 @@ function MaterialPanel({
   );
 }
 
+function VisualSettingsPanel({
+  lightStageLabel,
+  lightSoftLabel,
+  lightContrastLabel,
+  lightDaylightLabel,
+  lightWarmLabel,
+  lightRimLabel,
+  exposureLabel,
+  resetValueLabel,
+  skyOnLabel,
+  skyOffLabel,
+  fogOnLabel,
+  fogOffLabel,
+  rimLightOnLabel,
+  rimLightOffLabel,
+  lightPoolOnLabel,
+  lightPoolOffLabel,
+  onInteractionChange,
+}: {
+  lightStageLabel: string;
+  lightSoftLabel: string;
+  lightContrastLabel: string;
+  lightDaylightLabel: string;
+  lightWarmLabel: string;
+  lightRimLabel: string;
+  exposureLabel: string;
+  resetValueLabel: string;
+  skyOnLabel: string;
+  skyOffLabel: string;
+  fogOnLabel: string;
+  fogOffLabel: string;
+  rimLightOnLabel: string;
+  rimLightOffLabel: string;
+  lightPoolOnLabel: string;
+  lightPoolOffLabel: string;
+  onInteractionChange: (active: boolean) => void;
+}) {
+  const prefs = useMmdVrStore((s) => s.prefs);
+  const setPrefs = useMmdVrStore((s) => s.setPrefs);
+  const cycleLightPreset = useMmdVrStore((s) => s.cycleLightPreset);
+  const lightLabel = prefs.lightPreset === "soft"
+    ? lightSoftLabel
+    : prefs.lightPreset === "contrast"
+      ? lightContrastLabel
+      : prefs.lightPreset === "daylight"
+        ? lightDaylightLabel
+        : prefs.lightPreset === "warm"
+          ? lightWarmLabel
+          : prefs.lightPreset === "rim"
+            ? lightRimLabel
+            : lightStageLabel;
+
+  return (
+    <group position={[0.16, -1.08, 0.02]}>
+      <group scale={[2.35, 0.9, 1]}>
+        <ModelPanelBackdrop />
+      </group>
+      <HudButton position={[-0.72, 0.17, 0]} label={lightLabel} size={[0.7, 0.11]} onPress={cycleLightPreset} />
+      <HudButton
+        position={[0.08, 0.17, 0]}
+        label={prefs.stageSkyEnabled ? skyOnLabel : skyOffLabel}
+        size={[0.42, 0.11]}
+        active={prefs.stageSkyEnabled}
+        onPress={() => setPrefs({ stageSkyEnabled: !useMmdVrStore.getState().prefs.stageSkyEnabled })}
+      />
+      <HudButton
+        position={[0.58, 0.17, 0]}
+        label={prefs.stageFogEnabled ? fogOnLabel : fogOffLabel}
+        size={[0.42, 0.11]}
+        active={prefs.stageFogEnabled}
+        onPress={() => setPrefs({ stageFogEnabled: !useMmdVrStore.getState().prefs.stageFogEnabled })}
+      />
+      <ValueLabel position={[-0.67, -0.06, 0]} label={exposureLabel} value={prefs.exposure.toFixed(1)} />
+      <HudSlider
+        position={[0.12, -0.06, 0]}
+        width={0.72}
+        value={(prefs.exposure - 0.7) / 0.6}
+        onChange={(value) => {
+          const exposure = normalizeMmdVrExposure(0.7 + value * 0.6);
+          if (exposure !== useMmdVrStore.getState().prefs.exposure) setPrefs({ exposure });
+        }}
+        onInteractionChange={onInteractionChange}
+      />
+      <HudButton
+        position={[0.75, -0.06, 0]}
+        label={resetValueLabel}
+        size={[0.26, 0.1]}
+        onPress={() => {
+          if (useMmdVrStore.getState().prefs.exposure !== 1) setPrefs({ exposure: 1 });
+        }}
+      />
+      <HudButton
+        position={[-0.35, -0.3, 0]}
+        label={prefs.stageRimLightEnabled ? rimLightOnLabel : rimLightOffLabel}
+        size={[0.62, 0.11]}
+        active={prefs.stageRimLightEnabled}
+        onPress={() => setPrefs({ stageRimLightEnabled: !useMmdVrStore.getState().prefs.stageRimLightEnabled })}
+      />
+      <HudButton
+        position={[0.35, -0.3, 0]}
+        label={prefs.stageLightPoolEnabled ? lightPoolOnLabel : lightPoolOffLabel}
+        size={[0.62, 0.11]}
+        active={prefs.stageLightPoolEnabled}
+        onPress={() => setPrefs({ stageLightPoolEnabled: !useMmdVrStore.getState().prefs.stageLightPoolEnabled })}
+      />
+    </group>
+  );
+}
+
 function PhysicsSettingsPanel({
   collisionOnLabel,
   collisionOffLabel,
@@ -1001,7 +1125,6 @@ function PhysicsSettingsPanel({
   colliderRestitutionLabels,
   resetPhysicsLabel,
   snapTurnLabel,
-  exposureLabel,
 }: {
   collisionOnLabel: string;
   collisionOffLabel: string;
@@ -1018,7 +1141,6 @@ function PhysicsSettingsPanel({
   colliderRestitutionLabels: [string, string, string];
   resetPhysicsLabel: string;
   snapTurnLabel: string;
-  exposureLabel: string;
 }) {
   const physicsEnabled = useMmdVrStore((s) => s.physicsEnabled);
   const physicsBusy = useMmdVrStore((s) => s.physicsBusy);
@@ -1088,12 +1210,6 @@ function PhysicsSettingsPanel({
         onPress={() => setPrefs({
           snapTurnDegrees: prefs.snapTurnDegrees === 15 ? 30 : prefs.snapTurnDegrees === 30 ? 45 : 15,
         })}
-      />
-      <HudButton
-        position={[0.29, -0.1, 0]}
-        label={`${exposureLabel}:${prefs.exposure.toFixed(1)}`}
-        size={[0.46, 0.11]}
-        onPress={() => setPrefs({ exposure: prefs.exposure >= 1.3 ? 0.7 : prefs.exposure + 0.1 })}
       />
       <HudButton
         position={[-0.58, -0.36, 0]}
@@ -1225,6 +1341,15 @@ export function MmdVrControlBar({
   physicsDebugOnLabel,
   physicsDebugOffLabel,
   physicsSettingsLabel,
+  visualSettingsLabel,
+  skyOnLabel,
+  skyOffLabel,
+  fogOnLabel,
+  fogOffLabel,
+  rimLightOnLabel,
+  rimLightOffLabel,
+  lightPoolOnLabel,
+  lightPoolOffLabel,
   physicsCollisionOnLabel,
   physicsCollisionOffLabel,
   physicsSelfCollisionOnLabel,
@@ -1292,6 +1417,15 @@ export function MmdVrControlBar({
   physicsDebugOnLabel: string;
   physicsDebugOffLabel: string;
   physicsSettingsLabel: string;
+  visualSettingsLabel: string;
+  skyOnLabel: string;
+  skyOffLabel: string;
+  fogOnLabel: string;
+  fogOffLabel: string;
+  rimLightOnLabel: string;
+  rimLightOffLabel: string;
+  lightPoolOnLabel: string;
+  lightPoolOffLabel: string;
   physicsCollisionOnLabel: string;
   physicsCollisionOffLabel: string;
   physicsSelfCollisionOnLabel: string;
@@ -1328,14 +1462,12 @@ export function MmdVrControlBar({
   const statusLine = useMmdVrStore((s) => s.statusLine);
   const physicsError = useMmdVrStore((s) => s.physicsError);
   const placeMode = useMmdVrStore((s) => s.placeMode);
-  const lightPreset = useMmdVrStore((s) => s.prefs.lightPreset);
   const prefs = useMmdVrStore((s) => s.prefs);
   const profile = getMmdVrRenderProfile(prefs);
   const setPlaying = useMmdVrStore((s) => s.setPlaying);
   const setLoop = useMmdVrStore((s) => s.setLoop);
   const setPlaceMode = useMmdVrStore((s) => s.setPlaceMode);
   const resetView = useMmdVrStore((s) => s.resetView);
-  const cycleLightPreset = useMmdVrStore((s) => s.cycleLightPreset);
   const setPrefs = useMmdVrStore((s) => s.setPrefs);
   const physicsEnabled = useMmdVrStore((s) => s.physicsEnabled);
   const physicsDebugEnabled = useMmdVrStore((s) => s.physicsDebugEnabled);
@@ -1349,6 +1481,7 @@ export function MmdVrControlBar({
   const materialPanelOpen = useMmdVrStore((s) => s.materialPanelModelId != null);
   const [panelVisible, setPanelVisible] = useState(true);
   const [physicsPanelOpen, setPhysicsPanelOpen] = useState(false);
+  const [visualPanelOpen, setVisualPanelOpen] = useState(false);
   const [panelPosition, setPanelPosition] = useState(PANEL_DEFAULT_POSITION);
   const panelGroupRef = useRef<THREE.Group>(null);
   const billboardTarget = useMemo(() => new THREE.Vector3(), []);
@@ -1374,19 +1507,6 @@ export function MmdVrControlBar({
   const status =
     physicsError ?? statusLine ??
     (modelCount === 0 && objectCount === 0 ? emptyHint : placeMode ? placeHint : null);
-  const lightLabel =
-    lightPreset === "soft"
-      ? lightSoftLabel
-      : lightPreset === "contrast"
-        ? lightContrastLabel
-        : lightPreset === "daylight"
-          ? lightDaylightLabel
-          : lightPreset === "warm"
-            ? lightWarmLabel
-            : lightPreset === "rim"
-              ? lightRimLabel
-              : lightStageLabel;
-
   if (!panelVisible) {
     return (
       <group position={panelPosition} ref={panelGroupRef}>
@@ -1444,10 +1564,15 @@ export function MmdVrControlBar({
       />
       <HudButton
         position={[-0.05, 0.05, 0]}
-        label={lightLabel}
+        label={visualSettingsLabel}
         disabled={busy}
+        active={visualPanelOpen}
         size={[0.4, 0.11]}
-        onPress={() => cycleLightPreset()}
+        onPress={() => {
+          setVisualPanelOpen((open) => !open);
+          setPhysicsPanelOpen(false);
+          useMmdVrStore.getState().setMaterialPanelModelId(null);
+        }}
       />
       <HudButton
         position={[0.35, 0.05, 0]}
@@ -1528,9 +1653,33 @@ export function MmdVrControlBar({
         size={[0.46, 0.1]}
         disabled={busy}
         active={physicsPanelOpen}
-        onPress={() => setPhysicsPanelOpen((open) => !open)}
+        onPress={() => {
+          setPhysicsPanelOpen((open) => !open);
+          setVisualPanelOpen(false);
+          useMmdVrStore.getState().setMaterialPanelModelId(null);
+        }}
       />
-      {!materialPanelOpen && (physicsPanelOpen ? (
+      {!materialPanelOpen && (visualPanelOpen ? (
+        <VisualSettingsPanel
+          lightStageLabel={lightStageLabel}
+          lightSoftLabel={lightSoftLabel}
+          lightContrastLabel={lightContrastLabel}
+          lightDaylightLabel={lightDaylightLabel}
+          lightWarmLabel={lightWarmLabel}
+          lightRimLabel={lightRimLabel}
+          exposureLabel={exposureLabel}
+          resetValueLabel={resetValueLabel}
+          skyOnLabel={skyOnLabel}
+          skyOffLabel={skyOffLabel}
+          fogOnLabel={fogOnLabel}
+          fogOffLabel={fogOffLabel}
+          rimLightOnLabel={rimLightOnLabel}
+          rimLightOffLabel={rimLightOffLabel}
+          lightPoolOnLabel={lightPoolOnLabel}
+          lightPoolOffLabel={lightPoolOffLabel}
+          onInteractionChange={onDragChange}
+        />
+      ) : physicsPanelOpen ? (
         <PhysicsSettingsPanel
           collisionOnLabel={physicsCollisionOnLabel}
           collisionOffLabel={physicsCollisionOffLabel}
@@ -1547,7 +1696,6 @@ export function MmdVrControlBar({
           colliderRestitutionLabels={physicsColliderRestitutionLabels}
           resetPhysicsLabel={resetPhysicsLabel}
           snapTurnLabel={snapTurnLabel}
-          exposureLabel={exposureLabel}
         />
       ) : (
         <>

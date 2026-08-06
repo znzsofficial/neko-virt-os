@@ -52,7 +52,7 @@
 | 舞台 + WebGL runtime | ✅ | `MmdVrStage` + `createMmdRuntimeHandle` |
 | 播放 / 循环 / 重置视角 / 退出 | ✅ | `MmdVrHud` |
 | 进度条 seek | ✅ | `mmdVrClock` + HUD（热路径不写 React） |
-| 灯光预设 6 套 | ✅ | stage / soft / daylight / warm / rim / contrast；天空 / 雾 / 地面随预设联动，色温统一，移除失效的 envIntensity |
+| 灯光预设 6 套 | ✅ | stage / soft / daylight / warm / rim / contrast；预设提供配色和强度基线，天空 / 雾 / 轮廓光 / 地面光池可独立开关 |
 | 模型显隐（≤3） | ✅ | visibility 队列 |
 | 平滑行走 + snap 转向 | ✅ | `useXRControllerLocomotion` |
 | 与 VR 桌面互斥 | ✅ | `requestImmersiveEnter` |
@@ -62,7 +62,7 @@
 | VR 内快速设置 | ✅ | 行走速度 / FPS / 主题色 |
 | HUD 空间拖动 | ✅ | 沿控制器射线调整三维位置 |
 | 空态 / 错误态文案 (M14) | ✅ | emptyNoAssets / loadFailed |
-| 渐变天空穹顶 (V3) | ✅ | StageSky 随灯光预设 |
+| 渐变天空穹顶 (V3) | ✅ | StageSky 随灯光预设配色，可在视觉面板独立开关 |
 | face 动作单轨 (M11) | ✅ | 准备页选择，加载后与 body 合并 |
 | Quest 预设三档 + 明确刷新率 72/80/90/120 | ✅ | `MmdVrPrepApp` 预设 + `mmdVrQuality` |
 | 准备页参数渐进披露 | ✅ | 默认保留 Quest 预设与主题；渲染细项、移动、FPS、诊断收进“高级画面与诊断”，存储 schema 不变 |
@@ -76,7 +76,7 @@
 | 详细物理诊断 | ✅ | `physicsDebugEnabled` + HUD 叠加 |
 | 环境物件 glTF/GLB（A6） | ✅ | 轻量旁路，不进 mmdRuntime |
 | HUD 面板 billboard 跟随用户 | ✅ 默认开；`panelFollowUser` 持久化开关 | yaw-only，`MmdVrHud` useFrame |
-| 光照预设场景联动 | ✅ | 天空 / 雾 / 地面随预设统一色温 |
+| 光照预设场景联动 | ✅ | 天空 / 雾 / 轮廓光 / 地面光池沿用预设色温，但显示状态独立 |
 | 多文件夹导入累加 + 手动删除 | ✅ | `MmdVrPrepApp` merge / remove |
 | XR 内导入 / 多动作列表 | ❌ | v0.1 余下 |
 | 角色 / 场景资产类型 | ❌ | v0.3；当前 PMX 使用同一模型槽位 |
@@ -251,7 +251,7 @@ src/mmdVrShowcase/
 | ID | 任务 | 说明 |
 |----|------|------|
 | H1 | HUD 四分组 | 舞台 / 移动 / 物理 / 诊断；主面板只保留播放、放置、物理、重置和退出等高频操作 |
-| H2 | 参数归位 | `snapTurnDegrees` 移入移动，`exposure` 移入舞台；物理页只保留交互、模拟和重建相关参数 |
+| H2 | 参数归位 | 部分完成：`exposure` 已移入独立视觉面板；`snapTurnDegrees` 尚待移入移动页 |
 | H3 | 文案结构化 | 将 `MmdVrScene → PlayerRig → ControlBar` 的逐项 label props 改为结构化 labels，避免每增一项修改多层签名 |
 | H4 | 操作状态 | HUD 显示 enable / disable / rebuild 进行中状态，并保持恢复失败提示优先于普通空态 |
 
@@ -263,9 +263,9 @@ src/mmdVrShowcase/
 |----|----------|------|
 | V1 | 简单色调 / exposure | ✅ VR 内 0.7–1.3 调节；持久化偏好 |
 | V2 | 轻 bloom 或仅 emissive 增强 | ✅ 逐材质自发光强度 0–2；默认 0；复用现有 MMD shader uniform，无后处理 pass，因此不限定高档 |
-| V3 | 简单天空色 / 渐变背景 | ✅ StageSky 穹顶 + 灯光预设色 |
+| V3 | 简单天空色 / 渐变背景 | ✅ StageSky 穹顶 + 灯光预设色；视觉面板独立开关 |
 | V4 | 可选 HDR/IBL（低分辨率 PMREM） | 手测后；低档关 |
-| V5 | 雾 / 暗角 | 已有雾；暗角未做 |
+| V5 | 雾 / 暗角 | 雾已实现并可独立开关；暗角未做 |
 
 **明确延后**：SSR、DoF、体积光、复杂 LUT 链、TSL toon 专用路径。
 

@@ -38,6 +38,30 @@ describe("MMD VR adjustments", () => {
     expect(normalizeMmdVrPrefs({ viewDistance: 120 }).viewDistance).toBe(100);
     expect(normalizeMmdVrPrefs().physicsDynamicSelfCollision).toBe(false);
     expect(normalizeMmdVrPrefs({ physicsDynamicSelfCollision: true }).physicsDynamicSelfCollision).toBe(true);
+    expect(normalizeMmdVrPrefs()).toMatchObject({
+      stageSkyEnabled: true,
+      stageFogEnabled: true,
+      stageRimLightEnabled: false,
+      stageLightPoolEnabled: false,
+    });
+    expect(normalizeMmdVrPrefs({ stageFogEnabled: false, stageRimLightEnabled: false })).toMatchObject({
+      stageFogEnabled: false,
+      stageRimLightEnabled: false,
+    });
+    for (const lightPreset of ["soft", "contrast", "daylight", "warm", "rim"] as const) {
+      expect(normalizeMmdVrPrefs({ lightPreset })).toMatchObject({
+        stageRimLightEnabled: true,
+        stageLightPoolEnabled: true,
+      });
+    }
+    expect(normalizeMmdVrPrefs({
+      lightPreset: "rim",
+      stageRimLightEnabled: false,
+      stageLightPoolEnabled: true,
+    })).toMatchObject({
+      stageRimLightEnabled: false,
+      stageLightPoolEnabled: true,
+    });
     expect(normalizeMmdVrPrefs({ snapTurnDegrees: 45, exposure: 2 })).toMatchObject({
       snapTurnDegrees: 45,
       exposure: 1.3,

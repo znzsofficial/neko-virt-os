@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
+  '@pmndrs/xr@6.6.30': e8f142d1fb5826a9fa446695554ff37c91416259bafab26c7502957314780dcc
   '@yohawing/three-mmd-loader@0.8.1': c00e8e81f38ff9b48410cce12a110eb6e9cf681d7c3b23d9759368508ea9f542
 
 importers:
@@ -2156,7 +2157,7 @@ snapshots:
 
   '@pmndrs/pointer-events@6.6.30': {}
 
-  '@pmndrs/xr@6.6.30(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)':
+  '@pmndrs/xr@6.6.30(patch_hash=e8f142d1fb5826a9fa446695554ff37c91416259bafab26c7502957314780dcc)(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)':
     dependencies:
       '@iwer/devui': 1.1.2(@types/react@19.2.18)(iwer@2.3.0)
       '@iwer/sem': 0.2.5(iwer@2.3.0)
@@ -2363,7 +2364,7 @@ snapshots:
   '@react-three/xr@6.6.30(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)':
     dependencies:
       '@pmndrs/pointer-events': 6.6.30
-      '@pmndrs/xr': 6.6.30(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)
+      '@pmndrs/xr': 6.6.30(patch_hash=e8f142d1fb5826a9fa446695554ff37c91416259bafab26c7502957314780dcc)(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)
       '@react-three/fiber': 9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)

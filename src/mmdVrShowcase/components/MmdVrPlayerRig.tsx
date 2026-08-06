@@ -54,6 +54,15 @@ export function MmdVrPlayerRig({
   physicsDebugOnLabel,
   physicsDebugOffLabel,
   physicsSettingsLabel,
+  visualSettingsLabel,
+  skyOnLabel,
+  skyOffLabel,
+  fogOnLabel,
+  fogOffLabel,
+  rimLightOnLabel,
+  rimLightOffLabel,
+  lightPoolOnLabel,
+  lightPoolOffLabel,
   physicsCollisionOnLabel,
   physicsCollisionOffLabel,
   physicsSelfCollisionOnLabel,
@@ -120,6 +129,15 @@ export function MmdVrPlayerRig({
   physicsDebugOnLabel: string;
   physicsDebugOffLabel: string;
   physicsSettingsLabel: string;
+  visualSettingsLabel: string;
+  skyOnLabel: string;
+  skyOffLabel: string;
+  fogOnLabel: string;
+  fogOffLabel: string;
+  rimLightOnLabel: string;
+  rimLightOffLabel: string;
+  lightPoolOnLabel: string;
+  lightPoolOffLabel: string;
   physicsCollisionOnLabel: string;
   physicsCollisionOffLabel: string;
   physicsSelfCollisionOnLabel: string;
@@ -260,6 +278,15 @@ export function MmdVrPlayerRig({
         physicsDebugOnLabel={physicsDebugOnLabel}
         physicsDebugOffLabel={physicsDebugOffLabel}
         physicsSettingsLabel={physicsSettingsLabel}
+        visualSettingsLabel={visualSettingsLabel}
+        skyOnLabel={skyOnLabel}
+        skyOffLabel={skyOffLabel}
+        fogOnLabel={fogOnLabel}
+        fogOffLabel={fogOffLabel}
+        rimLightOnLabel={rimLightOnLabel}
+        rimLightOffLabel={rimLightOffLabel}
+        lightPoolOnLabel={lightPoolOnLabel}
+        lightPoolOffLabel={lightPoolOffLabel}
         physicsCollisionOnLabel={physicsCollisionOnLabel}
         physicsCollisionOffLabel={physicsCollisionOffLabel}
         physicsSelfCollisionOnLabel={physicsSelfCollisionOnLabel}

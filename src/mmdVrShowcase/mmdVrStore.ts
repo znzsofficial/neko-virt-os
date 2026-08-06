@@ -92,6 +92,10 @@ export type MmdVrPrefs = {
   viewDistance: number;
   snapTurnDegrees: MmdVrSnapTurnDegrees;
   exposure: number;
+  stageSkyEnabled: boolean;
+  stageFogEnabled: boolean;
+  stageRimLightEnabled: boolean;
+  stageLightPoolEnabled: boolean;
   advancedRenderOverrides: boolean;
   detailedPhysicsDiagnostics: boolean;
   panelFollowUser: boolean;
@@ -264,6 +268,8 @@ function normalizeHapticLevel(value: unknown): MmdVrHapticLevel {
 }
 
 export function normalizeMmdVrPrefs(parsed: Partial<MmdVrPrefs> = {}): MmdVrPrefs {
+  const lightPreset = normalizeLight(parsed.lightPreset);
+  const legacyPresetEffectsEnabled = lightPreset !== "stage";
   return {
     renderQuality: normalizeImmersiveQuality(parsed.renderQuality),
     showFps: Boolean(parsed.showFps),
@@ -274,7 +280,7 @@ export function normalizeMmdVrPrefs(parsed: Partial<MmdVrPrefs> = {}): MmdVrPref
     shadowsPref: normalizeImmersiveToggle(parsed.shadowsPref),
     gridPref: normalizeImmersiveToggle(parsed.gridPref),
     walkSpeedPref: normalizeWalk(parsed.walkSpeedPref),
-    lightPreset: normalizeLight(parsed.lightPreset),
+    lightPreset,
     framebufferScalePref: normalizeImmersiveFramebufferScale(parsed.framebufferScalePref),
     foveationPref: normalizeImmersiveFoveation(parsed.foveationPref),
     shadowResolutionPref: normalizeShadowResolution(parsed.shadowResolutionPref),
@@ -283,6 +289,14 @@ export function normalizeMmdVrPrefs(parsed: Partial<MmdVrPrefs> = {}): MmdVrPref
     viewDistance: normalizeMmdVrViewDistance(parsed.viewDistance),
     snapTurnDegrees: normalizeMmdVrSnapTurnDegrees(parsed.snapTurnDegrees),
     exposure: normalizeMmdVrExposure(parsed.exposure),
+    stageSkyEnabled: parsed.stageSkyEnabled !== false,
+    stageFogEnabled: parsed.stageFogEnabled !== false,
+    stageRimLightEnabled: typeof parsed.stageRimLightEnabled === "boolean"
+      ? parsed.stageRimLightEnabled
+      : legacyPresetEffectsEnabled,
+    stageLightPoolEnabled: typeof parsed.stageLightPoolEnabled === "boolean"
+      ? parsed.stageLightPoolEnabled
+      : legacyPresetEffectsEnabled,
     advancedRenderOverrides: Boolean(parsed.advancedRenderOverrides),
     detailedPhysicsDiagnostics: Boolean(parsed.detailedPhysicsDiagnostics),
     panelFollowUser: parsed.panelFollowUser !== false,
@@ -318,6 +332,10 @@ const prefsStorage = createLocalPrefsStorage<MmdVrPrefs>({
     viewDistance: 40,
     snapTurnDegrees: 30,
     exposure: 1,
+    stageSkyEnabled: true,
+    stageFogEnabled: true,
+    stageRimLightEnabled: false,
+    stageLightPoolEnabled: false,
     advancedRenderOverrides: false,
     detailedPhysicsDiagnostics: false,
     panelFollowUser: true,
@@ -389,6 +407,10 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
     if (patch.viewDistance != null) prefs.viewDistance = normalizeMmdVrViewDistance(patch.viewDistance);
     if (patch.snapTurnDegrees != null) prefs.snapTurnDegrees = normalizeMmdVrSnapTurnDegrees(patch.snapTurnDegrees);
     if (patch.exposure != null) prefs.exposure = normalizeMmdVrExposure(patch.exposure);
+    if (patch.stageSkyEnabled != null) prefs.stageSkyEnabled = Boolean(patch.stageSkyEnabled);
+    if (patch.stageFogEnabled != null) prefs.stageFogEnabled = Boolean(patch.stageFogEnabled);
+    if (patch.stageRimLightEnabled != null) prefs.stageRimLightEnabled = Boolean(patch.stageRimLightEnabled);
+    if (patch.stageLightPoolEnabled != null) prefs.stageLightPoolEnabled = Boolean(patch.stageLightPoolEnabled);
     if (patch.advancedRenderOverrides != null) prefs.advancedRenderOverrides = Boolean(patch.advancedRenderOverrides);
     if (patch.detailedPhysicsDiagnostics != null) prefs.detailedPhysicsDiagnostics = Boolean(patch.detailedPhysicsDiagnostics);
     if (patch.panelFollowUser != null) prefs.panelFollowUser = Boolean(patch.panelFollowUser);

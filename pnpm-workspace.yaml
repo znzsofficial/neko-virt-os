@@ -8,4 +8,5 @@ minimumReleaseAgeExclude:
   - dompurify@3.4.13
   - marked@18.0.9
 patchedDependencies:
+  '@pmndrs/xr@6.6.30': patches/@pmndrs__xr@6.6.30.patch
   '@yohawing/three-mmd-loader@0.8.1': patches/@yohawing__three-mmd-loader@0.8.1.patch

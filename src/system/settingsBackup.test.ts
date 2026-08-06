@@ -109,6 +109,10 @@ function createBackup(): SettingsBackup {
       themeColor: "purple",
       snapTurnDegrees: 45,
       exposure: 1.2,
+      stageSkyEnabled: false,
+      stageFogEnabled: false,
+      stageRimLightEnabled: false,
+      stageLightPoolEnabled: false,
       advancedRenderOverrides: true,
       detailedPhysicsDiagnostics: true,
       panelFollowUser: true,
@@ -156,6 +160,10 @@ describe("settings backup v2", () => {
       themeColor: _mmdTheme,
       snapTurnDegrees: _snapTurnDegrees,
       exposure: _exposure,
+      stageSkyEnabled: _stageSkyEnabled,
+      stageFogEnabled: _stageFogEnabled,
+      stageRimLightEnabled: _stageRimLightEnabled,
+      stageLightPoolEnabled: _stageLightPoolEnabled,
       ...mmdVrPrefs
     } = backup.mmdVrPrefs;
     const parsed = parseSettingsBackup(JSON.stringify({ ...backup, vrDesktopPrefs, mmdVrPrefs }), createStorage());
@@ -164,6 +172,26 @@ describe("settings backup v2", () => {
     expect(parsed.mmdVrPrefs.themeColor).toBe("blue");
     expect(parsed.mmdVrPrefs.snapTurnDegrees).toBe(30);
     expect(parsed.mmdVrPrefs.exposure).toBe(1);
+    expect(parsed.mmdVrPrefs).toMatchObject({
+      stageSkyEnabled: true,
+      stageFogEnabled: true,
+      stageRimLightEnabled: true,
+      stageLightPoolEnabled: true,
+    });
+  });
+
+  it("round-trips independent MMD VR visual switches", () => {
+    const backup = createBackup();
+    backup.mmdVrPrefs.stageRimLightEnabled = false;
+    backup.mmdVrPrefs.stageLightPoolEnabled = true;
+
+    const parsed = parseSettingsBackup(JSON.stringify(backup), createStorage());
+
+    expect(parsed.mmdVrPrefs).toMatchObject({
+      lightPreset: "contrast",
+      stageRimLightEnabled: false,
+      stageLightPoolEnabled: true,
+    });
   });
 
   it("migrates legacy MMD VR refresh tiers without changing VR Desktop preferences", () => {
