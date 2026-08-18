@@ -1,6 +1,6 @@
 # MMD Studio — 进度与约定
 
-最后更新：2026-08-03（`@yohawing/three-mmd-loader@0.8.1`）
+最后更新：2026-08-18（`@yohawing/three-mmd-loader@0.8.2`）
 
 文档索引：[docs/README.md](./README.md)
 
@@ -13,7 +13,7 @@ NekoVirtOS 内的浏览器 MMD 工作台：多模型预览、动作/表情/镜�
 - **后处理：WebGL-only**
 - **VR 桌面**：**不**共用本模块 WebGPU 会话；见 [vr-desktop-roadmap.md](./vr-desktop-roadmap.md)
 - **MMD VR 展示器**：独立 `mmd-vr.html` 页面、WebGL renderer 与 XR 会话；**不**从 Studio 进入或传递场景。展示器仍复用 `mmdRuntime`，但不加载 Studio Canvas / UI；见 [mmd-vr-showcase-roadmap.md](./mmd-vr-showcase-roadmap.md)
-- **依赖**：`@yohawing/three-mmd-loader@0.8.1`（mmd-anim WASM 0.3.3）；Bullet：`public/mmd/0.8.1/mmd_bullet.{js,wasm}`
+- **依赖**：`@yohawing/three-mmd-loader@0.8.2`（mmd-anim WASM 0.4.1）；Bullet：`public/mmd/0.8.2/mmd_bullet.{js,wasm}`
 
 ### 0.7.0 注意
 
@@ -105,7 +105,7 @@ docs/mmd-studio.md
 - IBL：`mmdMaterialEnhance` rev `v8-ibl-fix`；WebGPU TSL 不走 enhance  
 - SSR：独立 EffectPass；导出降档  
 - 阴影：PCF；地面 y≈-0.015；角色 cast-only  
-- 物理：每模型 world；步进 scale=1；t≈0 不步进；WASM 在 `public/mmd/0.8.1/`
+- 物理：每模型 world；步进 scale=1；t≈0 不步进；WASM 在 `public/mmd/0.8.2/`
 
 ### R3F 性能（本模块必遵）
 

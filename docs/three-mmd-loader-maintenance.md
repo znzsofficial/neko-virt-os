@@ -1,6 +1,6 @@
 # three-mmd-loader 近期维护记录
 
-最后更新：2026-08-04
+最后更新：2026-08-18
 
 文档索引：[docs/README.md](./README.md)
 
@@ -19,12 +19,12 @@
 
 当前 NekoVirtOS 依赖：
 
-- `@yohawing/three-mmd-loader@0.8.1`
-- `mmd-anim WASM 0.3.3`
-- Bullet 运行资产：`public/mmd/0.8.1/mmd_bullet.js`、`public/mmd/0.8.1/mmd_bullet.wasm`；版本化目录保证 ABI 配套的 JS/WASM 同步更新
-- pnpm patch：`patches/@yohawing__three-mmd-loader@0.8.1.patch`
+- `@yohawing/three-mmd-loader@0.8.2`
+- `mmd-anim WASM 0.4.1`
+- Bullet 运行资产：`public/mmd/0.8.2/mmd_bullet.js`、`public/mmd/0.8.2/mmd_bullet.wasm`；版本化目录保证 ABI 配套的 JS/WASM 同步更新
+- pnpm patch：`patches/@yohawing__three-mmd-loader@0.8.2.patch`（仅保留 rigid-body range contact 查询）
 - `pnpm-workspace.yaml` 中的 `patchedDependencies` 负责应用补丁
-- 当前 lockfile patch hash：`4ae21dfc73e3a1817a9bc8cc487f8c1d9c36b4da9c86a64af4d8dae37457cfce`
+- 当前 lockfile patch hash：`e7a769fb2ed8b60ecdd5edf97dc0eb28df96a7f844e94114a580287251fe887e`
 
 上游仓库提交了 `package-lock.json`，其开发文档和 CI 均使用 npm。不要在 `E:\WebProjects\three-mmd-loader` 中使用 pnpm 更新依赖或 lockfile。NekoVirtOS 仍使用 pnpm。
 
@@ -60,7 +60,7 @@
 - Commit：`20e16942c6e5301599500183cc5a967cbbd3b5e3`
 - Commit 标题：`fix(physics): preserve dynamic-with-bone translation`
 
-截至 2026-08-03：PR 为 `OPEN`、`MERGEABLE`，无 review、评论或 change request，GitHub 未显示 checks。
+2026-08-17：已合入 `main`，并随 `@yohawing/three-mmd-loader@0.8.2` 发布。
 
 ### 2. Bullet contact 查询未接通
 
@@ -102,7 +102,7 @@
 - Commit：`60e99d72e46c08004dc98acac8648a48f3ee4442`
 - Commit 标题：`feat(physics): expose Bullet contact queries`
 
-截至 2026-08-03：PR 为 `OPEN`、`MERGEABLE`，无 review、评论或 change request，GitHub 未显示 checks。
+2026-08-17：已合入 `main`，并随 `@yohawing/three-mmd-loader@0.8.2` 发布。
 
 ## NekoVirtOS 集成修改
 
@@ -295,23 +295,22 @@ git push fork main
 
 贡献分支有 review 修改时，先确认 upstream 是否已前进，再按上游偏好 rebase 或 merge。不要 force-push，除非明确获得批准。
 
-### 上游合并但尚未发布
+### 0.8.2 升级结果
 
-- 保留 NekoVirtOS pnpm patch。
-- 不要仅因 PR merged 就把依赖指向任意 Git commit。
-- 等待包含三个 patch 行为的正式 npm 版本，除非有明确需求提前使用 commit/预发布版本。
+- 2026-08-17 的 `v0.8.2` 已包含 PR #38 和 PR #40。
+- NekoVirtOS 已升级到 `@yohawing/three-mmd-loader@0.8.2`，并替换 `public/mmd/0.8.2/` 的配套 Bullet JS/WASM。
+- 官方包仍没有 `debugPhysicsContactsForRigidBodyRange()`，因此 0.8.2 patch 只保留这一项 JS 过滤。
+- 上游若发布带 range query 的新版本，再删除 `patchedDependencies` 条目和 `patches/@yohawing__three-mmd-loader@0.8.2.patch`。
 
 ### 新版本发布后
 
-1. 确认 release/npm 包同时包含 PR #38、PR #40 和 rigid-body range contact 查询。
+1. 确认 release/npm 包是否包含 rigid-body range contact 查询。
 2. 在独立分支更新 `@yohawing/three-mmd-loader` 版本。
-3. 检查新版本是否仍需要 patch 中的其他内容。
-4. 仅当发布包已覆盖全部 patch 行为时，删除 `patchedDependencies` 条目和 patch 文件。
+3. 仅当发布包已覆盖 range query 时，删除 `patchedDependencies` 条目和 patch 文件。
+4. 同步版本化 Bullet 资产目录，更新 `mmdPhysics.ts` 脚本路径。
 5. 运行 `pnpm install` 更新 lockfile，确认旧 patch hash 消失。
 6. 重跑 TypeScript、指定物理/触觉测试、完整测试和 build。
 7. 再次进行真机回归：模型缩放、衣服物理、面板存续、左右控制器碰撞和震动。
-
-不要直接删除整个 patch。当前 patch 同时包含 `dynamicWithBone`、contact API 和 rigid-body range contact 查询三部分；如果上游只合并或发布其中一部分，应重新生成只保留未发布修复的最小 patch。
 
 ## 本地分支保留策略
 

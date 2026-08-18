@@ -1,0 +1,86 @@
+diff --git a/dist/physics/customBulletMmd.d.ts b/dist/physics/customBulletMmd.d.ts
+index 3a8cd5fe856fa4c5c3074e500eeeea0d1434a9ee..3f6553c75c78d57372a8f222efbfb142ae5ca3a6 100644
+--- a/dist/physics/customBulletMmd.d.ts
++++ b/dist/physics/customBulletMmd.d.ts
+@@ -15,6 +15,7 @@ export type CustomBulletMmdModule = MmdAnimBulletModule;
+ export interface CustomBulletMmdPhysicsBackend extends MmdDirectBufferPhysicsBackend {
+     debugContactCount(): number;
+     debugPhysicsContacts(): readonly MmdAnimBulletContactPoint[];
++    debugPhysicsContactsForRigidBodyRange(firstRigidBodyIndex: number, rigidBodyCount: number): readonly MmdAnimBulletContactPoint[];
+ }
+ export declare function resolveCustomBulletMmdScriptUrl(baseUrl?: string): string;
+ export declare function loadCustomBulletMmdModule(options?: CustomBulletMmdLoaderOptions): Promise<CustomBulletMmdModule>;
+diff --git a/dist/physics/customBulletMmd.js b/dist/physics/customBulletMmd.js
+index 75621cc232d2eeaee3bd133886ef0f7075e31dca..69fb6a232f34db90ddb7b1abcbfb455bf650bb0e 100644
+--- a/dist/physics/customBulletMmd.js
++++ b/dist/physics/customBulletMmd.js
+@@ -80,4 +80,7 @@ class CustomBulletMmdCompatibilityBackend {
+     debugPhysicsContacts() {
+         return this.backend.debugPhysicsContacts();
+     }
++    debugPhysicsContactsForRigidBodyRange(firstRigidBodyIndex, rigidBodyCount) {
++        return this.backend.debugPhysicsContactsForRigidBodyRange(firstRigidBodyIndex, rigidBodyCount);
++    }
+ }
+diff --git a/dist/physics/mmdAnimBullet.d.ts b/dist/physics/mmdAnimBullet.d.ts
+index a72d76137c529c8aeefcf15d1d30b421fdbd16f6..47fd83d4b29150bcd0bf826cb1f36b8dfe664d33 100644
+--- a/dist/physics/mmdAnimBullet.d.ts
++++ b/dist/physics/mmdAnimBullet.d.ts
+@@ -30,6 +30,7 @@ export interface MmdAnimBulletContactPoint {
+ export interface MmdAnimBulletPhysicsBackend extends MmdPhysicsBackend {
+     debugContactCount(): number;
+     debugPhysicsContacts(): readonly MmdAnimBulletContactPoint[];
++    debugPhysicsContactsForRigidBodyRange(firstRigidBodyIndex: number, rigidBodyCount: number): readonly MmdAnimBulletContactPoint[];
+ }
+ export declare function createMmdAnimBulletPhysicsBackend(module: MmdAnimBulletModule, options?: {
+     fixedTimeStep?: number;
+diff --git a/dist/physics/mmdAnimBullet.js b/dist/physics/mmdAnimBullet.js
+index 35ad7804839e458df2f66bb413622f48815ead55..aecb4897f0fa360a682e2f33d83be0ab2acd7611 100644
+--- a/dist/physics/mmdAnimBullet.js
++++ b/dist/physics/mmdAnimBullet.js
+@@ -156,6 +156,45 @@ class MmdAnimBulletPhysicsBackendImpl {
+         }
+         return contacts;
+     }
++    debugPhysicsContactsForRigidBodyRange(firstRigidBodyIndex, rigidBodyCount) {
++        const collect = this.module._mmd_anim_bullet_world_collect_contacts;
++        const count = this.debugContactCount();
++        if (!collect || count <= 0)
++            return [];
++        if (count > this.contactBufferCapacity) {
++            if (this.contactBufferPointer !== 0)
++                this.module._free(this.contactBufferPointer);
++            this.contactBufferPointer = this.module._malloc(count * CONTACT_POINT_BYTES);
++            this.contactBufferCapacity = count;
++        }
++        if (collect(this.world, this.contactBufferPointer, this.contactBufferCapacity, this.contactCountPointer) !== 0)
++            return [];
++        this.module.refreshMemoryViews?.();
++        const heap = this.module.HEAPF32;
++        if (!heap)
++            return [];
++        const heapI32 = new Int32Array(heap.buffer);
++        const written = Math.min(this.module.HEAPU32?.[this.contactCountPointer >>> 2] ?? 0, this.contactBufferCapacity);
++        const lastRigidBodyIndex = firstRigidBodyIndex + rigidBodyCount;
++        const contacts = [];
++        for (let index = 0; index < written; index += 1) {
++            const base = (this.contactBufferPointer + index * CONTACT_POINT_BYTES) >>> 2;
++            const rigidBodyIndexA = heapI32[base] ?? -1;
++            const rigidBodyIndexB = heapI32[base + 1] ?? -1;
++            if (!((rigidBodyIndexA >= firstRigidBodyIndex && rigidBodyIndexA < lastRigidBodyIndex) ||
++                (rigidBodyIndexB >= firstRigidBodyIndex && rigidBodyIndexB < lastRigidBodyIndex)))
++                continue;
++            contacts.push({
++                rigidBodyIndexA,
++                rigidBodyIndexB,
++                distance: heap[base + 2] ?? 0,
++                positionWorldOnA: [heap[base + 3] ?? 0, heap[base + 4] ?? 0, heap[base + 5] ?? 0],
++                positionWorldOnB: [heap[base + 6] ?? 0, heap[base + 7] ?? 0, heap[base + 8] ?? 0],
++                normalWorldOnB: [heap[base + 9] ?? 0, heap[base + 10] ?? 0, heap[base + 11] ?? 0]
++            });
++        }
++        return contacts;
++    }
+     ensureModel(context) {
+         const bodies = context.rigidBodies;
+         if (!bodies)

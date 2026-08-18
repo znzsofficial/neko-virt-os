@@ -7,6 +7,7 @@ import {
   getFirstEncodableVideoCodec,
   Mp4OutputFormat,
   Output,
+  Quality,
   WebMOutputFormat,
   type AudioCodec,
   type VideoCodec,
@@ -106,18 +107,18 @@ export async function exportWithWebCodecs(options: WebCodecsExportOptions): Prom
   const end = Math.max(start + frameDuration, options.endTime);
   const frameCount = Math.max(1, Math.floor((end - start) / frameDuration) + 1);
 
-  const bitrate = Math.max(500_000, Math.round(options.videoBitrate));
+  const videoQuality = new Quality({ bitrate: Math.max(500_000, Math.round(options.videoBitrate)) });
   const videoCodec = await getFirstEncodableVideoCodec(videoCodecCandidates(options.preferCodec), {
     width: encodeWidth,
     height: encodeHeight,
-    bitrate,
+    quality: videoQuality,
   });
   if (!videoCodec) {
     throw new Error("No encodable video codec");
   }
 
   // Sanity check with explicit size.
-  const ok = await canEncodeVideo(videoCodec, { width: encodeWidth, height: encodeHeight, bitrate });
+  const ok = await canEncodeVideo(videoCodec, { width: encodeWidth, height: encodeHeight, quality: videoQuality });
   if (!ok) {
     throw new Error(`Cannot encode ${videoCodec} at ${encodeWidth}x${encodeHeight}`);
   }
@@ -131,7 +132,7 @@ export async function exportWithWebCodecs(options: WebCodecsExportOptions): Prom
 
   const videoSource = new CanvasSource(options.canvas, {
     codec: videoCodec,
-    bitrate,
+    quality: videoQuality,
     keyFrameInterval: 2,
     latencyMode: "quality",
   });
@@ -143,15 +144,16 @@ export async function exportWithWebCodecs(options: WebCodecsExportOptions): Prom
     const decoded = await decodeAudioUrl(options.audioUrl);
     if (decoded) {
       slicedAudio = sliceAudioBuffer(decoded, start, end);
+      const audioQuality = new Quality({ bitrate: Math.max(64_000, options.audioBitrate) });
       const audioCodec = await getFirstEncodableAudioCodec(audioCodecCandidates(videoCodec), {
         numberOfChannels: slicedAudio?.numberOfChannels ?? 2,
         sampleRate: slicedAudio?.sampleRate ?? 48000,
-        bitrate: options.audioBitrate,
+        quality: audioQuality,
       });
       if (audioCodec && slicedAudio) {
         audioSource = new AudioBufferSource({
           codec: audioCodec,
-          bitrate: Math.max(64_000, options.audioBitrate),
+          quality: audioQuality,
         });
         output.addAudioTrack(audioSource);
       }
