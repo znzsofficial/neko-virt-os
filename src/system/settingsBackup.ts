@@ -120,7 +120,6 @@ const mmdVrPrefsSchema = z.strictObject({
   shadowResolutionPref: z.enum(["auto", "low", "medium", "high"]),
   heightOffset: z.number().min(-5).max(50).default(0),
   viewDistance: z.number().min(10).max(100).default(40),
-  themeColor: z.enum(["blue", "cyan", "purple", "green", "red"]).default("blue"),
   snapTurnDegrees: z.union([z.literal(15), z.literal(30), z.literal(45)]).default(30),
   exposure: z.number().min(0.7).max(1.3).default(1),
   stageSkyEnabled: z.boolean().default(true),
@@ -237,7 +236,9 @@ export function collectSettingsBackup(storage: StorageLike = localStorage): Sett
       ? normalizeSystemPrefs(systemValue as Partial<SystemPrefs>)
       : normalizeSystemPrefs(),
     workspace: readWorkspace(storage),
-    widgetsCollapsed: storage.getItem(WIDGETS_KEY) === "1",
+    // New installations keep the optional desktop summary hidden until the
+    // user opts in. Preserve an explicit stored value during backup/export.
+    widgetsCollapsed: storage.getItem(WIDGETS_KEY) !== "0",
     desktopLayoutMode: normalizeDesktopLayoutMode(storage.getItem(DESKTOP_LAYOUT_MODE_KEY)),
     vrDesktopPrefs: readVrDesktopPrefs(storage),
     mmdVrPrefs: readMmdVrPrefs(storage),

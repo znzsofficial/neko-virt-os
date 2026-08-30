@@ -106,7 +106,6 @@ function createBackup(): SettingsBackup {
       shadowResolutionPref: "high",
       heightOffset: 50,
       viewDistance: 80,
-      themeColor: "purple",
       snapTurnDegrees: 45,
       exposure: 1.2,
       stageSkyEnabled: false,
@@ -145,6 +144,12 @@ describe("settings backup v2", () => {
     expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"handTracking":true');
   });
 
+  it("keeps widgets collapsed when no widget preference has been stored", () => {
+    const backup = collectSettingsBackup(createStorage());
+
+    expect(backup.widgetsCollapsed).toBe(true);
+  });
+
   it("rejects malformed fields and unknown v2 keys", () => {
     const backup = createBackup();
     expect(() => parseSettingsBackup(JSON.stringify({
@@ -155,11 +160,10 @@ describe("settings backup v2", () => {
     expect(() => parseSettingsBackup(JSON.stringify({ ...backup, version: 3 }), createStorage())).toThrow();
   });
 
-  it("defaults theme colors for backups created before color settings existed", () => {
+  it("defaults newly optional MMD VR fields", () => {
     const backup = createBackup();
     const { themeColor: _desktopTheme, ...vrDesktopPrefs } = backup.vrDesktopPrefs;
     const {
-      themeColor: _mmdTheme,
       snapTurnDegrees: _snapTurnDegrees,
       exposure: _exposure,
       stageSkyEnabled: _stageSkyEnabled,
@@ -170,8 +174,6 @@ describe("settings backup v2", () => {
     } = backup.mmdVrPrefs;
     const parsed = parseSettingsBackup(JSON.stringify({ ...backup, vrDesktopPrefs, mmdVrPrefs }), createStorage());
 
-    expect(parsed.vrDesktopPrefs.themeColor).toBe("blue");
-    expect(parsed.mmdVrPrefs.themeColor).toBe("blue");
     expect(parsed.mmdVrPrefs.snapTurnDegrees).toBe(30);
     expect(parsed.mmdVrPrefs.exposure).toBe(1);
     expect(parsed.mmdVrPrefs).toMatchObject({
