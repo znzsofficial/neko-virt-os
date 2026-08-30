@@ -29,6 +29,8 @@ export function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose
   const togglePinnedWindowZ = useDesktopStore((state) => state.togglePinnedWindowZ);
   const moveWindowToWorkspace = useDesktopStore((state) => state.moveWindowToWorkspace);
   const resetWindowLayout = useDesktopStore((state) => state.resetWindowLayout);
+  const desktopLayoutMode = useDesktopStore((state) => state.desktopLayoutMode);
+  const setDesktopLayoutMode = useDesktopStore((state) => state.setDesktopLayoutMode);
   const addNotification = useNotificationStore((state) => state.addNotification);
   const t = useLanguageStore((state) => state.t);
   const createFile = useFsStore((state) => state.createFile);
@@ -295,6 +297,10 @@ export function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose
           >
             <Icon icon="solar:eye-bold-duotone" width={16} height={16} />
             {t("showHiddenApplications")}
+          </button>
+          <button role="menuitem" onClick={() => run(() => setDesktopLayoutMode(desktopLayoutMode === "grid" ? "free" : "grid"))}>
+            <Icon icon={desktopLayoutMode === "grid" ? "solar:move-to-folder-bold-duotone" : "solar:widget-5-bold-duotone"} width={16} height={16} />
+            {desktopLayoutMode === "grid" ? t("desktopFreeMode") : t("desktopGridMode")}
           </button>
           <div className="context-menu-divider" />
         </>

@@ -1,10 +1,8 @@
 import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId } from "react";
 import { useLanguageStore } from "../languageStore";
 import { useOsUiStore, type WorkspaceId } from "../osUiStore";
-import { readThemeSettings, subscribeThemeSettings, updateThemeSettings } from "../system/theme";
-import type { ThemeSettings } from "../types";
 import { useDesktopStore } from "../windowStore";
 import { requestVrDesktopEnter } from "../vrDesktop/requestVrEnter";
 import { refreshVrCapability, useVrDesktopStore } from "../vrDesktop/vrDesktopStore";
@@ -31,16 +29,9 @@ export function ControlCenter() {
   const restoreWindow = useDesktopStore((state) => state.restoreWindow);
   const windows = useDesktopStore((state) => state.windows);
 
-  const [theme, setTheme] = useState(() => readThemeSettings());
   const vrUnavailableReasonId = useId();
   const vrUnavailable = vrCapability === "unavailable" || vrCapability === "limited";
   const vrUnavailableReason = vrCapability === "unavailable" ? t("settingsVrDesktopNeedHttps") : t("settingsVrDesktopNoXr");
-
-  useEffect(() => {
-    if (open) setTheme(readThemeSettings());
-  }, [open]);
-
-  useEffect(() => subscribeThemeSettings(setTheme), []);
 
   // Refresh when panel opens (secure context / xr may change after navigation).
   useEffect(() => {
@@ -49,10 +40,6 @@ export function ControlCenter() {
   }, [open, vrEnabled]);
 
   if (!open) return null;
-
-  function patchTheme(patch: Partial<ThemeSettings>) {
-    setTheme(updateThemeSettings(patch));
-  }
 
   function switchWorkspace(workspace: WorkspaceId) {
     setActiveWorkspace(workspace);
@@ -73,51 +60,12 @@ export function ControlCenter() {
       <div className="control-center-grid">
         <button
           type="button"
-          className={clsx("control-center-tile tint-sky", theme.theme === "system" && "is-active")}
-          onClick={() => patchTheme({ theme: "system" })}
-        >
-          <Icon icon="solar:laptop-bold-duotone" width={18} height={18} />
-          <span>{t("colorSystem")}</span>
-        </button>
-        <button
-          type="button"
-          className={clsx("control-center-tile tint-amber", theme.theme === "light" && "is-active")}
-          onClick={() => patchTheme({ theme: "light" })}
-        >
-          <Icon icon="solar:sun-bold-duotone" width={18} height={18} />
-          <span>{t("colorLight")}</span>
-        </button>
-        <button
-          type="button"
-          className={clsx("control-center-tile tint-violet", theme.theme === "dark" && "is-active")}
-          onClick={() => patchTheme({ theme: "dark" })}
-        >
-          <Icon icon="solar:moon-bold-duotone" width={18} height={18} />
-          <span>{t("colorDark")}</span>
-        </button>
-        <button
-          type="button"
-          className={clsx("control-center-tile tint-indigo", dndEnabled && "is-active")}
+          className={clsx("control-center-tile", dndEnabled && "is-active")}
+          aria-pressed={dndEnabled}
           onClick={() => setNotificationPrefs({ dndEnabled: !dndEnabled })}
         >
           <Icon icon="solar:moon-sleep-bold-duotone" width={18} height={18} />
           <span>{t("notificationDndToggle")}</span>
-        </button>
-        <button
-          type="button"
-          className={clsx("control-center-tile tint-mint", theme.density === "cozy" && "is-active")}
-          onClick={() => patchTheme({ density: "cozy" })}
-        >
-          <Icon icon="solar:widget-bold-duotone" width={18} height={18} />
-          <span>{t("densityCozy")}</span>
-        </button>
-        <button
-          type="button"
-          className={clsx("control-center-tile tint-rose", theme.density === "compact" && "is-active")}
-          onClick={() => patchTheme({ density: "compact" })}
-        >
-          <Icon icon="solar:slider-minimalistic-horizontal-bold-duotone" width={18} height={18} />
-          <span>{t("densityCompact")}</span>
         </button>
       </div>
 
@@ -141,7 +89,7 @@ export function ControlCenter() {
       <div className="control-center-actions">
         <button
           type="button"
-          className="control-center-action tint-amber"
+          className="control-center-action"
           onClick={() => {
             setControlCenterOpen(false);
             setNotificationCenterOpen(true);
@@ -152,7 +100,7 @@ export function ControlCenter() {
         </button>
         <button
           type="button"
-          className="control-center-action tint-violet"
+          className="control-center-action"
           onClick={() => {
             setControlCenterOpen(false);
             openApp("settings");
@@ -164,7 +112,7 @@ export function ControlCenter() {
         {vrEnabled ? (
           <button
             type="button"
-            className="control-center-action tint-sky"
+            className="control-center-action"
             disabled={vrUnavailable || vrPhase === "entering" || vrPhase === "active"}
             aria-describedby={vrUnavailable ? vrUnavailableReasonId : undefined}
             title={vrUnavailable ? vrUnavailableReason : t("settingsVrDesktop")}
@@ -184,7 +132,7 @@ export function ControlCenter() {
         {vrEnabled && vrUnavailable ? <span id={vrUnavailableReasonId} className="settings-visually-hidden">{vrUnavailableReason}</span> : null}
         <button
           type="button"
-          className="control-center-action tint-mint"
+          className="control-center-action"
           title={t("settingsMmdVrShowcase")}
           onClick={() => {
             setControlCenterOpen(false);
@@ -196,7 +144,7 @@ export function ControlCenter() {
         </button>
         <button
           type="button"
-          className="control-center-action tint-rose"
+          className="control-center-action"
           onClick={() => {
             lockSession();
           }}

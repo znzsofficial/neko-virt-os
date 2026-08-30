@@ -975,6 +975,7 @@
   transition: all 120ms ease;
 }
 .wallpaper-option {
+  position: relative;
   cursor: pointer;
 }
 .settings-btn-pill:hover {

@@ -15,13 +15,13 @@ export function Taskbar() {
   const activeWindowId = useDesktopStore((state) => state.activeWindowId);
   const toggleLauncher = useDesktopStore((state) => state.toggleLauncher);
   const toggleTaskbarWindow = useDesktopStore((state) => state.toggleTaskbarWindow);
-  const resetWindowLayout = useDesktopStore((state) => state.resetWindowLayout);
   const activeWorkspace = useOsUiStore((state) => state.activeWorkspace);
   const toggleNotificationCenter = useOsUiStore((state) => state.toggleNotificationCenter);
   const controlCenterOpen = useOsUiStore((state) => state.controlCenterOpen);
   const toggleControlCenter = useOsUiStore((state) => state.toggleControlCenter);
   const setControlCenterOpen = useOsUiStore((state) => state.setControlCenterOpen);
   const dndEnabled = useOsUiStore((state) => state.notificationPrefs.dndEnabled);
+  const setNotificationPrefs = useOsUiStore((state) => state.setNotificationPrefs);
   const hour12 = useOsUiStore((state) => state.systemPrefs.hour12);
   const taskbarShowLabels = useOsUiStore((state) => state.systemPrefs.taskbarShowLabels);
   const taskbarAutoHide = useOsUiStore((state) => state.systemPrefs.taskbarAutoHide);
@@ -73,36 +73,35 @@ export function Taskbar() {
       className={clsx("taskbar", taskbarAutoHide && "is-autohide", !taskbarShowLabels && "is-icons-only")}
       onMouseDown={(event) => event.stopPropagation()}
     >
-      <button className="start-button" onClick={toggleLauncher} aria-label={t("openLauncher")}>
-        <Icon icon="solar:cat-bold-duotone" width={22} height={22} />
-      </button>
+      <div className="taskbar-center">
+        <button className="start-button" onClick={toggleLauncher} aria-label={t("openLauncher")}>
+          <Icon icon="solar:cat-bold-duotone" width={22} height={22} />
+        </button>
 
-      <div className="taskbar-apps">
-        {workspaceWindows.map((window) => (
-          <button
-            key={window.id}
-            className={clsx(
-              "taskbar-item",
-              "is-running",
-              activeWindowId === window.id && !window.minimized && "is-active",
-              window.minimized && "is-minimized",
-              !taskbarShowLabels && "is-icon-only",
-            )}
-            data-context-kind="taskbar-window"
-            data-context-id={window.id}
-            data-app-id={window.appId}
-            title={t(appTitleKeys[window.appId])}
-            onClick={() => toggleTaskbarWindow(window.id)}
-          >
-            <Icon icon={getAppIcon(window.appId, window.icon)} width={18} height={18} />
-            {taskbarShowLabels ? <span>{t(appTitleKeys[window.appId])}</span> : null}
-          </button>
-        ))}
+        <div className="taskbar-apps">
+          {workspaceWindows.map((window) => (
+            <button
+              key={window.id}
+              className={clsx(
+                "taskbar-item",
+                "is-running",
+                activeWindowId === window.id && !window.minimized && "is-active",
+                window.minimized && "is-minimized",
+                !taskbarShowLabels && "is-icon-only",
+              )}
+              data-context-kind="taskbar-window"
+              data-context-id={window.id}
+              data-app-id={window.appId}
+              title={t(appTitleKeys[window.appId])}
+              onClick={() => toggleTaskbarWindow(window.id)}
+            >
+              <Icon icon={getAppIcon(window.appId, window.icon)} width={18} height={18} />
+              {taskbarShowLabels ? <span>{t(appTitleKeys[window.appId])}</span> : null}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="system-tray">
-        <button className="tray-button" onClick={resetWindowLayout} title={t("resetWindowLayoutLabel")} aria-label={t("resetWindowLayoutLabel")}>
-          <Icon icon="solar:restart-bold-duotone" width={15} height={15} />
-        </button>
         <button
           type="button"
           className="tray-button tray-notify"
@@ -130,10 +129,16 @@ export function Taskbar() {
           </button>
           <ControlCenter />
         </div>
-        <span className={clsx("tray-pill", dndEnabled && "is-dnd")}>
-          <Icon icon={dndEnabled ? "solar:moon-sleep-bold-duotone" : "solar:database-bold-duotone"} width={15} height={15} />
-          {dndEnabled ? t("notificationDndToggle") : t("localLabel")}
-        </span>
+        <button
+          type="button"
+          className={clsx("tray-button", dndEnabled && "is-active")}
+          onClick={() => setNotificationPrefs({ dndEnabled: !dndEnabled })}
+          title={dndEnabled ? t("notificationDndOn") : t("notificationDndToggle")}
+          aria-label={dndEnabled ? t("notificationDndOn") : t("notificationDndToggle")}
+          aria-pressed={dndEnabled}
+        >
+          <Icon icon={dndEnabled ? "solar:moon-sleep-bold-duotone" : "solar:bell-bold-duotone"} width={15} height={15} />
+        </button>
         <div className="tray-clock" ref={clockRef}>
           <button
             type="button"

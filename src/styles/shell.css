@@ -12,8 +12,8 @@
 }
 [data-wallpaper="online"] .os {
   background:
-    linear-gradient(135deg, oklch(0.08 0.012 255 / 0.24), oklch(0.08 0.012 255 / 0.10)),
-    radial-gradient(circle at 84% 12%, oklch(0.72 0.14 310 / 0.18), transparent 30%),
+    linear-gradient(135deg, oklch(0.08 0.012 var(--os-neutral-color) / 0.24), oklch(0.08 0.012 var(--os-neutral-color) / 0.10)),
+    radial-gradient(circle at 84% 12%, oklch(0.72 0.14 var(--os-primary-color) / 0.18), transparent 30%),
     var(--os-wallpaper-image),
     linear-gradient(135deg, var(--os-bg), var(--os-wallpaper-end));
   background-position: center, center, center, center;
@@ -22,8 +22,8 @@
 }
 [data-wallpaper-overlay="soft"][data-wallpaper="online"] .os {
   background:
-    linear-gradient(135deg, oklch(0.08 0.012 255 / 0.14), oklch(0.08 0.012 255 / 0.06)),
-    radial-gradient(circle at 84% 12%, oklch(0.72 0.14 310 / 0.10), transparent 30%),
+    linear-gradient(135deg, oklch(0.08 0.012 var(--os-neutral-color) / 0.14), oklch(0.08 0.012 var(--os-neutral-color) / 0.06)),
+    radial-gradient(circle at 84% 12%, oklch(0.72 0.14 var(--os-primary-color) / 0.10), transparent 30%),
     var(--os-wallpaper-image),
     linear-gradient(135deg, var(--os-bg), var(--os-wallpaper-end));
   background-position: center, center, center, center;
@@ -65,16 +65,6 @@
   inset: 0;
   z-index: var(--z-desktop);
   padding: 26px;
-}
-.desktop-brand {
-  position: absolute;
-  right: 30px;
-  top: 26px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--os-muted);
-  user-select: none;
 }
 .desktop-widgets {
   position: absolute;
@@ -155,18 +145,6 @@
   font-size: 12px;
   padding: 8px 12px;
 }
-.desktop-layout-toggle {
-  position: absolute;
-  right: 30px;
-  top: 76px;
-  z-index: 6;
-  display: inline-flex;
-  gap: 4px;
-  border: 1px solid var(--os-border-strong);
-  border-radius: 12px;
-  background: var(--os-overlay);
-  padding: 4px;
-}
 .desktop-root-drop-target {
   position: absolute;
   left: 26px;
@@ -189,37 +167,6 @@
 .desktop-root-drop-target span {
   font-size: 12px;
   font-weight: 620;
-}
-.desktop-layout-toggle button {
-  display: inline-flex;
-  height: 28px;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--os-muted);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 620;
-  padding: 0 8px;
-}
-.desktop-layout-toggle button:hover,
-.desktop-layout-toggle button.is-active {
-  background: var(--os-primary-soft);
-  color: var(--os-ink);
-}
-.desktop-layout-toggle button.is-active iconify-icon {
-  color: var(--os-accent);
-}
-.desktop-brand p {
-  margin: 0;
-  color: var(--os-ink);
-  font-size: 13px;
-  font-weight: 650;
-}
-.desktop-brand span {
-  font-size: 12px;
 }
 .desktop-icons {
   position: absolute;
@@ -377,7 +324,9 @@
   filter: saturate(0.82) brightness(0.92);
 }
 .system-window .window-frame {
+  opacity: 1;
   animation: window-frame-enter 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
   transform-origin: center;
 }
 .system-window.is-minimizing .window-frame {
@@ -823,15 +772,6 @@
   background: var(--app-soft, var(--os-elevated));
   color: var(--os-ink);
 }
-/* macOS-style dock magnification: hovered app grows, neighbors lift slightly. */
-.taskbar-apps > .taskbar-item:hover {
-  transform: translateY(-3px) scale(1.16);
-  z-index: 1;
-}
-.taskbar-apps > .taskbar-item:has(+ .taskbar-item:hover),
-.taskbar-apps > .taskbar-item:hover + .taskbar-item {
-  transform: translateY(-2px) scale(1.05);
-}
 .taskbar-item iconify-icon {
   color: var(--app-color, currentColor);
 }
@@ -888,31 +828,23 @@
 }
 .control-center-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
 }
 .control-center-tile {
   display: grid;
   gap: 6px;
-  min-height: 72px;
+  min-height: 56px;
   place-content: center;
-  border: 1px solid color-mix(in oklch, var(--tile-hue, var(--os-border)) 35%, var(--os-border));
-  border-radius: 14px;
-  background:
-    radial-gradient(circle at 30% 0%, color-mix(in oklch, var(--tile-hue, var(--os-primary)) 22%, transparent), transparent 55%),
-    color-mix(in oklch, var(--os-elevated) 78%, transparent);
+  border: 1px solid var(--os-border);
+  border-radius: 8px;
+  background: var(--os-surface);
   color: var(--os-muted);
   cursor: pointer;
   padding: 10px 8px;
   text-align: center;
-  transition: background 140ms ease, color 140ms ease, border-color 140ms ease, transform 140ms ease;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
 }
-.control-center-tile.tint-sky { --tile-hue: oklch(0.72 0.14 230); }
-.control-center-tile.tint-mint { --tile-hue: oklch(0.74 0.13 160); }
-.control-center-tile.tint-violet { --tile-hue: oklch(0.7 0.16 300); }
-.control-center-tile.tint-amber { --tile-hue: oklch(0.8 0.14 85); }
-.control-center-tile.tint-rose { --tile-hue: oklch(0.72 0.15 20); }
-.control-center-tile.tint-indigo { --tile-hue: oklch(0.68 0.14 275); }
 .control-center-tile span {
   font-size: 11px;
   font-weight: 600;
@@ -923,15 +855,13 @@
 }
 .control-center-tile:hover,
 .control-center-tile.is-active {
-  border-color: color-mix(in oklch, var(--tile-hue, var(--os-primary)) 50%, var(--os-border));
-  background:
-    radial-gradient(circle at 30% 0%, color-mix(in oklch, var(--tile-hue, var(--os-primary)) 32%, transparent), transparent 55%),
-    color-mix(in oklch, var(--tile-hue, var(--os-primary)) 16%, var(--os-elevated));
+  border-color: var(--os-selection-border);
+  background: var(--os-primary-soft);
   color: var(--os-ink);
 }
 .control-center-tile.is-active iconify-icon,
 .control-center-tile:hover iconify-icon {
-  color: var(--tile-hue, var(--os-primary));
+  color: var(--os-primary);
 }
 .control-center-section {
   display: grid;
@@ -973,9 +903,7 @@
   height: 36px;
   border: 0;
   border-radius: 10px;
-  background:
-    radial-gradient(circle at 0% 50%, color-mix(in oklch, var(--action-hue, var(--os-primary)) 18%, transparent), transparent 55%),
-    color-mix(in oklch, var(--os-elevated) 85%, transparent);
+  background: var(--os-surface);
   color: var(--os-ink);
   cursor: pointer;
   font-size: 12px;
@@ -983,12 +911,6 @@
   padding: 0 12px;
   text-align: left;
 }
-.control-center-action.tint-sky { --action-hue: oklch(0.72 0.14 230); }
-.control-center-action.tint-mint { --action-hue: oklch(0.74 0.13 160); }
-.control-center-action.tint-amber { --action-hue: oklch(0.8 0.14 85); }
-.control-center-action.tint-violet { --action-hue: oklch(0.7 0.16 300); }
-.control-center-action.tint-rose { --action-hue: oklch(0.72 0.15 20); }
-.control-center-action.tint-indigo { --action-hue: oklch(0.68 0.14 275); }
 .control-center-action:disabled {
   opacity: 0.55;
   cursor: not-allowed;
@@ -1000,12 +922,10 @@
   display: none;
 }
 .control-center-action:hover {
-  background:
-    radial-gradient(circle at 0% 50%, color-mix(in oklch, var(--action-hue, var(--os-primary)) 28%, transparent), transparent 55%),
-    color-mix(in oklch, var(--action-hue, var(--os-primary)) 14%, var(--os-elevated));
+  background: var(--os-hover);
 }
 .control-center-action iconify-icon {
-  color: var(--action-hue, var(--os-primary));
+  color: var(--os-primary);
 }
 .window-switcher {
   position: absolute;
@@ -1074,11 +994,9 @@
 }
 @keyframes window-frame-enter {
   from {
-    opacity: 0;
     transform: translateY(8px) scale(0.985);
   }
   to {
-    opacity: 1;
     transform: translateY(0) scale(1);
   }
 }

@@ -14,7 +14,7 @@ export const SYSTEM_PREFS_KEY = "neko-virt-os.system-prefs.v1";
 export const DEFAULT_SYSTEM_PREFS: SystemPrefs = {
   hour12: false,
   autoLockMinutes: 0,
-  taskbarShowLabels: true,
+  taskbarShowLabels: false,
   taskbarAutoHide: false,
 };
 
@@ -25,7 +25,7 @@ export function normalizeSystemPrefs(value: Partial<SystemPrefs> = {}): SystemPr
   return {
     hour12: Boolean(value.hour12),
     autoLockMinutes,
-    taskbarShowLabels: value.taskbarShowLabels !== false,
+    taskbarShowLabels: Boolean(value.taskbarShowLabels),
     taskbarAutoHide: Boolean(value.taskbarAutoHide),
   };
 }

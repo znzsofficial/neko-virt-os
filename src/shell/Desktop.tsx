@@ -11,7 +11,6 @@ import { getFileOpenApp } from "../fs";
 import { useFsStore } from "../fs";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
-import type { DesktopLayoutMode } from "../types";
 import { useDesktopStore } from "../windowStore";
 import { useDesktopPinsStore } from "./desktopPinsStore";
 import { openFilesFolder } from "./filesBridge";
@@ -28,7 +27,6 @@ export function Desktop() {
   const openApp = useDesktopStore((state) => state.openApp);
   const updateDesktopIconPosition = useDesktopStore((state) => state.updateDesktopIconPosition);
   const desktopLayoutMode = useDesktopStore((state) => state.desktopLayoutMode);
-  const setDesktopLayoutMode = useDesktopStore((state) => state.setDesktopLayoutMode);
   const desktopIconPositions = useDesktopStore((state) => state.desktopIconPositions);
   const files = useFsStore((state) => state.files);
   const selectFile = useFsStore((state) => state.selectFile);
@@ -120,25 +118,6 @@ export function Desktop() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reflow on geometry/item-set/mode, not every position write
   }, [desktopBounds.width, desktopBounds.height, desktopItemIdsKey, desktopLayoutMode, draggingIconIds.length]);
 
-  function setLayoutMode(mode: DesktopLayoutMode) {
-    if (mode === "grid") {
-      const bounds = getDesktopBoundsSize(desktopIconsRef.current);
-      setDesktopBounds(bounds);
-      const itemIds = getDesktopItemIds();
-      const seeds = Object.fromEntries(
-        itemIds.map((id, index) => [id, desktopIconPositions[id] ?? getDesktopGridPosition(index, bounds)]),
-      );
-      applyGridLayout(itemIds, seeds, bounds);
-    }
-    setDesktopLayoutMode(mode);
-    addNotification({
-      title: mode === "grid" ? t("desktopGridMode") : t("desktopFreeMode"),
-      message: mode === "grid" ? t("desktopGridModeMessage") : t("desktopFreeModeMessage"),
-      type: "info",
-      category: "system",
-    });
-  }
-
   // Selection box and delete key logic
   useEffect(() => {
     function handleGlobalKeyDown(event: KeyboardEvent) {
@@ -183,7 +162,7 @@ export function Desktop() {
       return;
     }
 
-    if (target.classList.contains("desktop") || target.classList.contains("desktop-brand") || target.closest(".desktop-brand") || target.classList.contains("desktop-icons")) {
+    if (target.classList.contains("desktop") || target.classList.contains("desktop-icons")) {
       setSelectedDesktopItems([]);
       const startX = event.clientX;
       const startY = event.clientY;
@@ -414,28 +393,7 @@ export function Desktop() {
       data-context-kind="desktop"
       onMouseDown={handleDesktopMouseDown}
     >
-      <div className="desktop-brand">
-        <span className="brand-mark">N</span>
-        <div>
-          <p>NekoVirtOS</p>
-          <span>{t("desktopSubtitle")}</span>
-        </div>
-      </div>
       <DesktopWidgets />
-      <div className="desktop-layout-toggle" onMouseDown={(event) => event.stopPropagation()}>
-        {(["grid", "free"] as const).map((mode) => (
-          <button
-            key={mode}
-            className={clsx(desktopLayoutMode === mode && "is-active")}
-            onClick={() => setLayoutMode(mode)}
-            title={mode === "grid" ? t("desktopGridMode") : t("desktopFreeMode")}
-            aria-pressed={desktopLayoutMode === mode}
-          >
-            <Icon icon={mode === "grid" ? "solar:widget-5-bold-duotone" : "solar:move-to-folder-bold-duotone"} width={15} height={15} />
-            <span>{mode === "grid" ? t("desktopGridMode") : t("desktopFreeMode")}</span>
-          </button>
-        ))}
-      </div>
       {desktopDragTarget === "desktop-root" ? (
         <div className="desktop-root-drop-target" aria-hidden="true">
           <Icon icon="solar:home-angle-bold-duotone" width={18} height={18} />

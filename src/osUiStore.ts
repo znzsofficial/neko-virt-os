@@ -86,9 +86,10 @@ function loadPrefs(): NotificationPrefs {
 
 function loadWidgetsCollapsed() {
   try {
-    return localStorage.getItem(WIDGETS_KEY) === "1";
+    const stored = localStorage.getItem(WIDGETS_KEY);
+    return stored !== "0";
   } catch {
-    return false;
+    return true;
   }
 }
 

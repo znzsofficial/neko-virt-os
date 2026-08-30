@@ -40,7 +40,12 @@ export function Launcher() {
       </div>
       <label className="launcher-search">
         <Icon icon="solar:magnifer-bold-duotone" width={16} height={16} />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("launcherSearchPlaceholder")} />
+        <input
+          aria-label={t("launcherSearchPlaceholder")}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={t("launcherSearchPlaceholder")}
+        />
       </label>
       <div className="launcher-body">
         {pinnedApps.length ? <LauncherSection title={t("pinnedApplication")} sectionApps={pinnedApps} onLaunch={launch} onTogglePinned={togglePinnedApp} t={t} /> : null}
@@ -73,10 +78,15 @@ function LauncherSection({
       <div className="launcher-grid">
         {sectionApps.map((app) => (
           <div key={app.id} className="launcher-app" data-app-id={app.id}>
-            <button type="button" className="launcher-app-main" onClick={() => onLaunch(app.id)}>
+            <button
+              type="button"
+              className="launcher-app-main"
+              title={t(appDescriptionKeys[app.id])}
+              onClick={() => onLaunch(app.id)}
+            >
               <Icon icon={app.icon} width={28} height={28} />
               <strong>{t(appTitleKeys[app.id])}</strong>
-              <span>{t(appDescriptionKeys[app.id])}</span>
+              <span className="launcher-app-description">{t(appDescriptionKeys[app.id])}</span>
             </button>
             <button
               type="button"

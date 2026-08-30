@@ -21,19 +21,6 @@
     padding: 12px;
   }
 
-  .desktop-brand {
-    display: none;
-  }
-
-  .desktop-layout-toggle {
-    right: 10px;
-    top: 10px;
-  }
-
-  .desktop-layout-toggle button span {
-    display: none;
-  }
-
   .desktop-icons {
     inset: 52px 6px 62px;
   }
@@ -305,10 +292,6 @@
   }
 
   .taskbar-item span,
-  .system-tray .tray-pill span {
-    display: none;
-  }
-
   .system-tray {
     gap: 4px;
     padding: 0 2px;
