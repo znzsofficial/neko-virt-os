@@ -18,7 +18,7 @@ import {
 } from "../mmdVrClock";
 import { getMmdVrRenderProfile } from "../mmdVrQuality";
 import { useMmdVrStore, type MmdVrLightPreset, type MmdVrMaterialState } from "../mmdVrStore";
-import { getXrAccentTokens } from "../../xr";
+import { useMmdVrTheme } from "../mmdVrTheme";
 import { prepareMmdVrModel } from "../prepareMmdVrModel";
 import { getMmdVrControllerColliderMatrices } from "../mmdVrControllerColliders";
 import { getMmdVrHandColliderMatrices } from "../mmdVrHandColliders";
@@ -29,7 +29,6 @@ import {
 } from "../mmdVrHaptics";
 import { transformRequiresPhysicsReseed } from "../mmdVrPhysicsReseed";
 
-const STAGE_BG = "#0c1018";
 const OBJECT_DEFAULT_Z = -2.2;
 
 type MmdVrObjectRef = {
@@ -210,16 +209,14 @@ function StageFloor({
   segments,
   shadows,
   placeMode,
-  themeColor,
   floorColor,
 }: {
   segments: number;
   shadows: boolean;
   placeMode: boolean;
-  themeColor: string;
   floorColor: string;
 }) {
-  const accent = getXrAccentTokens(themeColor);
+  const { accent } = useMmdVrTheme();
   return (
     <group position={[0, -0.02, 0]}>
       <mesh
@@ -295,6 +292,7 @@ function StageLightPool({ color, opacity }: { color: string; opacity: number }) 
  */
 export function MmdVrStageContent() {
   const { scene, camera, size, gl } = useThree();
+  const { accent } = useMmdVrTheme();
   const mmdPrefs = useMmdVrStore((s) => s.prefs);
   const profile = getMmdVrRenderProfile(mmdPrefs);
   const lightPreset = mmdPrefs.lightPreset;
@@ -988,7 +986,7 @@ export function MmdVrStageContent() {
 
   return (
     <>
-      <color attach="background" args={[STAGE_BG]} />
+      <color attach="background" args={[accent.stageBg]} />
       {mmdPrefs.stageFogEnabled ? (
         <fog attach="fog" args={[lightCfg.fogColor, Math.min(10, viewDistance * 0.45), viewDistance]} />
       ) : null}
@@ -1025,7 +1023,6 @@ export function MmdVrStageContent() {
         segments={profile.floorSegments}
         shadows={profile.shadows}
         placeMode={placeMode}
-        themeColor={mmdPrefs.themeColor}
         floorColor={lightCfg.floorColor}
       />
       {mmdPrefs.stageLightPoolEnabled ? (
@@ -1033,7 +1030,7 @@ export function MmdVrStageContent() {
       ) : null}
       {profile.showGrid ? (
         <gridHelper
-          args={[12, 12, getXrAccentTokens(mmdPrefs.themeColor).gridMajor, getXrAccentTokens(mmdPrefs.themeColor).gridMinor]}
+          args={[12, 12, accent.gridMajor, accent.gridMinor]}
           position={[0, 0.01, 0]}
         />
       ) : null}

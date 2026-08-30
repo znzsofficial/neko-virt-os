@@ -5,6 +5,7 @@ import { createPanelTexture, roundRectPath } from "../../shared/panelTexture";
 import { getMmdVrClock } from "../mmdVrClock";
 import { getMmdVrRenderProfile } from "../mmdVrQuality";
 import { normalizeMmdVrExposure, useMmdVrStore } from "../mmdVrStore";
+import { useMmdVrTheme } from "../mmdVrTheme";
 import {
   formatMmdVrModelScale,
   MMD_VR_HEIGHT_OFFSET_FINE_STEP,
@@ -15,7 +16,7 @@ import {
   mmdVrSliderToViewDistance,
   mmdVrViewDistanceToSlider,
 } from "../mmdVrAdjustments";
-import { getXrAccentTokens, hexToRgba, XR_THEME_COLORS } from "../../xr";
+import { hexToRgba } from "../../xr";
 
 /** Match paintProgressBar track insets (px on 640-wide canvas). */
 const PROGRESS_PAD = 16;
@@ -92,8 +93,7 @@ function HudButton({
 }) {
   const [hovered, setHovered] = useState(false);
   const [pressed, setPressed] = useState(false);
-  const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
-  const accent = getXrAccentTokens(themeColor);
+  const { accent } = useMmdVrTheme();
   const geometry = useMemo(
     () => createRoundedPlaneGeometry(size[0], size[1], Math.min(0.025, size[1] * 0.22)),
     [size[0], size[1]],
@@ -120,7 +120,7 @@ function HudButton({
           ctx.fill();
           ctx.fillStyle = active ? accent.marker : danger ? "#e48296" : "rgba(255, 255, 255, 0.09)";
           ctx.fillRect(18, 6, width - 36, 4);
-          ctx.fillStyle = "#f7f2f4";
+          ctx.fillStyle = danger ? "#f8eef1" : accent.ink;
           ctx.font = "650 31px system-ui, sans-serif";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
@@ -128,7 +128,7 @@ function HudButton({
         },
         "en",
       ),
-    [accent.border, accent.marker, accent.primary, active, danger, label, textureWidth],
+    [accent.border, accent.ink, accent.marker, accent.primary, active, danger, label, textureWidth],
   );
 
   useEffect(() => () => texture.dispose(), [texture]);
@@ -180,8 +180,7 @@ function HudButton({
 }
 
 function PanelBackdrop() {
-  const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
-  const accent = getXrAccentTokens(themeColor);
+  const { accent } = useMmdVrTheme();
   const texture = useMemo(
     () => createPanelTexture(1400, 620, ({ ctx, width, height }) => {
       roundRectPath(ctx, 2, 2, width - 4, height - 4, 28);
@@ -234,21 +233,20 @@ function DragHandle({
   const groupRef = useRef<THREE.Group>(null);
   const dragRef = useRef<HudDragState | null>(null);
   const [dragging, setDragging] = useState(false);
-  const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
-  const accent = getXrAccentTokens(themeColor);
+  const { accent } = useMmdVrTheme();
   const texture = useMemo(
     () => createPanelTexture(720, 72, ({ ctx, width, height }) => {
       ctx.clearRect(0, 0, width, height);
       roundRectPath(ctx, 1, 1, width - 2, height - 2, 18);
       ctx.fillStyle = dragging ? hexToRgba(accent.primary, 0.82) : accent.soft;
       ctx.fill();
-      ctx.fillStyle = "#f2eaed";
+      ctx.fillStyle = accent.ink;
       ctx.font = "650 25px system-ui, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(`⋮⋮  ${label}`, width / 2, height / 2);
     }, "en"),
-    [accent.primary, accent.soft, dragging, label],
+    [accent.ink, accent.primary, accent.soft, dragging, label],
   );
 
   useEffect(() => () => texture.dispose(), [texture]);
@@ -337,8 +335,7 @@ function ValueLabel({
   size?: [number, number];
   centered?: boolean;
 }) {
-  const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
-  const accent = getXrAccentTokens(themeColor);
+  const { accent } = useMmdVrTheme();
   const textureWidth = Math.max(256, Math.round(88 * size[0] / size[1]));
   const texture = useMemo(
     () => createPanelTexture(textureWidth, 88, ({ ctx, width, height }) => {
@@ -349,19 +346,19 @@ function ValueLabel({
       ctx.strokeStyle = accent.border;
       ctx.lineWidth = 3;
       ctx.stroke();
-      ctx.fillStyle = "#c8bcc1";
+      ctx.fillStyle = accent.muted;
       ctx.font = centered ? "700 30px system-ui, sans-serif" : "600 23px system-ui, sans-serif";
       ctx.textAlign = centered ? "center" : "left";
       ctx.textBaseline = "middle";
       ctx.fillText(label, centered ? width / 2 : 20, height / 2);
       if (!centered) {
-        ctx.fillStyle = "#f2eaed";
+        ctx.fillStyle = accent.ink;
         ctx.font = "700 30px system-ui, sans-serif";
         ctx.textAlign = "right";
         ctx.fillText(value, width - 20, height / 2);
       }
     }, "en"),
-    [accent.border, accent.soft, centered, label, textureWidth, value],
+    [accent.border, accent.ink, accent.muted, accent.soft, centered, label, textureWidth, value],
   );
   useEffect(() => () => texture.dispose(), [texture]);
   return (
@@ -389,8 +386,7 @@ function HudSlider({
 }) {
   const pointerRef = useRef<number | null>(null);
   const pointerTargetRef = useRef<{ releasePointerCapture?: (id: number) => void } | null>(null);
-  const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
-  const accent = getXrAccentTokens(themeColor);
+  const { accent } = useMmdVrTheme();
   const ratio = Math.min(1, Math.max(0, value));
 
   function update(event: ThreeEvent<PointerEvent>) {
@@ -448,7 +444,7 @@ function HudSlider({
     <group position={position}>
       <mesh position={[0, 0, -0.004]} renderOrder={30} raycast={() => null}>
         <planeGeometry args={[width, 0.035]} />
-        <meshBasicMaterial color="#4b4248" transparent opacity={disabled ? 0.45 : 1} toneMapped={false} depthWrite={false} depthTest={false} />
+        <meshBasicMaterial color={accent.track} transparent opacity={disabled ? 0.45 : 1} toneMapped={false} depthWrite={false} depthTest={false} />
       </mesh>
       {ratio > 0 ? (
         <mesh position={[-width / 2 + (width * ratio) / 2, 0, 0]} renderOrder={31} raycast={() => null}>
@@ -477,8 +473,7 @@ function HudSlider({
 }
 
 function StatusPlane({ text }: { text: string }) {
-  const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
-  const accent = getXrAccentTokens(themeColor);
+  const { accent } = useMmdVrTheme();
   const texture = useMemo(
     () =>
       createPanelTexture(
@@ -493,7 +488,7 @@ function StatusPlane({ text }: { text: string }) {
           ctx.beginPath();
           ctx.arc(34, height / 2, 8, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = "#f0e9ec";
+          ctx.fillStyle = accent.ink;
           ctx.font = "600 26px system-ui, sans-serif";
           ctx.textAlign = "left";
           ctx.textBaseline = "middle";
@@ -501,7 +496,7 @@ function StatusPlane({ text }: { text: string }) {
         },
         "en",
       ),
-    [accent.marker, accent.soft, text],
+    [accent.ink, accent.marker, accent.soft, text],
   );
 
   useEffect(
@@ -523,8 +518,7 @@ function ProgressBar({ onInteractionChange }: { onInteractionChange: (active: bo
   const duration = useMmdVrStore((s) => s.duration);
   const modelCount = useMmdVrStore((s) => s.modelCount);
   const requestSeek = useMmdVrStore((s) => s.requestSeek);
-  const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
-  const accent = getXrAccentTokens(themeColor);
+  const { accent } = useMmdVrTheme();
 
   const texture = useMemo(
     () =>
@@ -536,9 +530,9 @@ function ProgressBar({ onInteractionChange }: { onInteractionChange: (active: bo
           roundRectPath(ctx, 0, 0, width, height, 16);
           ctx.fillStyle = accent.soft;
           ctx.fill();
-          ctx.fillStyle = "rgba(255,255,255,0.16)";
+          ctx.fillStyle = accent.track;
           ctx.fillRect(PROGRESS_PAD, height / 2 - 6, width - PROGRESS_PAD * 2, 12);
-          ctx.fillStyle = "#c8d4e8";
+          ctx.fillStyle = accent.muted;
           ctx.font = "600 22px system-ui, sans-serif";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
@@ -546,7 +540,7 @@ function ProgressBar({ onInteractionChange }: { onInteractionChange: (active: bo
         },
         "en",
       ),
-    [accent.primary, accent.soft],
+    [accent.muted, accent.primary, accent.soft, accent.track],
   );
 
   const lastPaintVersionRef = useRef(-1);
@@ -630,11 +624,11 @@ function ProgressBar({ onInteractionChange }: { onInteractionChange: (active: bo
     roundRectPath(ctx, 0, 0, w, h, 16);
     ctx.fillStyle = accent.soft;
     ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    ctx.fillStyle = accent.track;
     ctx.fillRect(PROGRESS_PAD, h / 2 - 6, trackW, 12);
     ctx.fillStyle = accent.primary;
     ctx.fillRect(PROGRESS_PAD, h / 2 - 6, trackW * ratio, 12);
-    ctx.fillStyle = "#c8d4e8";
+    ctx.fillStyle = accent.muted;
     ctx.font = "600 22px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -661,8 +655,7 @@ function ProgressBar({ onInteractionChange }: { onInteractionChange: (active: bo
 }
 
 function ModelPanelBackdrop() {
-  const themeColor = useMmdVrStore((s) => s.prefs.themeColor);
-  const accent = getXrAccentTokens(themeColor);
+  const { accent } = useMmdVrTheme();
   const texture = useMemo(
     () => createPanelTexture(720, 620, ({ ctx, width, height }) => {
       roundRectPath(ctx, 2, 2, width - 4, height - 4, 24);
@@ -1385,7 +1378,6 @@ export function MmdVrControlBar({
   materialRoughnessLabel,
   materialMetallicLabel,
   materialEmissionLabel,
-  themeLabels,
   walkLabels,
   walkSpeedLabel,
   onDragChange,
@@ -1463,7 +1455,6 @@ export function MmdVrControlBar({
   materialRoughnessLabel: string;
   materialMetallicLabel: string;
   materialEmissionLabel: string;
-  themeLabels: [string, string, string, string, string];
   walkLabels: [string, string, string];
   walkSpeedLabel: string;
   onDragChange: (dragging: boolean) => void;
@@ -1517,7 +1508,6 @@ export function MmdVrControlBar({
   const heightOffset = prefs.heightOffset;
   const viewDistance = prefs.viewDistance;
   const walkIndex = prefs.walkSpeedPref === "slow" ? 0 : prefs.walkSpeedPref === "fast" ? 2 : 1;
-  const themeIndex = Math.max(0, XR_THEME_COLORS.indexOf(prefs.themeColor));
 
   const status =
     physicsError ?? statusLine ??
@@ -1637,12 +1627,6 @@ export function MmdVrControlBar({
         size={[0.44, 0.1]}
         active={prefs.showFps}
         onPress={() => setPrefs({ showFps: !useMmdVrStore.getState().prefs.showFps })}
-      />
-      <HudButton
-        position={[-0.82, -0.59, 0]}
-        label={themeLabels[themeIndex]}
-        size={[0.62, 0.1]}
-        onPress={() => setPrefs({ themeColor: XR_THEME_COLORS[(themeIndex + 1) % XR_THEME_COLORS.length] })}
       />
       <HudButton
         position={[-0.16, -0.59, 0]}

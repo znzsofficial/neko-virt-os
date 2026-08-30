@@ -13,8 +13,6 @@ import {
   type ImmersiveFoveationPref,
   type ImmersiveRenderQuality,
   type ImmersiveTogglePref,
-  normalizeXrThemeColor,
-  type XrThemeColor,
 } from "../xr";
 import { endMmdVrAssetSession } from "./mmdVrAssets";
 import { resetMmdVrClock } from "./mmdVrClock";
@@ -88,7 +86,6 @@ export type MmdVrPrefs = {
   foveationPref: ImmersiveFoveationPref;
   shadowResolutionPref: MmdVrShadowResolutionPref;
   heightOffset: number;
-  themeColor: XrThemeColor;
   viewDistance: number;
   snapTurnDegrees: MmdVrSnapTurnDegrees;
   exposure: number;
@@ -287,7 +284,6 @@ export function normalizeMmdVrPrefs(parsed: Partial<MmdVrPrefs> = {}): MmdVrPref
     foveationPref: normalizeImmersiveFoveation(parsed.foveationPref),
     shadowResolutionPref: normalizeShadowResolution(parsed.shadowResolutionPref),
     heightOffset: normalizeMmdVrHeightOffset(parsed.heightOffset),
-    themeColor: normalizeXrThemeColor(parsed.themeColor),
     viewDistance: normalizeMmdVrViewDistance(parsed.viewDistance),
     snapTurnDegrees: normalizeMmdVrSnapTurnDegrees(parsed.snapTurnDegrees),
     exposure: normalizeMmdVrExposure(parsed.exposure),
@@ -331,7 +327,6 @@ const prefsStorage = createLocalPrefsStorage<MmdVrPrefs>({
     foveationPref: "auto",
     shadowResolutionPref: "auto",
     heightOffset: 0,
-    themeColor: "blue",
     viewDistance: 40,
     snapTurnDegrees: 30,
     exposure: 1,
@@ -407,7 +402,6 @@ export const useMmdVrStore = create<MmdVrStore>((set, get) => ({
     if (patch.foveationPref != null) prefs.foveationPref = normalizeImmersiveFoveation(patch.foveationPref);
     if (patch.shadowResolutionPref != null) prefs.shadowResolutionPref = normalizeShadowResolution(patch.shadowResolutionPref);
     if (patch.heightOffset != null) prefs.heightOffset = normalizeMmdVrHeightOffset(patch.heightOffset);
-    if (patch.themeColor != null) prefs.themeColor = normalizeXrThemeColor(patch.themeColor);
     if (patch.viewDistance != null) prefs.viewDistance = normalizeMmdVrViewDistance(patch.viewDistance);
     if (patch.snapTurnDegrees != null) prefs.snapTurnDegrees = normalizeMmdVrSnapTurnDegrees(patch.snapTurnDegrees);
     if (patch.exposure != null) prefs.exposure = normalizeMmdVrExposure(patch.exposure);

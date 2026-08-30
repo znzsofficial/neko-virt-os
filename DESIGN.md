@@ -1,64 +1,67 @@
-<!-- SEED: re-run $impeccable document once there's code to capture the actual tokens and components. -->
 ---
 name: NekoVirtOS
-description: A quiet, precise, cute browser-based virtual desktop system for local-first work.
+description: A Windows-first local browser workstation with quiet Neko details.
 colors:
-  os-bg: "oklch(0.095 0 0)"
-  os-surface: "oklch(0.145 0.008 20)"
-  os-panel: "oklch(0.190 0.010 20)"
-  os-elevated: "oklch(0.235 0.012 20)"
-  os-ink: "oklch(0.940 0.006 20)"
-  os-muted: "oklch(0.690 0.010 20)"
-  os-subtle: "oklch(0.500 0.010 20)"
-  os-primary: "oklch(0.520 0.155 20)"
-  os-primary-strong: "oklch(0.450 0.150 20)"
-  os-primary-soft: "oklch(0.260 0.055 20)"
-  os-accent: "oklch(0.760 0.115 330)"
-  os-accent-soft: "oklch(0.300 0.050 330)"
-  os-success: "oklch(0.680 0.120 150)"
-  os-warning: "oklch(0.760 0.125 75)"
-  os-danger: "oklch(0.620 0.160 25)"
-  os-info: "oklch(0.700 0.105 245)"
-  os-border: "oklch(0.300 0.010 20)"
-  os-border-strong: "oklch(0.420 0.020 20)"
-  os-focus: "oklch(0.760 0.115 330)"
+  os-bg: "oklch(0.90 0.035 35)"
+  os-surface: "oklch(0.945 0.028 35 / 0.92)"
+  os-panel: "oklch(0.975 0.018 35 / 0.96)"
+  os-elevated: "oklch(0.99 0.016 35 / 0.98)"
+  os-overlay: "oklch(0.985 0.020 35 / 0.96)"
+  os-ink: "oklch(0.20 0.035 35)"
+  os-muted: "oklch(0.43 0.035 35)"
+  os-subtle: "oklch(0.57 0.025 35)"
+  os-primary: "oklch(0.52 0.22 35)"
+  os-primary-strong: "oklch(0.45 0.22 35)"
+  os-primary-soft: "oklch(0.88 0.075 35 / 0.78)"
+  os-primary-contrast: "oklch(0.985 0.010 35)"
+  os-accent: "oklch(0.68 0.22 35)"
+  os-accent-soft: "oklch(0.88 0.075 35 / 0.78)"
+  os-success: "oklch(0.62 0.18 145)"
+  os-warning: "oklch(0.70 0.18 75)"
+  os-danger: "oklch(0.58 0.21 25)"
+  os-info: "oklch(0.62 0.18 245)"
+  os-border: "oklch(0.78 0.030 35)"
+  os-border-strong: "oklch(0.64 0.055 35)"
+  os-focus: "oklch(0.68 0.22 35)"
+  os-focus-ring: "oklch(0.68 0.22 35 / 0.30)"
 typography:
   display:
-    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
     fontSize: "2rem"
     fontWeight: 650
     lineHeight: 1.08
     letterSpacing: "-0.025em"
   headline:
-    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-    fontSize: "1.5rem"
-    fontWeight: 620
-    lineHeight: 1.15
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+    fontSize: "1.375rem"
+    fontWeight: 650
+    lineHeight: 1.2
     letterSpacing: "-0.018em"
   title:
-    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-    fontSize: "1rem"
-    fontWeight: 600
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+    fontSize: "0.8125rem"
+    fontWeight: 620
     lineHeight: 1.3
-    letterSpacing: "-0.01em"
+    letterSpacing: "normal"
   body:
-    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-    fontSize: "0.875rem"
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+    fontSize: "0.8125rem"
     fontWeight: 400
     lineHeight: 1.55
     letterSpacing: "normal"
   label:
-    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-    fontSize: "0.75rem"
-    fontWeight: 560
+    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+    fontSize: "0.6875rem"
+    fontWeight: 600
     lineHeight: 1.25
     letterSpacing: "0.01em"
 rounded:
   xs: "4px"
-  sm: "8px"
-  md: "12px"
-  lg: "14px"
-  xl: "16px"
+  sm: "7px"
+  md: "9px"
+  window: "10px"
+  lg: "12px"
+  xl: "14px"
   pill: "999px"
 spacing:
   xs: "4px"
@@ -70,20 +73,20 @@ spacing:
 components:
   button-primary:
     backgroundColor: "{colors.os-primary}"
-    textColor: "{colors.os-ink}"
+    textColor: "{colors.os-primary-contrast}"
     rounded: "{rounded.sm}"
-    padding: "0 14px"
+    padding: "0 12px"
     height: "32px"
   button-ghost:
     backgroundColor: "transparent"
     textColor: "{colors.os-muted}"
     rounded: "{rounded.sm}"
     padding: "0 10px"
-    height: "30px"
+    height: "32px"
   window-surface:
     backgroundColor: "{colors.os-panel}"
     textColor: "{colors.os-ink}"
-    rounded: "{rounded.lg}"
+    rounded: "{rounded.window}"
   input-default:
     backgroundColor: "{colors.os-surface}"
     textColor: "{colors.os-ink}"
@@ -94,148 +97,177 @@ components:
 
 # Design System: NekoVirtOS
 
-## 1. Overview
+## Overview
 
-**Creative North Star: "Quiet Neko Workstation"**
+**Creative North Star: "Quiet Windows Workstation"**
 
-NekoVirtOS is a desktop system for late-night local work: calm enough to keep open for hours, precise enough to trust with files and windows, and cute only where the detail helps the user remember the system. The atmosphere is a dark, low-luminance workstation with oxblood identity marks and soft rose-violet focus accents. The desktop should feel owned and personal, not themed like a toy.
+NekoVirtOS is a browser-based local workstation. Its desktop grammar is Windows-first: desktop icons, a cat-shaped Start button, a bottom taskbar, system tray, movable windows, maximize and snap actions, context menus, and keyboard window switching. Neko personality is deliberately concentrated in the cat mark, app icons, wallpaper choices, calm empty states, and small feedback details.
 
-This is product UI. The design serves window management, text editing, file actions, and repeated app use. Visual personality appears through app icons, state dots, empty states, microcopy, and motion details; it must never interrupt standard desktop behaviors.
+The current visual system is an operational 2D shell, not a marketing page. It uses a cool near-neutral architectural base, a user-selectable system accent, compact controls, and restrained layering. Solid tonal surfaces carry application work; translucency and blur are reserved for shell flyouts, the taskbar, the launcher, and other surfaces whose relationship to the desktop matters.
 
-NekoVirtOS explicitly rejects generic SaaS dashboard language, low-fidelity retro toy OS tropes, and overly anime-themed interfaces where characters or decoration dominate the workflow. It also rejects cheap glassmorphism: blur may be used only when it clarifies depth or a modal relationship.
+The first version supports responsive browser layouts, but it remains a desktop interaction model. A separate MMD VR preparation page and WebGL/WebXR session are intentionally outside this system and must not inherit the 2D desktop material layer.
 
-**Key Characteristics:**
-- Dark, near-neutral architectural background with warm crimson identity marks.
-- Compact desktop density: toolbars, titlebars, menus, and inputs are small but readable.
-- Cute through precision: tiny Neko cues, calm empty states, and soft status details instead of large decorative mascots.
-- Clear layering: window focus, active apps, selection, and file persistence must be visually obvious.
-- Desktop-native behavior: predictable titlebars, taskbar states, context menus, focus rings, and reversible actions.
+### Current Scope
 
-## 2. Colors
+- The shell token pass, wallpaper pipeline, opaque Settings surface, taskbar, launcher, window frame, desktop selection, and context-menu styling are implemented.
+- The taskbar defaults to icons only for new users; labels remain available as a persisted setting.
+- Desktop widgets are optional and default to collapsed; they can be enabled from Settings.
+- Desktop layout switching is available from the desktop context menu and Settings, not as permanent desktop chrome.
+- The control center exposes immediate notification state, workspaces, notifications, Settings, VR entry, MMD VR entry, and lock actions. Theme and density remain in Settings.
 
-The palette is restrained: near-black neutral surfaces carry the workload, while oxblood crimson and rose-violet appear in small, deliberate system states.
+### Planned Phases
+
+- A true coarse-pointer touch workspace with full-screen applications, an app switcher, and split or Stage Manager-style multitasking is not implemented yet.
+- Snap behavior exists, but a visual snap preview and a Windows 11 Snap Layout flyout are not implemented yet.
+- Full command-bar/list-row convergence across every built-in app is not complete; existing app-specific behavior and content remain authoritative.
+- Taskbar grouping for multiple windows of the same application and a complete shell icon-family migration remain follow-up work.
+
+## Colors
+
+The working palette is low-chroma neutral surfaces plus one active system accent. The default accent is coral; users can select other accent families, and the theme module recomputes both the primary state tokens and the neutral surface hue for light or dark mode.
+
+The MMD VR preparation page uses this same system accent as its source of truth. Its preparation swatches update the shared accent setting, while the WebGL/WebXR HUD and stage derive a Quest-safe palette from that setting. The XR session, layout, lighting presets, and performance controls remain independent of the 2D desktop shell.
 
 ### Primary
-- **Oxblood Kernel** (`os-primary`, `os-primary-strong`): The identity color for primary actions, active app markers, selected system states, and sparse brand moments. Use it on no more than 10% of a typical screen.
-- **Soft Kernel Wash** (`os-primary-soft`): Low-luminance fill for selected rows, active tabs, and subtle app identity surfaces where saturated crimson would be too loud.
+
+- **Kernel Coral** (`os-primary`, `oklch(0.52 0.22 35)`): Default primary action, active marker, selected system state, and small Neko identity moments.
+- **Kernel Coral Strong** (`os-primary-strong`, `oklch(0.45 0.22 35)`): Pressed and hover state for primary actions.
+- **Kernel Wash** (`os-primary-soft`, `oklch(0.88 0.075 35 / 0.78)`): Selection fills, active rows, and quiet state surfaces.
 
 ### Secondary
-- **Neko Focus Rose** (`os-accent`, `os-accent-soft`): The focus and assistive accent. Use it for focus rings, command palette highlights, text cursor accents, and one-off Neko personality moments.
+
+- **Focus Accent** (`os-accent`, `oklch(0.68 0.22 35)`): Focus rings, app marks, and concise assistive emphasis. It is not a decorative page-wide glow.
+- **Focus Wash** (`os-accent-soft`, `oklch(0.88 0.075 35 / 0.78)`): Low-intensity focus and notification state fill.
 
 ### Tertiary
-- **System Semantic Set** (`os-success`, `os-warning`, `os-danger`, `os-info`): Status colors for filesystem actions, validation, destructive operations, and notifications. These colors are functional, not decorative.
+
+- **Semantic Set** (`os-success`, `os-warning`, `os-danger`, `os-info`): Functional colors for successful file operations, warnings, destructive actions, and informational notifications. They should not become decorative panel backgrounds.
 
 ### Neutral
-- **Midnight Desktop** (`os-bg`): The full desktop background. Keep it almost pure black with no warm cream, sand, paper, or decorative grid treatment.
-- **Quiet Surface** (`os-surface`): Toolbars, docks, menus, and secondary panels.
-- **Working Panel** (`os-panel`): Standard application windows and main panels.
-- **Lifted Panel** (`os-elevated`): Popovers, command palette, active floating panels, and frontmost contextual UI.
-- **Milk Ink** (`os-ink`): Primary text. Body copy and controls should prefer this over weak gray.
-- **Muted Ink** (`os-muted`): Secondary text, timestamps, metadata, and inactive labels. Do not use it for critical actions or body text on low-contrast surfaces.
-- **Subtle Ink** (`os-subtle`): Dividers, placeholder-adjacent hints, disabled labels, and tertiary metadata only.
-- **Quiet Border** (`os-border`, `os-border-strong`): Structural borders for windows, fields, menus, and separators.
+
+- **Desktop Ground** (`os-bg`, low-chroma accent hue): Base light desktop tone and fallback behind the wallpaper.
+- **Quiet Surface** (`os-surface`, low-chroma accent hue): Toolbars, taskbar, navigation, and secondary shell surfaces.
+- **Working Panel** (`os-panel`, low-chroma accent hue): Application windows and Settings content.
+- **Elevated Surface** (`os-elevated`, low-chroma accent hue): Launcher, menus, flyouts, and frontmost contextual UI.
+- **Ink** (`os-ink`, low-chroma accent hue): Primary text and essential control labels.
+- **Muted Ink** (`os-muted`, low-chroma accent hue): Secondary labels, metadata, and inactive controls.
+- **Subtle Ink** (`os-subtle`, low-chroma accent hue): Tertiary metadata, placeholders, and quiet indicators.
+- **Structural Borders** (`os-border`, `os-border-strong`): One-pixel dividers, field strokes, window edges, and context-menu boundaries.
+
+### Dark Mode
+
+Dark mode keeps the same hierarchy with the selected accent's hue carried through low-chroma surfaces. The default coral primary lifts to `oklch(0.70 0.22 35)` for contrast.
 
 ### Named Rules
 
-**The Ten Percent Kernel Rule.** Crimson is the system identity, not decoration. If `os-primary` covers more than 10% of a normal workspace, the interface has become a theme instead of a tool.
+**The One Kernel Rule.** The selected system accent belongs on actions, focus, selection, and small identity marks. Its hue may gently tint low-chroma system surfaces, but application colors must not tint every window surface.
 
-**The No Cheap Glass Rule.** Blur is forbidden as a default surface treatment. Use solid tonal layers first; use backdrop filtering only for modal context or a deliberate focus effect.
+**The Surface Before Blur Rule.** Use a solid tonal layer first. Blur is limited to shell surfaces where it clarifies a floating relationship, and a solid fallback is provided for reduced-transparency preferences.
 
-## 3. Typography
+## Typography
 
-**Display Font:** Inter with system sans fallbacks.
-**Body Font:** Inter with system sans fallbacks.
-**Label/Mono Font:** Use the same sans for MVP; introduce a mono face only for terminal/code surfaces.
+**Display and Body Font:** The system UI stack: `ui-sans-serif`, system-ui, Segoe UI, PingFang SC, and Microsoft YaHei fallbacks.
 
-**Character:** The type system is compact, technical, and quiet. It should feel like a careful desktop UI rather than a landing page. One well-tuned sans family is correct here; display pairings would add noise.
+**Label/Mono Font:** The same UI stack for shell labels. Monospace is reserved for code, terminal, and measured technical output.
+
+**Character:** Compact, familiar, and quiet. The type system favors scanability in a dense desktop over a branded display voice.
 
 ### Hierarchy
-- **Display** (650, `2rem`, `1.08`, `-0.025em`): Used sparingly in onboarding, About System, and empty-state headlines. Never use massive hero typography inside the OS.
-- **Headline** (620, `1.5rem`, `1.15`, `-0.018em`): App-level headings such as Settings sections, file manager landing states, and first-run panels.
-- **Title** (600, `1rem`, `1.3`, `-0.01em`): Window titles, dialog titles, sidebar group headings, and prominent list headers.
-- **Body** (400, `0.875rem`, `1.55`): Standard content, file previews, settings descriptions, and notes. Long prose should cap at 65-75ch.
-- **Label** (560, `0.75rem`, `1.25`, `0.01em`): Toolbar labels, metadata, menu labels, chips, field labels, and status text. Avoid all-caps except for very short technical tags.
+
+- **Display** (650, `2rem`, `1.08`, `-0.025em`): Boot, About, and unusually large empty-state headings only.
+- **Headline** (650, approximately `1.375rem`, `1.2`): Settings section headings and app-level empty states.
+- **Title** (620, `0.8125rem`, `1.3`): Window titles, list headings, and compact panel titles.
+- **Body** (400, `0.8125rem`, `1.55`): File content, settings explanations, notes, and ordinary application text.
+- **Label** (600, `0.6875rem`, `1.25`): Toolbars, metadata, menu labels, status text, and short section labels.
 
 ### Named Rules
 
-**The Product Type Rule.** No display fonts in buttons, fields, menus, tables, or titlebars. If the user is doing a task, typography must stay familiar and compact.
+**The Product Type Rule.** Do not use display treatment in buttons, fields, menus, titlebars, or data rows. Desktop work should remain immediately legible.
 
-## 4. Elevation
+## Layout
 
-NekoVirtOS uses tonal layering first and shadows second. Depth should be readable from surface color, border strength, and focus treatment before any shadow appears. Windows can cast a restrained structural shadow when floating over the desktop, but idle panels and controls should remain flat.
+The desktop is a full-viewport workspace with a bottom system taskbar. On wide screens the taskbar is 52px high, flush to the bottom edge, with the Start control and running-window group centered and the system tray aligned to the right. New users see icon-only running applications; labels can be enabled in General Settings. The taskbar may be auto-hidden through the existing system preference.
+
+Desktop icons occupy a left-side absolute work area and support selection, rectangle selection, drag, file drops, grid snapping, and free placement. Grid or free mode is exposed through the desktop context menu and Settings rather than persistent top-right controls. The desktop brand strap is intentionally absent; the wallpaper and icons are the primary desktop content. Optional widgets live in one compact right-side shell and start collapsed.
+
+Windows use a 10px shell frame on the 2D desktop, a 40px titlebar, and a single window layer above the desktop. Maximized and immersive windows remove the frame radius. The existing window store remains responsible for focus, z-order, minimize, maximize, snap, tiling, cascading, workspaces, and persistence.
+
+The main responsive breakpoint is 720px. Narrow layouts reduce desktop padding, make application windows nearly full-width, stack Settings navigation above content, collapse application sidebars, and keep the taskbar usable. This is responsive desktop behavior, not the future touch workspace.
+
+Spacing follows the 4px base rhythm: 4, 8, 12, 16, 24, and 32px. Dense controls use 8-12px groups; shell panels use 12-16px internal spacing; large empty states may use 24-32px.
+
+## Elevation & Depth
+
+Depth is communicated by tonal layers and structural borders before shadows. Floating windows use the restrained system shadow `0 18px 44px oklch(0.20 0.035 258 / 0.20)` in light mode and `0 18px 44px oklch(0.02 0.02 258 / 0.48)` in dark mode. Menus, launchers, notifications, and shell flyouts use the same vocabulary with a small inner highlight. Idle application panels stay flat.
+
+The taskbar, launcher, control center, notification center, clock panel, and command palette may use backdrop blur because they float over the desktop and need separation from the wallpaper. Settings and ordinary application content use opaque working panels. `prefers-reduced-transparency: reduce` switches floating shell surfaces to solid `os-elevated` backgrounds.
 
 ### Shadow Vocabulary
-- **Window Float** (`0 18px 48px oklch(0 0 0 / 0.34)`): Frontmost windows and dialogs only. Do not pair with a decorative wide glow.
-- **Menu Lift** (`0 10px 28px oklch(0 0 0 / 0.30)`): Context menus, command palette, select popovers, and notification trays.
-- **Focus Halo** (`0 0 0 3px oklch(0.760 0.115 330 / 0.28)`): Keyboard focus and precise interaction targets. This is state feedback, not decoration.
 
-### Named Rules
+- **Window Float** (`0 18px 44px ...`): Movable application windows and dialogs over the desktop.
+- **Menu Lift** (`var(--os-shadow)`): Context menus, launcher, command palette, notifications, and tray panels.
+- **Inner Highlight** (`inset 0 1px 0 var(--os-inner-highlight)`): A quiet edge cue on elevated shell surfaces, never a substitute for contrast.
 
-**The Layer Before Shadow Rule.** If a surface cannot be understood without a large shadow, fix its tonal layer, border, or placement first.
+### Motion
 
-## 5. Components
+Window entry uses a short 180ms translate-and-scale transition from an already visible frame. It does not begin at `opacity: 0`. Wallpaper changes preload remote images and cross-fade the incoming image; generation guards prevent stale asynchronous selections from winning. Minimize has its own exit animation. Reduced-motion settings and the platform preference collapse these transitions.
+
+## Shapes
+
+The 2D shell uses controlled soft rectangles rather than a floating-card vocabulary. Standard controls use 7-9px radii, shell windows use 10px, flyouts use 12px, and the launcher may use 14px. Maximized and immersive windows are square against the work area. Full pills are reserved for small status chips and legacy compact tags, not primary buttons or entire panels.
+
+Borders are one pixel and neutral by default. Active state is communicated with a primary marker, selection wash, or stronger neutral border. Application colors remain available for app icons and small status points. Desktop labels receive a small contrast backing when the wallpaper needs it, rather than a permanent opaque desktop card.
+
+## Components
 
 ### Buttons
-- **Shape:** Compact rounded rectangle with controlled softness (`8px`). Pills are reserved for chips and status tags, not standard buttons.
-- **Primary:** Oxblood fill with near-white text, `32px` height, horizontal padding of `14px`. Use for the main action in a dialog, save/apply actions, or selected launch commands.
-- **Hover / Focus:** Hover slightly raises luminance or shifts to `os-primary-strong`; focus uses `os-focus` halo. Transition duration should sit between `120ms` and `180ms`.
-- **Secondary / Ghost:** Transparent or quiet-surface buttons with muted text. On hover, use `os-elevated` background and `os-ink` text. Ghost buttons must not look disabled.
 
-### Chips
-- **Style:** Pill radius only (`999px`), small height (`22-26px`), compact padding, and either soft crimson/rose fills or neutral surface fills.
-- **State:** Selected chips use `os-primary-soft` with `os-ink`; unselected chips use `os-surface` and `os-muted`. Never use fully saturated inactive chips.
-
-### Cards / Containers
-- **Corner Style:** Standard panels use `12px`; windows use `14px`; large dialogs may use `16px`. Cards and panels must never exceed `16px` radius.
-- **Background:** Use `os-panel` for application windows, `os-surface` for toolbars and docks, and `os-elevated` for floating context UI.
-- **Shadow Strategy:** Follow the Layer Before Shadow Rule. Shadows belong to floating windows, menus, dialogs, and overlays only.
-- **Border:** Use `1px` borders with `os-border`; active windows may use `os-border-strong` plus a small identity marker.
-- **Internal Padding:** Dense system components use `8-12px`; panels and dialogs use `16-24px`; large empty states can use `32px`.
-
-### Inputs / Fields
-- **Style:** `32px` height for standard fields, `8px` radius, `os-surface` background, `1px` `os-border` stroke, `os-ink` text.
-- **Focus:** Border shifts to `os-focus` with the Focus Halo. Placeholder text must be readable enough; do not default to barely visible gray.
-- **Error / Disabled:** Errors use `os-danger` border and concise inline text. Disabled fields reduce contrast but must remain legible and visibly non-interactive.
+- **Primary:** 32px high, 7px radius, `os-primary` fill, and `os-primary-contrast` text.
+- **Ghost:** Transparent or quiet-surface background, muted text, 32px target, and an elevated tonal hover state.
+- **Focus:** All interactive controls use the shared visible focus ring. Large-target accessibility settings raise relevant shell controls to at least 44px.
+- **State:** Disabled controls reduce opacity and retain readable text; destructive actions use the semantic danger color and explicit confirmation.
 
 ### Navigation
-- **Style:** Taskbar, dock, launcher, and app sidebars use solid quiet surfaces with compact labels and consistent icon stroke. Active items use small crimson markers, not large filled blocks.
-- **Hover / Active:** Hover reveals a tonal lift; active state adds a persistent marker or soft fill. Focus state must be visible even when the pointer is not used.
-- **Desktop Treatment:** First version is desktop-only. Design for precise pointer use, keyboard focus, and fixed work areas rather than touch-first mobile behavior.
+
+The taskbar is a flush system strip, not a rounded dock card. Running applications use compact icons and a small bottom marker; the active application gets a primary marker rather than a colored block. The cat Start button is the one expressive shell mark. The system tray contains notifications, control center, Do Not Disturb, and clock actions; the old Local status capsule and layout-reset tray action are intentionally absent.
+
+### Launcher
+
+The launcher is a compact Start-menu surface with a search field, pinned applications, recent applications, and an all-apps icon grid. Application descriptions are available through the item tooltip but are hidden from the default grid so the launcher reads as a system menu rather than a catalogue. Pin controls appear on hover or keyboard focus instead of occupying every item at rest.
 
 ### Window
 
-The window is the signature component. It should feel precise, reliable, and desktop-native.
+The window frame is neutral and reliable: 10px radius, one-pixel border, opaque `os-panel` content, compact titlebar, app icon, title, and predictable controls. Active windows get a small primary title marker. The titlebar remains draggable, and existing maximize, minimize, close, fullscreen, snap, workspace, and context-menu actions remain intact.
 
-- **Frame:** `14px` radius, `1px` quiet border, `os-panel` background.
-- **Titlebar:** `34-40px` height, compact app icon, title text, and predictable control placement.
-- **Active State:** Active window gets a stronger border, clearer titlebar text, and optional small crimson focus marker. Inactive windows reduce titlebar contrast but remain readable.
-- **Resize / Drag:** Handles must be discoverable without visual clutter. The cursor and active edge state are part of the design vocabulary.
-- **Motion:** Opening windows may use `120-180ms` opacity plus subtle scale from `0.985` to `1`. Reduced motion disables scale.
+### Desktop
 
-### File Item
+The desktop contains wallpaper, left-aligned icons, optional files, selection feedback, and contextual actions. Brand explanation is not permanent desktop content. Grid/free layout, hidden-app restoration, file creation, window arrangement, and reset actions are discoverable from the desktop context menu or command palette.
 
-File rows and desktop icons must make persistence feel trustworthy.
+### Control Center
 
-- **Rows:** Dense list rows use `30-34px` height with clear selection and hover states.
-- **Desktop Icons:** Labels must remain readable on the desktop background. Use a subtle text backing only when needed for contrast.
-- **Selection:** Use `os-primary-soft` or rose focus treatment, not bright saturated fills.
-- **Destructive State:** Delete and overwrite actions must use `os-danger` and explicit confirmation language.
+The control center is a single neutral flyout. Immediate state is limited to Do Not Disturb and workspace selection. Theme and density are Settings concerns. Secondary rows link to notification history, Settings, optional VR Desktop, the independent MMD VR page, and session lock.
 
-## 6. Do's and Don'ts
+### Settings
+
+Settings is a continuous working surface with a compact navigation rail, search, and grouped rows/cards. Theme mode, accent, density, wallpaper slots, wallpaper fit, and wallpaper overlay are edited here. Wallpaper selection preloads remote images, applies the selection immediately, preserves independent light/dark slots, and falls back to the built-in system wallpaper when offline or unavailable. Settings content is explicitly opaque so the desktop wallpaper cannot show through.
+
+## Do's and Don'ts
 
 ### Do:
-- **Do** keep Neko personality small and functional: app icons, state dots, empty-state copy, and subtle motion are the right places.
-- **Do** use dark tonal layers to separate desktop, windows, toolbars, menus, and popovers before adding shadows.
-- **Do** keep standard controls compact: buttons around `30-34px`, titlebars around `34-40px`, inputs around `32px`.
-- **Do** use visible focus states on every interactive control, especially window chrome, app launcher items, file rows, and text editor controls.
-- **Do** treat saved local state as a visible product concern: file changes, window state, and settings persistence should have clear feedback.
-- **Do** include reduced-motion alternatives for window, menu, and launcher transitions.
+
+- **Do** use Windows desktop syntax for the default 2D shell: Start, taskbar, tray, titlebar controls, snap actions, and context menus.
+- **Do** keep shell surfaces neutral and use the selected accent for actions, focus, selection, and small markers.
+- **Do** let the MMD VR preparation swatches edit the shared system accent; the MMD WebGL HUD and stage should follow it without importing desktop window, taskbar, or launcher chrome.
+- **Do** preserve visible focus, keyboard window switching, reduced-motion behavior, and large-target accessibility settings.
+- **Do** keep wallpaper asynchronous work generation-safe and make the currently displayed wallpaper explicit in persisted settings.
+- **Do** keep the MMD VR page and WebXR session isolated from desktop shell CSS and state.
+- **Do** expose optional widgets and taskbar labels as user preferences instead of forcing dashboard content into the default desktop.
 
 ### Don't:
-- **Don't** make NekoVirtOS look like a generic SaaS dashboard. No hero-metric layouts, marketing card grids, pricing-page rhythm, or template landing-page sections inside the OS.
-- **Don't** make it a low-fidelity retro toy OS. Avoid fake pixel nostalgia, chunky novelty controls, and intentionally awkward desktop behaviors.
-- **Don't** make it overly anime-themed. Characters, mascots, and decorative art must never dominate file management, text editing, settings, or window work.
-- **Don't** use cheap glassmorphism as the default. Solid panels are the baseline; blur only earns a place when it clarifies modal depth.
-- **Don't** use gradient text, colored side-stripe borders, decorative grid backgrounds, or repeated identical icon cards.
-- **Don't** over-round panels. Cards, windows, inputs, and sections top out at `16px`; only chips and tiny status pills may be full pill.
-- **Don't** pair a decorative `1px` border with a wide soft shadow on cards or controls. Choose structure or lift, not both as decoration.
+
+- **Don't** reintroduce macOS Dock magnification, neighbor lift, or a floating rounded taskbar card.
+- **Don't** put permanent brand copy, layout controls, or reset controls in the desktop chrome when a context menu or Settings surface can own them.
+- **Don't** use multi-color gradient cards as the default control-center or application-surface language.
+- **Don't** let wallpaper or translucent shell material bleed into Settings or ordinary working panels.
+- **Don't** present the responsive desktop adaptation as an iPadOS/touch mode until the interaction model changes to full-screen apps and touch-first multitasking.
+- **Don't** move application logic, filesystem behavior, MMD Studio, or the independent MMD VR entry into the desktop material layer merely to achieve visual consistency.

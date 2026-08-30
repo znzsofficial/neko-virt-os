@@ -88,7 +88,6 @@ export function MmdVrPlayerRig({
   materialRoughnessLabel,
   materialMetallicLabel,
   materialEmissionLabel,
-  themeLabels,
   walkLabels,
   walkSpeedLabel,
   onExit,
@@ -165,7 +164,6 @@ export function MmdVrPlayerRig({
   materialRoughnessLabel: string;
   materialMetallicLabel: string;
   materialEmissionLabel: string;
-  themeLabels: [string, string, string, string, string];
   walkLabels: [string, string, string];
   walkSpeedLabel: string;
   onExit: () => void;
@@ -317,7 +315,6 @@ export function MmdVrPlayerRig({
         materialRoughnessLabel={materialRoughnessLabel}
         materialMetallicLabel={materialMetallicLabel}
         materialEmissionLabel={materialEmissionLabel}
-        themeLabels={themeLabels}
         walkLabels={walkLabels}
         walkSpeedLabel={walkSpeedLabel}
         onDragChange={setPanelDragging}

@@ -68,7 +68,6 @@ describe("requestMmdVrEnter", () => {
         shadowResolutionPref: "auto",
         heightOffset: 0,
         viewDistance: 40,
-        themeColor: "blue",
         snapTurnDegrees: 30,
         exposure: 1,
         stageSkyEnabled: true,

@@ -1,6 +1,6 @@
 import { Icon } from "@iconify-icon/react";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
-import { useLanguageStore } from "../languageStore";
+import { useLanguageStore, type TranslationKey } from "../languageStore";
 import {
   collectFilesFromDataTransfer,
   companionsForModel,
@@ -16,7 +16,8 @@ import { MMD_VR_MAX_MODELS, MMD_VR_MAX_OBJECTS, type MmdVrAssetSlot } from "./mm
 import { formatMmdVrProfileSummary, getMmdVrRenderProfile } from "./mmdVrQuality";
 import { requestMmdVrEnter } from "./requestMmdVrEnter";
 import { useMmdVrStore } from "./mmdVrStore";
-import { XR_THEME_COLORS, getXrAccentTokens } from "../xr";
+import { ACCENT_CHROMA, ACCENT_COLORS, ACCENT_HUES, updateThemeSettings } from "../system/theme";
+import { useThemeSettings } from "../system/useThemeSettings";
 
 function OptionGroup<T extends string>({
   value,
@@ -65,6 +66,7 @@ function getQuestPreset(prefs: ReturnType<typeof useMmdVrStore.getState>["prefs"
 export function MmdVrPrepApp() {
   const t = useLanguageStore((state) => state.t);
   const language = useLanguageStore((state) => state.language);
+  const themeSettings = useThemeSettings();
   const addNotification = useNotificationStore((state) => state.addNotification);
   const phase = useMmdVrStore((state) => state.phase);
   const errorMessage = useMmdVrStore((state) => state.errorMessage);
@@ -382,166 +384,169 @@ export function MmdVrPrepApp() {
                 />
               </div>
               <div className="mmd-vr-prep-config-row">
-                <span>{t("settingsVrThemeColor")}</span>
-                <div className="mmd-vr-theme-swatches" role="group" aria-label={t("settingsVrThemeColor")}>
-                  {XR_THEME_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      className={prefs.themeColor === color ? "is-active" : ""}
-                      style={{ background: getXrAccentTokens(color).primary }}
-                      aria-label={`${t("settingsVrThemeColor")}: ${color}`}
-                      aria-pressed={prefs.themeColor === color}
-                      title={color}
-                      onClick={() => setPrefs({ themeColor: color })}
-                    />
-                  ))}
+                <span>{t("settingsAccent")}</span>
+                <div className="mmd-vr-theme-swatches" role="group" aria-label={t("settingsAccent")}>
+                  {ACCENT_COLORS.map((color) => {
+                    const labelKey = `accent${color[0].toUpperCase()}${color.slice(1)}` as TranslationKey;
+                    return (
+                      <button
+                        key={color}
+                        type="button"
+                        className={themeSettings.accentColor === color ? "is-active" : ""}
+                        style={{ background: `oklch(0.62 ${ACCENT_CHROMA[color]} ${ACCENT_HUES[color]})` }}
+                        aria-label={t(labelKey)}
+                        aria-pressed={themeSettings.accentColor === color}
+                        title={t(labelKey)}
+                        onClick={() => updateThemeSettings({ accentColor: color })}
+                      />
+                    );
+                  })}
                 </div>
               </div>
               <details className="mmd-vr-prep-advanced">
                 <summary>{t("settingsMmdVrAdvancedConfig")}</summary>
-              <div className="mmd-vr-prep-config-row">
-                <span>{t("settingsVrDesktopQuality")}</span>
-                <OptionGroup
-                  value={prefs.renderQuality}
-                  options={[
-                    { id: "high", label: t("settingsVrDesktopQualityHigh") },
-                    { id: "balanced", label: t("settingsVrDesktopQualityBalanced") },
-                    { id: "low", label: t("settingsVrDesktopQualityLow") },
-                  ]}
-                  onChange={(renderQuality) => setPrefs({ renderQuality })}
-                />
-              </div>
-              <div className="mmd-vr-prep-config-row">
-                <span>{t("settingsVrDesktopDpr")}</span>
-                <OptionGroup
-                  value={prefs.dprPref}
-                  options={[
-                    { id: "auto", label: t("settingsVrDesktopQualityAuto") },
-                    { id: "1", label: "1×" },
-                    { id: "1.25", label: "1.25×" },
-                    { id: "1.5", label: "1.5×" },
-                  ]}
-                  onChange={(dprPref) => setPrefs({ dprPref })}
-                />
-              </div>
-              <div className="mmd-vr-prep-config-row">
-                <span>{t("settingsVrDesktopFrameRate")}</span>
-                <OptionGroup
-                  value={prefs.frameRatePref}
-                  options={[
-                    { id: "auto", label: t("settingsVrDesktopQualityAuto") },
-                    { id: "72", label: "72 Hz" },
-                    { id: "80", label: "80 Hz" },
-                    { id: "90", label: "90 Hz" },
-                    { id: "120", label: "120 Hz" },
-                  ]}
-                  onChange={(frameRatePref) => setPrefs({ frameRatePref })}
-                />
-              </div>
-              <details className="mmd-vr-prep-advanced">
-                <summary>{t("settingsMmdVrExperimentalRendering")}</summary>
-                <label className="mmd-vr-prep-toggle">
-                  <span>{t("settingsMmdVrEnableRenderOverrides")}</span>
-                  <input type="checkbox" checked={prefs.advancedRenderOverrides} onChange={(event) => setPrefs({ advancedRenderOverrides: event.target.checked })} />
-                </label>
                 <div className="mmd-vr-prep-config-row">
-                  <span>{t("settingsVrDesktopFramebufferScale")}</span>
+                  <span>{t("settingsVrDesktopQuality")}</span>
                   <OptionGroup
-                    value={prefs.framebufferScalePref}
-                    options={[{ id: "auto", label: t("settingsVrDesktopQualityAuto") }, { id: "0.7", label: "70%" }, { id: "0.85", label: "85%" }, { id: "1", label: "100%" }]}
-                    onChange={(framebufferScalePref) => setPrefs({ framebufferScalePref, advancedRenderOverrides: true })}
-                  />
-                </div>
-                <div className="mmd-vr-prep-config-row">
-                  <span>{t("settingsVrDesktopFoveation")}</span>
-                  <OptionGroup
-                    value={prefs.foveationPref}
+                    value={prefs.renderQuality}
                     options={[
-                      { id: "high", label: t("settingsMmdVrFoveationPerformance") },
-                      { id: "medium", label: t("settingsMmdVrFoveationBalanced") },
-                      { id: "off", label: t("settingsMmdVrFoveationOff") },
+                      { id: "high", label: t("settingsVrDesktopQualityHigh") },
+                      { id: "balanced", label: t("settingsVrDesktopQualityBalanced") },
+                      { id: "low", label: t("settingsVrDesktopQualityLow") },
                     ]}
-                    onChange={(foveationPref) => setPrefs({ foveationPref, advancedRenderOverrides: true })}
+                    onChange={(renderQuality) => setPrefs({ renderQuality })}
                   />
                 </div>
-              </details>
-              <div className="mmd-vr-prep-config-row">
-                <span>{t("settingsVrDesktopAntialias")}</span>
-                <OptionGroup
-                  value={prefs.antialiasPref}
-                  options={[
-                    { id: "auto", label: t("settingsVrDesktopQualityAuto") },
-                    { id: "on", label: t("settingsVrDesktopAaOn") },
-                    { id: "off", label: t("settingsVrDesktopAaOff") },
-                  ]}
-                  onChange={(antialiasPref) => setPrefs({ antialiasPref })}
-                />
-              </div>
-              <div className="mmd-vr-prep-config-row">
-                <span>{t("settingsMmdVrShadows")}</span>
-                <OptionGroup
-                  value={prefs.shadowsPref}
-                  options={[
-                    { id: "auto", label: t("settingsVrDesktopQualityAuto") },
-                    { id: "on", label: t("settingsVrDesktopAaOn") },
-                    { id: "off", label: t("settingsVrDesktopAaOff") },
-                  ]}
-                  onChange={(shadowsPref) => setPrefs({ shadowsPref })}
-                />
-              </div>
-              <div className="mmd-vr-prep-config-row">
-                <span>{t("settingsMmdVrShadowResolution")}</span>
-                <OptionGroup
-                  value={prefs.shadowResolutionPref}
-                  options={[
-                    { id: "auto", label: t("settingsVrDesktopQualityAuto") },
-                    { id: "low", label: "512" },
-                    { id: "medium", label: "1024" },
-                    { id: "high", label: "2048" },
-                  ]}
-                  onChange={(shadowResolutionPref) => setPrefs({ shadowResolutionPref })}
-                />
-              </div>
-              <div className="mmd-vr-prep-config-row">
-                <span>{t("settingsMmdVrGrid")}</span>
-                <OptionGroup
-                  value={prefs.gridPref}
-                  options={[
-                    { id: "auto", label: t("settingsVrDesktopQualityAuto") },
-                    { id: "on", label: t("settingsVrDesktopAaOn") },
-                    { id: "off", label: t("settingsVrDesktopAaOff") },
-                  ]}
-                  onChange={(gridPref) => setPrefs({ gridPref })}
-                />
-              </div>
-              <div className="mmd-vr-prep-config-row">
-                <span>{t("settingsMmdVrWalkSpeed")}</span>
-                <OptionGroup
-                  value={prefs.walkSpeedPref}
-                  options={[
-                    { id: "auto", label: t("settingsVrDesktopQualityAuto") },
-                    { id: "slow", label: t("settingsMmdVrWalkSlow") },
-                    { id: "normal", label: t("settingsMmdVrWalkNormal") },
-                    { id: "fast", label: t("settingsMmdVrWalkFast") },
-                  ]}
-                  onChange={(walkSpeedPref) => setPrefs({ walkSpeedPref })}
-                />
-              </div>
-              <label className="mmd-vr-prep-toggle">
-                <span>{t("settingsVrDesktopShowFps")}</span>
-                <input
-                  type="checkbox"
-                  checked={prefs.showFps}
-                  onChange={(event) => setPrefs({ showFps: event.target.checked })}
-                />
-              </label>
-              <label className="mmd-vr-prep-toggle">
-                <span>{t("settingsMmdVrDetailedPhysicsDiagnostics")}</span>
-                <input type="checkbox" checked={prefs.detailedPhysicsDiagnostics} onChange={(event) => setPrefs({ detailedPhysicsDiagnostics: event.target.checked })} />
-              </label>
-              {highLoadConfig ? <p className="mmd-vr-prep-warning">{t("settingsMmdVrHighLoadWarning")}</p> : null}
-              <p>{t("settingsVrDesktopQualityHint")}</p>
+                <div className="mmd-vr-prep-config-row">
+                  <span>{t("settingsVrDesktopDpr")}</span>
+                  <OptionGroup
+                    value={prefs.dprPref}
+                    options={[
+                      { id: "auto", label: t("settingsVrDesktopQualityAuto") },
+                      { id: "1", label: "1×" },
+                      { id: "1.25", label: "1.25×" },
+                      { id: "1.5", label: "1.5×" },
+                    ]}
+                    onChange={(dprPref) => setPrefs({ dprPref })}
+                  />
+                </div>
+                <div className="mmd-vr-prep-config-row">
+                  <span>{t("settingsVrDesktopFrameRate")}</span>
+                  <OptionGroup
+                    value={prefs.frameRatePref}
+                    options={[
+                      { id: "auto", label: t("settingsVrDesktopQualityAuto") },
+                      { id: "72", label: "72 Hz" },
+                      { id: "80", label: "80 Hz" },
+                      { id: "90", label: "90 Hz" },
+                      { id: "120", label: "120 Hz" },
+                    ]}
+                    onChange={(frameRatePref) => setPrefs({ frameRatePref })}
+                  />
+                </div>
+                <details className="mmd-vr-prep-advanced">
+                  <summary>{t("settingsMmdVrExperimentalRendering")}</summary>
+                  <label className="mmd-vr-prep-toggle">
+                    <span>{t("settingsMmdVrEnableRenderOverrides")}</span>
+                    <input type="checkbox" checked={prefs.advancedRenderOverrides} onChange={(event) => setPrefs({ advancedRenderOverrides: event.target.checked })} />
+                  </label>
+                  <div className="mmd-vr-prep-config-row">
+                    <span>{t("settingsVrDesktopFramebufferScale")}</span>
+                    <OptionGroup
+                      value={prefs.framebufferScalePref}
+                      options={[{ id: "auto", label: t("settingsVrDesktopQualityAuto") }, { id: "0.7", label: "70%" }, { id: "0.85", label: "85%" }, { id: "1", label: "100%" }]}
+                      onChange={(framebufferScalePref) => setPrefs({ framebufferScalePref, advancedRenderOverrides: true })}
+                    />
+                  </div>
+                  <div className="mmd-vr-prep-config-row">
+                    <span>{t("settingsVrDesktopFoveation")}</span>
+                    <OptionGroup
+                      value={prefs.foveationPref}
+                      options={[
+                        { id: "high", label: t("settingsMmdVrFoveationPerformance") },
+                        { id: "medium", label: t("settingsMmdVrFoveationBalanced") },
+                        { id: "off", label: t("settingsMmdVrFoveationOff") },
+                      ]}
+                      onChange={(foveationPref) => setPrefs({ foveationPref, advancedRenderOverrides: true })}
+                    />
+                  </div>
+                </details>
+                <div className="mmd-vr-prep-config-row">
+                  <span>{t("settingsVrDesktopAntialias")}</span>
+                  <OptionGroup
+                    value={prefs.antialiasPref}
+                    options={[
+                      { id: "auto", label: t("settingsVrDesktopQualityAuto") },
+                      { id: "on", label: t("settingsVrDesktopAaOn") },
+                      { id: "off", label: t("settingsVrDesktopAaOff") },
+                    ]}
+                    onChange={(antialiasPref) => setPrefs({ antialiasPref })}
+                  />
+                </div>
+                <div className="mmd-vr-prep-config-row">
+                  <span>{t("settingsMmdVrShadows")}</span>
+                  <OptionGroup
+                    value={prefs.shadowsPref}
+                    options={[
+                      { id: "auto", label: t("settingsVrDesktopQualityAuto") },
+                      { id: "on", label: t("settingsVrDesktopAaOn") },
+                      { id: "off", label: t("settingsVrDesktopAaOff") },
+                    ]}
+                    onChange={(shadowsPref) => setPrefs({ shadowsPref })}
+                  />
+                </div>
+                <div className="mmd-vr-prep-config-row">
+                  <span>{t("settingsMmdVrShadowResolution")}</span>
+                  <OptionGroup
+                    value={prefs.shadowResolutionPref}
+                    options={[
+                      { id: "auto", label: t("settingsVrDesktopQualityAuto") },
+                      { id: "low", label: "512" },
+                      { id: "medium", label: "1024" },
+                      { id: "high", label: "2048" },
+                    ]}
+                    onChange={(shadowResolutionPref) => setPrefs({ shadowResolutionPref })}
+                  />
+                </div>
+                <div className="mmd-vr-prep-config-row">
+                  <span>{t("settingsMmdVrGrid")}</span>
+                  <OptionGroup
+                    value={prefs.gridPref}
+                    options={[
+                      { id: "auto", label: t("settingsVrDesktopQualityAuto") },
+                      { id: "on", label: t("settingsVrDesktopAaOn") },
+                      { id: "off", label: t("settingsVrDesktopAaOff") },
+                    ]}
+                    onChange={(gridPref) => setPrefs({ gridPref })}
+                  />
+                </div>
+                <div className="mmd-vr-prep-config-row">
+                  <span>{t("settingsMmdVrWalkSpeed")}</span>
+                  <OptionGroup
+                    value={prefs.walkSpeedPref}
+                    options={[
+                      { id: "auto", label: t("settingsVrDesktopQualityAuto") },
+                      { id: "slow", label: t("settingsMmdVrWalkSlow") },
+                      { id: "normal", label: t("settingsMmdVrWalkNormal") },
+                      { id: "fast", label: t("settingsMmdVrWalkFast") },
+                    ]}
+                    onChange={(walkSpeedPref) => setPrefs({ walkSpeedPref })}
+                  />
+                </div>
+                <label className="mmd-vr-prep-toggle">
+                  <span>{t("settingsVrDesktopShowFps")}</span>
+                  <input
+                    type="checkbox"
+                    checked={prefs.showFps}
+                    onChange={(event) => setPrefs({ showFps: event.target.checked })}
+                  />
+                </label>
+                <label className="mmd-vr-prep-toggle">
+                  <span>{t("settingsMmdVrDetailedPhysicsDiagnostics")}</span>
+                  <input type="checkbox" checked={prefs.detailedPhysicsDiagnostics} onChange={(event) => setPrefs({ detailedPhysicsDiagnostics: event.target.checked })} />
+                </label>
+                {highLoadConfig ? <p className="mmd-vr-prep-warning">{t("settingsMmdVrHighLoadWarning")}</p> : null}
+                <p>{t("settingsVrDesktopQualityHint")}</p>
               </details>
             </div>
           </details>

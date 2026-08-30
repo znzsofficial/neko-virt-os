@@ -43,11 +43,13 @@ export {
 export { createXrSceneMountGuard, type XrSceneLifecycleOpts } from "./useXrSceneLifecycle";
 export {
   XR_THEME_COLORS,
+  getSystemXrAccentTokens,
   getXrAccentTokens,
   hexToRgba,
   normalizeXrThemeColor,
   type XrAccentTokens,
   type XrThemeColor,
+  type XrThemeMode,
 } from "./themeColor";
 export {
   buildQuestVrSessionInit,
