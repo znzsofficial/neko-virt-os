@@ -12,15 +12,9 @@ import {
 } from "../system/networkInfo";
 import { useNotificationStore } from "../notificationStore";
 import { useOsUiStore } from "../osUiStore";
-import {
-  applySettingsBackup,
-  downloadSettingsBackup,
-  parseSettingsBackup,
-} from "../system/settingsBackup";
 import { resetSiteData } from "../system/siteDataReset";
 import { pausePersistence } from "../system/persistenceGate";
 import {
-  applyThemeSettings,
   readThemeSettings,
   resolveThemeMode,
   subscribeThemeSettings,
@@ -128,11 +122,6 @@ export function SettingsApp() {
       cancelled = true;
     };
   }, [deviceInfo, section]);
-
-  useEffect(() => {
-    // Keep document tokens in sync when local settings state changes (mode/density/wallpaper/accent).
-    applyThemeSettings(themeSettings);
-  }, [themeSettings]);
 
   useEffect(() => {
     if (section !== "network") return;
@@ -326,10 +315,11 @@ export function SettingsApp() {
     }
   }
 
-  function exportSettings() {
+  async function exportSettings() {
     if (settingsTransferBusy) return;
     setSettingsTransferBusy(true);
     try {
+      const { downloadSettingsBackup } = await import("../system/settingsBackup");
       downloadSettingsBackup();
       addNotification({ title: t("settingsExportDone"), message: t("settingsBackupScope"), type: "success", category: "system", appId: "settings" });
     } catch {
@@ -351,6 +341,7 @@ export function SettingsApp() {
     setSettingsTransferBusy(true);
     try {
       const text = await file.text();
+      const { applySettingsBackup, parseSettingsBackup } = await import("../system/settingsBackup");
       const backup = parseSettingsBackup(text);
       applySettingsBackup(backup);
       addNotification({ title: t("settingsImportDone"), message: t("settingsImportDoneMessage"), type: "success", category: "system", appId: "settings" });

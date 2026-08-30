@@ -17,7 +17,7 @@ import { ContextMenu } from "./shell/ContextMenu";
 import { Desktop } from "./shell/Desktop";
 import { SystemWindow } from "./shell/SystemWindow";
 import { useIdleLock } from "./hooks/useIdleLock";
-import { applyThemeSettings, readThemeSettings, THEME_STORAGE_KEY } from "./system/theme";
+import { applyThemeSettings, initializeThemeSync, readThemeSettings, THEME_STORAGE_KEY } from "./system/theme";
 import type { ContextMenuState } from "./types";
 import { useDesktopStore } from "./windowStore";
 import { VrDesktopOverlay } from "./vrDesktop/VrDesktopOverlay";
@@ -76,21 +76,7 @@ export function App() {
     const theme = readThemeSettings();
     applyThemeSettings(theme);
     setOwnedLocalStorageItem(THEME_STORAGE_KEY, JSON.stringify(theme));
-
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const updateSystemTheme = () => {
-      const nextTheme = readThemeSettings();
-      if (nextTheme.theme === "system") applyThemeSettings(nextTheme);
-    };
-    const updateWallpaperAvailability = () => applyThemeSettings(readThemeSettings());
-    media.addEventListener?.("change", updateSystemTheme);
-    window.addEventListener("online", updateWallpaperAvailability);
-    window.addEventListener("offline", updateWallpaperAvailability);
-    return () => {
-      media.removeEventListener?.("change", updateSystemTheme);
-      window.removeEventListener("online", updateWallpaperAvailability);
-      window.removeEventListener("offline", updateWallpaperAvailability);
-    };
+    initializeThemeSync();
   }, []);
 
   // Capability refresh: secure context + navigator.xr; isSessionSupported is advisory only.

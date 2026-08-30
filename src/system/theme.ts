@@ -23,7 +23,7 @@ export const WALLPAPERS: Record<ThemeSettings["wallpaperId"], { labelKey: Transl
   "neon-street": { labelKey: "wallpaperNeonStreet", categoryKey: "wallpaperCategoryCity", source: "unsplash", url: "https://images.unsplash.com/photo-1520034475321-cbe63696469a?auto=format&fit=crop&w=2400&q=85" },
 };
 
-export const DEFAULT_THEME_SETTINGS: ThemeSettings = { accentColor: "blue", density: "cozy", theme: "system", wallpaperId: "system", wallpaperLightId: "system", wallpaperDarkId: "system", wallpaperFit: "cover", wallpaperOverlay: "standard" };
+export const DEFAULT_THEME_SETTINGS: ThemeSettings = { accentColor: "coral", density: "cozy", theme: "system", wallpaperId: "system", wallpaperLightId: "system", wallpaperDarkId: "system", wallpaperFit: "cover", wallpaperOverlay: "standard" };
 
 export const ACCENT_COLORS = [
   "blue",
@@ -52,16 +52,16 @@ export const ACCENT_HUES: Record<ThemeSettings["accentColor"], string> = {
 };
 
 export const ACCENT_CHROMA: Record<ThemeSettings["accentColor"], string> = {
-  blue: "0.145",
-  cyan: "0.12",
-  emerald: "0.14",
-  mint: "0.11",
-  amber: "0.13",
-  coral: "0.14",
-  rose: "0.15",
-  purple: "0.16",
-  violet: "0.14",
-  slate: "0.04",
+  blue: "0.19",
+  cyan: "0.17",
+  emerald: "0.18",
+  mint: "0.16",
+  amber: "0.18",
+  coral: "0.22",
+  rose: "0.21",
+  purple: "0.20",
+  violet: "0.20",
+  slate: "0.08",
 };
 
 const WALLPAPER_FITS: ThemeSettings["wallpaperFit"][] = ["cover", "contain", "stretch", "tile"];
@@ -109,6 +109,56 @@ export function readThemeSettings(): ThemeSettings {
 
 const themeListeners = new Set<(theme: ThemeSettings) => void>();
 
+let themeSyncInitialized = false;
+
+function notifyThemeSettings(theme: ThemeSettings) {
+  for (const listener of themeListeners) listener(theme);
+}
+
+function readThemeSettingsFromStorageValue(value: string | null): ThemeSettings {
+  if (!value) return DEFAULT_THEME_SETTINGS;
+  try {
+    return normalizeThemeSettings(JSON.parse(value));
+  } catch {
+    return DEFAULT_THEME_SETTINGS;
+  }
+}
+
+function syncSystemTheme() {
+  const theme = readThemeSettings();
+  if (theme.theme !== "system") return;
+  const wallpaperId = getWallpaperIdForMode(theme);
+  if (wallpaperId !== theme.wallpaperId) {
+    updateThemeSettings({ wallpaperId });
+    return;
+  }
+  applyThemeSettings(theme);
+  notifyThemeSettings(theme);
+}
+
+/** Install browser-level listeners shared by the desktop and MMD entry points. */
+export function initializeThemeSync() {
+  if (themeSyncInitialized || typeof window === "undefined") return;
+  themeSyncInitialized = true;
+
+  window.addEventListener("storage", (event) => {
+    if (event.key !== THEME_STORAGE_KEY) return;
+    const theme = readThemeSettingsFromStorageValue(event.newValue);
+    applyThemeSettings(theme);
+    notifyThemeSettings(theme);
+  });
+
+  const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+  media?.addEventListener?.("change", syncSystemTheme);
+  const syncWallpaperAvailability = () => {
+    const theme = readThemeSettings();
+    applyThemeSettings(theme);
+    notifyThemeSettings(theme);
+  };
+  window.addEventListener("online", syncWallpaperAvailability);
+  window.addEventListener("offline", syncWallpaperAvailability);
+}
+
 export function subscribeThemeSettings(listener: (theme: ThemeSettings) => void) {
   themeListeners.add(listener);
   return () => {
@@ -118,14 +168,26 @@ export function subscribeThemeSettings(listener: (theme: ThemeSettings) => void)
 
 /** Merge patch, persist, and apply to the document. */
 export function updateThemeSettings(patch: Partial<ThemeSettings>): ThemeSettings {
-  const next = normalizeThemeSettings({ ...readThemeSettings(), ...patch });
+  const current = readThemeSettings();
+  const next = normalizeThemeSettings({ ...current, ...patch });
+  const nextEffectiveTheme = resolveThemeMode(next.theme);
+
+  // Keep wallpaperId as the currently displayed image. A mode change selects
+  // that mode's saved slot; selecting either slot can still override it for a
+  // live preview without changing the other slot.
+  if (
+    current.theme !== next.theme &&
+    !Object.prototype.hasOwnProperty.call(patch, "wallpaperId")
+  ) {
+    next.wallpaperId = getWallpaperIdForMode(next, nextEffectiveTheme);
+  }
   try {
     setOwnedLocalStorageItem(THEME_STORAGE_KEY, JSON.stringify(next));
   } catch {
     // ignore quota
   }
   applyThemeSettings(next);
-  for (const listener of themeListeners) listener(next);
+  notifyThemeSettings(next);
   return next;
 }
 
@@ -134,18 +196,21 @@ export function applyThemeSettings(theme: ThemeSettings) {
   const effectiveTheme = resolveThemeMode(theme.theme);
   const hue = ACCENT_HUES[theme.accentColor] ?? ACCENT_HUES.blue;
   const chroma = ACCENT_CHROMA[theme.accentColor] ?? ACCENT_CHROMA.blue;
-  const primaryL = effectiveTheme === "dark" ? "0.72" : "0.52";
-  const primaryStrongL = effectiveTheme === "dark" ? "0.64" : "0.45";
-  const accentL = effectiveTheme === "dark" ? "0.78" : "0.65";
+  const primaryL = effectiveTheme === "dark" ? "0.70" : "0.52";
+  const primaryStrongL = effectiveTheme === "dark" ? "0.61" : "0.45";
+  const accentL = effectiveTheme === "dark" ? "0.80" : "0.68";
   const softBg =
     effectiveTheme === "dark"
-      ? `oklch(0.26 ${Math.min(0.08, Number(chroma))} ${hue})`
-      : `oklch(0.94 ${Math.min(0.04, Number(chroma) * 0.25)} ${hue})`;
+      ? `oklch(0.31 ${Math.min(0.105, Number(chroma) * 0.52)} ${hue} / 0.82)`
+      : `oklch(0.88 ${Math.min(0.075, Number(chroma) * 0.38)} ${hue} / 0.78)`;
 
   root.setAttribute("data-accent", theme.accentColor);
   root.setAttribute("data-density", theme.density);
   root.setAttribute("data-theme-mode", theme.theme);
   root.setAttribute("data-theme", effectiveTheme);
+
+  // Keep the low-chroma application surfaces in the selected accent's hue family.
+  root.style.setProperty("--os-neutral-color", hue);
 
   // Inline tokens so accent changes always recompute (attribute-only CSS can look like a no-op).
   root.style.setProperty("--os-primary-color", hue);
@@ -160,12 +225,12 @@ export function applyThemeSettings(theme: ThemeSettings) {
   root.style.setProperty(
     "--os-selection",
     effectiveTheme === "dark"
-      ? `oklch(0.29 ${Math.min(0.08, Number(chroma))} ${hue} / 0.72)`
-      : `oklch(0.98 ${Math.min(0.04, Number(chroma) * 0.2)} ${hue} / 0.78)`,
+      ? `oklch(0.35 ${Math.min(0.14, Number(chroma) * 0.68)} ${hue} / 0.84)`
+      : `oklch(0.84 ${Math.min(0.095, Number(chroma) * 0.48)} ${hue} / 0.68)`,
   );
   root.style.setProperty(
     "--os-selection-border",
-    effectiveTheme === "dark" ? `oklch(0.57 ${chroma} ${hue})` : `oklch(0.78 ${Math.min(0.08, Number(chroma))} ${hue})`,
+    effectiveTheme === "dark" ? `oklch(0.70 ${chroma} ${hue})` : `oklch(0.56 ${chroma} ${hue})`,
   );
   root.style.setProperty(
     "--os-wallpaper-glow-a",
@@ -178,7 +243,7 @@ export function applyThemeSettings(theme: ThemeSettings) {
   root.style.colorScheme = effectiveTheme;
   const colorSchemeMeta = document.querySelector('meta[name="color-scheme"]');
   if (colorSchemeMeta) colorSchemeMeta.setAttribute("content", effectiveTheme);
-  const configuredWallpaperId = effectiveTheme === "dark" ? theme.wallpaperDarkId : theme.wallpaperLightId;
+  const configuredWallpaperId = theme.wallpaperId;
   const configuredWallpaper = WALLPAPERS[configuredWallpaperId];
   const online = typeof navigator === "undefined" || navigator.onLine;
   const wallpaper = !online && configuredWallpaper.url ? WALLPAPERS.system : configuredWallpaper;
@@ -230,6 +295,10 @@ function getWallpaperSize(fit: ThemeSettings["wallpaperFit"]) {
   if (fit === "stretch") return "100% 100%";
   if (fit === "tile") return "auto";
   return "cover";
+}
+
+export function getWallpaperIdForMode(theme: ThemeSettings, mode: "light" | "dark" = resolveThemeMode(theme.theme)) {
+  return mode === "dark" ? theme.wallpaperDarkId : theme.wallpaperLightId;
 }
 
 export function resolveThemeMode(theme: ThemeSettings["theme"]): "light" | "dark" {
