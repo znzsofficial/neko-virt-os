@@ -495,15 +495,6 @@ input[type="file"]::file-selector-button:hover {
   color: white;
   font-weight: 760;
 }
-.context-glyph {
-  display: inline-grid;
-  width: 16px;
-  place-items: center;
-  color: inherit;
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1;
-}
 [data-theme="dark"] .desktop-icon span {
   background: oklch(0.08 0.006 var(--os-neutral-color) / 0.48);
   text-shadow: 0 1px 8px oklch(0 0 0 / 0.85);

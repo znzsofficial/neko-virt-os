@@ -238,11 +238,11 @@ export function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose
             {t("restore")}
           </button>
           <button role="menuitem" onClick={() => run(() => minimizeWindow(windowState.id))}>
-            <span className="context-glyph">-</span>
+            <Icon icon="lucide:minus" width={16} height={16} />
             {t("minimize")}
           </button>
           <button role="menuitem" onClick={() => run(() => toggleMaximize(windowState.id))}>
-            <span className="context-glyph">{windowState.maximized ? "□" : "▢"}</span>
+            <Icon icon={windowState.maximized ? "lucide:copy" : "lucide:square"} width={16} height={16} />
             {windowState.maximized ? t("restoreSize") : t("maximize")}
           </button>
           <button role="menuitem" onClick={() => run(() => snapWindow(windowState.id, "left"))}>
@@ -270,7 +270,7 @@ export function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose
           ))}
           <div className="context-menu-divider" />
           <button role="menuitem" onClick={() => run(() => requestCloseWindow(windowState, closeWindow))}>
-            <span className="context-glyph">×</span>
+            <Icon icon="lucide:x" width={16} height={16} />
             {t("close")}
           </button>
           <div className="context-menu-divider" />
