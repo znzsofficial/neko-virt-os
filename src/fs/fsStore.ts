@@ -3,6 +3,7 @@ import {
   createFolder as createFolderEntry,
   createTextFile,
   deleteFile,
+  deleteFiles,
   emptyTrash,
   listFiles,
   moveFile,
@@ -13,7 +14,7 @@ import {
   touchFile,
   updateFileContent,
 } from "./virtualFs";
-import { findEntryByNameInFolder, findFileByName, getFileNameError, getMoveError } from "./fileUtils";
+import { findEntryByNameInFolder, findFileByName, getFileNameError, getMoveError, getUniqueFileName } from "./fileUtils";
 import type { FsStore } from "../types";
 
 export const useFsStore = create<FsStore>((set, get) => ({
@@ -173,14 +174,12 @@ export const useFsStore = create<FsStore>((set, get) => ({
   },
   deleteFilesByIds: async (ids) => {
     const unique = [...new Set(ids)].filter(Boolean);
-    let count = 0;
-    for (const id of unique) {
+    const targets = unique.filter((id) => {
       const file = get().files.find((item) => item.id === id && !item.trashed);
-      if (!file) continue;
-      await deleteFile(id);
-      count += 1;
-    }
-    if (!count) return 0;
+      return Boolean(file);
+    });
+    if (!targets.length) return 0;
+    await deleteFiles(targets);
     const files = await listFiles();
     const selectedStill = get().selectedFileId && files.some((f) => f.id === get().selectedFileId && !f.trashed)
       ? get().selectedFileId
@@ -192,7 +191,7 @@ export const useFsStore = create<FsStore>((set, get) => ({
       draft: selectedFile?.kind === "text" ? selectedFile.content : "",
       dirty: false,
     });
-    return count;
+    return targets.length;
   },
   restoreSelectedFile: async () => {
     const selectedFileId = get().selectedFileId;
@@ -244,14 +243,14 @@ export const useFsStore = create<FsStore>((set, get) => ({
     const selectedFileId = get().selectedFileId;
     if (!selectedFileId) return;
     const selectedFile = get().files.find((file) => file.id === selectedFileId);
-    if (!selectedFile || selectedFile.kind !== "text") return;
+    if (!selectedFile || selectedFile.kind !== "text" || selectedFile.trashed) return;
     await updateFileContent(selectedFileId, get().draft);
     const files = await listFiles();
     set({ files, dirty: false });
   },
   saveFileDraft: async (id, draft) => {
     const file = get().files.find((item) => item.id === id);
-    if (!file || file.kind !== "text") return;
+    if (!file || file.kind !== "text" || file.trashed) return;
     await updateFileContent(id, draft);
     const files = await listFiles();
     const selectedFile = files.find((file) => file.id === get().selectedFileId);
@@ -263,22 +262,10 @@ async function restoreFileWithUniqueName(id: string, files: ReturnType<typeof us
   const file = files.find((item) => item.id === id);
   if (!file) return;
   const targetParentId = file.parentId ?? null;
-  const activeNames = new Set(
-    files
-      .filter((item) => !item.trashed && item.id !== id && (item.parentId ?? null) === targetParentId)
-      .map((item) => item.name.toLowerCase()),
-  );
-  let nextName = file.name;
-  if (activeNames.has(nextName.toLowerCase())) {
-    const dotIndex = file.name.lastIndexOf(".");
-    const base = dotIndex > 0 ? file.name.slice(0, dotIndex) : file.name;
-    const ext = dotIndex > 0 ? file.name.slice(dotIndex) : "";
-    let index = 1;
-    do {
-      nextName = `${base} (restored ${index})${ext}`;
-      index += 1;
-    } while (activeNames.has(nextName.toLowerCase()));
-    await renameFile(id, nextName);
-  }
+  const activeNames = files
+    .filter((item) => !item.trashed && item.id !== id && (item.parentId ?? null) === targetParentId)
+    .map((item) => item.name);
+  const nextName = getUniqueFileName(file.name, activeNames);
+  if (nextName !== file.name) await renameFile(id, nextName);
   await restoreFile(id);
 }

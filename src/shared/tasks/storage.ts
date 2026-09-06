@@ -1,7 +1,7 @@
-import { setOwnedLocalStorageItem } from "../../system/persistenceGate";
+import { removeOwnedLocalStorageItem, setOwnedLocalStorageItem } from "../../system/persistenceGate";
 
 export const TASKS_STORAGE_KEY = "neko-virt-os.tasks.v2";
-export const TASKS_LEGACY_KEY = "neko-virt-os.tasks.v1";
+const TASKS_LEGACY_KEY = "neko-virt-os.tasks.v1";
 
 export type TaskPriority = "low" | "medium" | "high";
 
@@ -35,9 +35,21 @@ function normalizeTaskList(raw: unknown): LocalTaskItem[] {
 /** Historical format: bare JSON array (v1 + v2). */
 export function readTasks(): LocalTaskItem[] {
   try {
-    const raw = localStorage.getItem(TASKS_STORAGE_KEY) ?? localStorage.getItem(TASKS_LEGACY_KEY);
-    if (!raw) return [];
-    return normalizeTaskList(JSON.parse(raw));
+    const raw = localStorage.getItem(TASKS_STORAGE_KEY);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          removeOwnedLocalStorageItem(TASKS_LEGACY_KEY);
+          return normalizeTaskList(parsed);
+        }
+      } catch {
+        // Corrupted v2 value: keep the legacy key and fall back to v1 below.
+      }
+    }
+    const legacy = localStorage.getItem(TASKS_LEGACY_KEY);
+    if (!legacy) return [];
+    return normalizeTaskList(JSON.parse(legacy));
   } catch {
     return [];
   }

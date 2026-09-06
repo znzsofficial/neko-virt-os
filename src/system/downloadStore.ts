@@ -21,6 +21,15 @@ type DownloadStore = {
 };
 
 const DOWNLOADS_STORAGE_KEY = "neko-virt-os.downloads.v1";
+const MAX_DOWNLOADS = 24;
+
+const ownedBlobUrls = new Set<string>();
+
+function revokeIfOwned(url: string | undefined) {
+  if (!url?.startsWith("blob:") || !ownedBlobUrls.has(url)) return;
+  ownedBlobUrls.delete(url);
+  URL.revokeObjectURL(url);
+}
 
 function readDownloads(): DownloadEntry[] {
   try {
@@ -38,6 +47,26 @@ function persistDownloads(entries: DownloadEntry[]) {
     setOwnedLocalStorageItem(DOWNLOADS_STORAGE_KEY, JSON.stringify(history));
   } catch {
     // ignore
+  }
+}
+
+async function adoptStoreOwnedUrl(entryId: string, sharedUrl: string) {
+  try {
+    const response = await fetch(sharedUrl);
+    if (!response.ok) return;
+    const ownedUrl = URL.createObjectURL(await response.blob());
+    if (!useDownloadStore.getState().entries.some((entry) => entry.id === entryId)) {
+      URL.revokeObjectURL(ownedUrl);
+      return;
+    }
+    const previous = useDownloadStore.getState().entries.find((entry) => entry.id === entryId)?.url;
+    ownedBlobUrls.add(ownedUrl);
+    useDownloadStore.setState((state) => ({
+      entries: state.entries.map((entry) => (entry.id === entryId ? { ...entry, url: ownedUrl } : entry)),
+    }));
+    revokeIfOwned(previous);
+  } catch {
+    // Keep sharing the caller URL when the copy fails.
   }
 }
 
@@ -60,9 +89,8 @@ export type DownloadBlobOptions = {
  * Prefer this over hand-rolled createObjectURL + <a click>.
  */
 export function downloadBlob(opts: DownloadBlobOptions): DownloadEntry | null {
-  const url =
-    opts.url ??
-    (opts.blob ? URL.createObjectURL(opts.blob) : null);
+  const callerUrl = opts.url ?? null;
+  const url = callerUrl ?? (opts.blob ? URL.createObjectURL(opts.blob) : null);
   if (!url) return null;
 
   const size = opts.size ?? opts.blob?.size;
@@ -70,13 +98,16 @@ export function downloadBlob(opts: DownloadBlobOptions): DownloadEntry | null {
 
   let entry: DownloadEntry | null = null;
   if (opts.register !== false) {
+    const ownedUrl = opts.blob ? (callerUrl ? URL.createObjectURL(opts.blob) : url) : null;
     entry = useDownloadStore.getState().addDownload({
       name: opts.name,
       source: opts.source,
       size,
       mimeType,
-      url,
+      url: ownedUrl ?? url,
     });
+    if (ownedUrl) ownedBlobUrls.add(ownedUrl);
+    else if (callerUrl?.startsWith("blob:")) void adoptStoreOwnedUrl(entry.id, callerUrl);
   }
 
   const link = document.createElement("a");
@@ -86,7 +117,10 @@ export function downloadBlob(opts: DownloadBlobOptions): DownloadEntry | null {
 
   if (opts.revokeAfterMs != null && opts.revokeAfterMs >= 0) {
     window.setTimeout(() => {
-      if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+      if (url.startsWith("blob:")) {
+        ownedBlobUrls.delete(url);
+        URL.revokeObjectURL(url);
+      }
     }, opts.revokeAfterMs);
   }
 
@@ -102,7 +136,9 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
       createdAt: Date.now(),
     };
     set((state) => {
-      const entries = [nextEntry, ...state.entries].slice(0, 24);
+      const merged = [nextEntry, ...state.entries];
+      for (const evicted of merged.slice(MAX_DOWNLOADS)) revokeIfOwned(evicted.url);
+      const entries = merged.slice(0, MAX_DOWNLOADS);
       persistDownloads(entries);
       return { entries };
     });
@@ -111,7 +147,7 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
   removeDownload: (id) =>
     set((state) => {
       const removed = state.entries.find((entry) => entry.id === id);
-      if (removed?.url?.startsWith("blob:")) URL.revokeObjectURL(removed.url);
+      if (removed) revokeIfOwned(removed.url);
       const entries = state.entries.filter((entry) => entry.id !== id);
       persistDownloads(entries);
       return { entries };
@@ -119,7 +155,7 @@ export const useDownloadStore = create<DownloadStore>((set) => ({
   clearDownloads: () =>
     set((state) => {
       state.entries.forEach((entry) => {
-        if (entry.url?.startsWith("blob:")) URL.revokeObjectURL(entry.url);
+        revokeIfOwned(entry.url);
       });
       persistDownloads([]);
       return { entries: [] };

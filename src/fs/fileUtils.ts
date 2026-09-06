@@ -11,6 +11,21 @@ export function findEntryByNameInFolder(files: FsFile[], name: string, parentId:
   return files.find((file) => !file.trashed && (file.parentId ?? null) === parentId && file.name.toLowerCase() === normalized) ?? null;
 }
 
+export function getUniqueFileName(target: string, takenNames: readonly string[]): string {
+  const taken = new Set(Array.from(takenNames, (name) => name.toLowerCase()));
+  if (!taken.has(target.toLowerCase())) return target;
+  const dotIndex = target.lastIndexOf(".");
+  const base = dotIndex > 0 ? target.slice(0, dotIndex) : target;
+  const ext = dotIndex > 0 ? target.slice(dotIndex) : "";
+  let index = 1;
+  let nextName = `${base} (restored ${index})${ext}`;
+  while (taken.has(nextName.toLowerCase())) {
+    index += 1;
+    nextName = `${base} (restored ${index})${ext}`;
+  }
+  return nextName;
+}
+
 export function splitFsPath(path: string) {
   const trimmed = path.trim();
   if (!trimmed) return [];
@@ -69,7 +84,10 @@ export function isFolderDescendant(files: FsFile[], folderId: string, parentCand
 export function getFileNameError(name: string, files: FsFile[], currentFileId?: string, parentId?: string | null): FileMutationErrorCode | null {
   const nextName = name.trim();
   if (!nextName) return "empty_name";
+  if (nextName === "." || nextName === "..") return "invalid_characters";
   if (/[\\/:*?"<>|]/.test(nextName)) return "invalid_characters";
+  if (/[\u0000-\u001f\u007f]/.test(nextName)) return "invalid_characters";
+  if (nextName.length > 255) return "invalid_characters";
   const duplicate = files.find(
     (file) => !file.trashed && file.id !== currentFileId && (file.parentId ?? null) === (parentId ?? null) && file.name.toLowerCase() === nextName.toLowerCase(),
   );

@@ -40,8 +40,8 @@ import {
 } from "./systemPrefs";
 import {
   THEME_STORAGE_KEY,
-  WALLPAPERS,
   applyThemeSettings,
+  isWallpaperId,
   normalizeThemeSettings,
 } from "./theme";
 
@@ -53,9 +53,9 @@ const themeSchema = z.strictObject({
   accentColor: z.enum(["blue", "cyan", "emerald", "mint", "amber", "coral", "rose", "purple", "violet", "slate"]),
   density: z.enum(["compact", "cozy"]),
   theme: z.enum(["system", "light", "dark"]),
-  wallpaperId: z.string().refine((value) => value in WALLPAPERS),
-  wallpaperLightId: z.string().refine((value) => value in WALLPAPERS),
-  wallpaperDarkId: z.string().refine((value) => value in WALLPAPERS),
+  wallpaperId: z.string().refine(isWallpaperId),
+  wallpaperLightId: z.string().refine(isWallpaperId),
+  wallpaperDarkId: z.string().refine(isWallpaperId),
   wallpaperFit: z.enum(["cover", "contain", "stretch", "tile"]),
   wallpaperOverlay: z.enum(["off", "soft", "standard"]),
 });
@@ -328,6 +328,7 @@ export function applySettingsBackup(
   ]);
 
   try {
+    // Restore intentionally bypasses the persistence gate so imports apply even while paused.
     for (const key of targetKeys) storage.setItem(key, values.get(key)!);
   } catch (error) {
     for (const key of targetKeys) {

@@ -25,6 +25,10 @@ export const WALLPAPERS: Record<ThemeSettings["wallpaperId"], { labelKey: Transl
 
 export const DEFAULT_THEME_SETTINGS: ThemeSettings = { accentColor: "coral", density: "cozy", theme: "system", wallpaperId: "system", wallpaperLightId: "system", wallpaperDarkId: "system", wallpaperFit: "cover", wallpaperOverlay: "standard" };
 
+export function isWallpaperId(id: unknown): id is ThemeSettings["wallpaperId"] {
+  return typeof id === "string" && Object.hasOwn(WALLPAPERS, id);
+}
+
 export const ACCENT_COLORS = [
   "blue",
   "cyan",
@@ -75,18 +79,18 @@ export function normalizeThemeSettings(value: Partial<ThemeSettings> & { accentC
     accentColor,
     density: value.density === "compact" || value.density === "cozy" ? value.density : DEFAULT_THEME_SETTINGS.density,
     theme: value.theme === "system" || value.theme === "dark" || value.theme === "light" ? value.theme : DEFAULT_THEME_SETTINGS.theme,
-    wallpaperId: value.wallpaperId && value.wallpaperId in WALLPAPERS ? value.wallpaperId as ThemeSettings["wallpaperId"] : DEFAULT_THEME_SETTINGS.wallpaperId,
+    wallpaperId: isWallpaperId(value.wallpaperId) ? value.wallpaperId : DEFAULT_THEME_SETTINGS.wallpaperId,
     wallpaperLightId:
-      value.wallpaperLightId && value.wallpaperLightId in WALLPAPERS
-        ? value.wallpaperLightId as ThemeSettings["wallpaperLightId"]
-        : value.wallpaperId && value.wallpaperId in WALLPAPERS
-          ? value.wallpaperId as ThemeSettings["wallpaperLightId"]
+      isWallpaperId(value.wallpaperLightId)
+        ? value.wallpaperLightId
+        : isWallpaperId(value.wallpaperId)
+          ? value.wallpaperId
           : DEFAULT_THEME_SETTINGS.wallpaperLightId,
     wallpaperDarkId:
-      value.wallpaperDarkId && value.wallpaperDarkId in WALLPAPERS
-        ? value.wallpaperDarkId as ThemeSettings["wallpaperDarkId"]
-        : value.wallpaperId && value.wallpaperId in WALLPAPERS
-          ? value.wallpaperId as ThemeSettings["wallpaperDarkId"]
+      isWallpaperId(value.wallpaperDarkId)
+        ? value.wallpaperDarkId
+        : isWallpaperId(value.wallpaperId)
+          ? value.wallpaperId
           : DEFAULT_THEME_SETTINGS.wallpaperDarkId,
     wallpaperFit: WALLPAPER_FITS.includes(value.wallpaperFit as ThemeSettings["wallpaperFit"]) ? value.wallpaperFit as ThemeSettings["wallpaperFit"] : DEFAULT_THEME_SETTINGS.wallpaperFit,
     wallpaperOverlay:
