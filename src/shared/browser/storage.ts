@@ -44,7 +44,10 @@ export function createBrowserTabRecord(initialUrl = BROWSER_HOME_URL): BrowserTa
 export function readBrowserRecents(): BrowserRecentEntry[] {
   try {
     const raw = localStorage.getItem(BROWSER_RECENTS_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as BrowserRecentEntry[]) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isRecentEntry);
   } catch {
     return [];
   }
@@ -64,10 +67,50 @@ export function pushBrowserRecent(url: string, title: string): BrowserRecentEntr
   return next;
 }
 
+function isHttpUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url);
+}
+
+function isNavigableTabUrl(url: string): boolean {
+  return url === BROWSER_HOME_URL || isHttpUrl(url);
+}
+
+function isRecentEntry(value: unknown): value is BrowserRecentEntry {
+  if (!value || typeof value !== "object") return false;
+  const entry = value as BrowserRecentEntry;
+  return typeof entry.title === "string" && typeof entry.url === "string" && isHttpUrl(entry.url);
+}
+
+function isTabRecord(value: unknown): value is BrowserTabRecord {
+  return Boolean(value) && typeof value === "object" && typeof (value as BrowserTabRecord).id === "string";
+}
+
+function sanitizeHistory(history: unknown): string[] {
+  if (!Array.isArray(history)) return [BROWSER_HOME_URL];
+  const entries = history.filter((url): url is string => typeof url === "string" && isNavigableTabUrl(url));
+  return entries.length ? entries : [BROWSER_HOME_URL];
+}
+
+function sanitizeTabRecord(tab: BrowserTabRecord): BrowserTabRecord {
+  const history = sanitizeHistory(tab.history);
+  const historyIndex =
+    typeof tab.historyIndex === "number"
+      ? Math.max(0, Math.min(Math.trunc(tab.historyIndex), history.length - 1))
+      : 0;
+  const currentUrl = history[historyIndex] ?? BROWSER_HOME_URL;
+  return {
+    id: tab.id,
+    history,
+    historyIndex,
+    address:
+      typeof tab.address === "string" && isNavigableTabUrl(tab.address) ? tab.address : currentUrl,
+  };
+}
+
 function isBookmarkEntry(value: unknown): value is BrowserBookmarkEntry {
   if (!value || typeof value !== "object") return false;
   const entry = value as BrowserBookmarkEntry;
-  return typeof entry.title === "string" && typeof entry.url === "string" && entry.url.length > 0;
+  return typeof entry.title === "string" && isHttpUrl(entry.url);
 }
 
 export function readBrowserBookmarksRaw(): BrowserBookmarkEntry[] | null {
@@ -98,7 +141,10 @@ export function writeBrowserBookmarks(entries: BrowserBookmarkEntry[]) {
 export function readClosedTabRecords(): BrowserTabRecord[] {
   try {
     const raw = localStorage.getItem(BROWSER_CLOSED_TABS_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as BrowserTabRecord[]) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isTabRecord).map(sanitizeTabRecord);
   } catch {
     return [];
   }
@@ -120,20 +166,11 @@ export function readBrowserSessionRecords(): {
     const raw = localStorage.getItem(BROWSER_SESSION_STORAGE_KEY);
     if (!raw) return null;
     const value = JSON.parse(raw) as { tabs: BrowserTabRecord[]; activeTabId: string };
-    if (!Array.isArray(value.tabs) || !value.tabs.length) return null;
+    if (!Array.isArray(value.tabs)) return null;
+    const tabs = value.tabs.filter(isTabRecord).map(sanitizeTabRecord);
+    if (!tabs.length) return null;
     return {
-      tabs: value.tabs.map((tab) => ({
-        id: tab.id,
-        history: Array.isArray(tab.history) && tab.history.length ? tab.history : [BROWSER_HOME_URL],
-        historyIndex:
-          typeof tab.historyIndex === "number"
-            ? Math.max(0, Math.min(tab.historyIndex, (tab.history?.length ?? 1) - 1))
-            : 0,
-        address:
-          typeof tab.address === "string"
-            ? tab.address
-            : tab.history?.[tab.historyIndex] ?? BROWSER_HOME_URL,
-      })),
+      tabs,
       activeTabId: value.activeTabId,
     };
   } catch {

@@ -20,7 +20,19 @@ export function normalizeBrowserUrl(
 ): string {
   const trimmed = value.trim();
   if (!trimmed || trimmed === homeUrl) return homeUrl;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      if (url.username || url.password) {
+        url.username = "";
+        url.password = "";
+        return url.toString();
+      }
+    } catch {
+      return trimmed;
+    }
+    return trimmed;
+  }
   if (/^[\w.-]+\.[a-z]{2,}(\/.*)?$/i.test(trimmed)) return `https://${trimmed}`;
   return `${SEARCH_ENGINE_URLS[searchEngine]}${encodeURIComponent(trimmed)}`;
 }

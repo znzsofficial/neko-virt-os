@@ -336,6 +336,8 @@ export function VrBrowserPanel({ open, onClose, disabled, initialUrl }: Props) {
           <iframe
             title="VR Browser"
             src={url}
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
+            referrerPolicy="no-referrer-when-downgrade"
             // Match 2D BrowserApp as closely as possible.
             style={{
               width: "100%",

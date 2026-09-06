@@ -20,13 +20,13 @@ export default defineConfig(({ mode }) => ({
       output: {
         manualChunks(id) {
           if (!id.includes("node_modules")) return undefined;
-          if (id.includes("react-rnd")) return "vendor-windowing";
-          if (id.includes("dexie") || id.includes("zustand")) return "vendor-state";
-          if (id.includes("@iconify-icon/react") || id.includes("clsx") || id.includes("react-hotkeys-hook")) return "vendor-ui";
-          if (id.includes("nanoid")) return "vendor-utils";
-          if (id.includes("@yohawing/three-mmd-loader")) return "vendor-mmd";
-          if (id.includes("postprocessing")) return "vendor-postfx";
-          if (id.includes("@react-three") || id.includes("three")) return "vendor-three";
+          if (/[\\/]node_modules[\\/]react-rnd[\\/]/.test(id)) return "vendor-windowing";
+          if (/[\\/]node_modules[\\/](dexie|zustand)[\\/]/.test(id)) return "vendor-state";
+          if (/[\\/]node_modules[\\/](@iconify-icon[\\/]react|clsx|react-hotkeys-hook)[\\/]/.test(id)) return "vendor-ui";
+          if (/[\\/]node_modules[\\/]nanoid[\\/]/.test(id)) return "vendor-utils";
+          if (/[\\/]node_modules[\\/]@yohawing[\\/]three-mmd-loader[\\/]/.test(id)) return "vendor-mmd";
+          if (/[\\/]node_modules[\\/]postprocessing[\\/]/.test(id)) return "vendor-postfx";
+          if (/[\\/]node_modules[\\/](@react-three[\\/][^\\/]+|three|three-stdlib)[\\/]/.test(id)) return "vendor-three";
           return undefined;
         },
       },

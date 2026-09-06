@@ -123,7 +123,7 @@ function BrowserFavicon({ url, fallback, size = 16 }: { url: string; fallback: s
   return (
     <img
       className="browser-favicon"
-      src={`https://www.google.com/s2/favicons?sz=32&domain_url=${encodeURIComponent(url)}`}
+      src={`https://www.google.com/s2/favicons?sz=32&domain_url=${encodeURIComponent(host)}`}
       alt=""
       width={size}
       height={size}
@@ -147,6 +147,14 @@ export function BrowserApp() {
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? createTab();
   const currentUrl = activeTab.history[activeTab.historyIndex] ?? HOME_URL;
+  const frameSrc = (() => {
+    try {
+      const protocol = new URL(currentUrl).protocol;
+      return protocol === "http:" || protocol === "https:" ? currentUrl : "";
+    } catch {
+      return "";
+    }
+  })();
   const isHome = currentUrl === HOME_URL;
   const canGoBack = activeTab.historyIndex > 0;
   const canGoForward = activeTab.historyIndex < activeTab.history.length - 1;
@@ -168,7 +176,7 @@ export function BrowserApp() {
   useEffect(() => {
     const pendingUrl = consumeBrowserOpenUrl();
     if (!pendingUrl) return;
-    const nextTab = createTab(pendingUrl);
+    const nextTab = createTab(normalizeBrowserUrl(pendingUrl, HOME_URL, searchEngine));
     setTabs((current) => [...current, nextTab]);
     setActiveTabId(nextTab.id);
   }, []);
@@ -491,7 +499,16 @@ export function BrowserApp() {
           </section>
         ) : (
           <section className="browser-frame-shell">
-            <iframe key={currentUrl} src={currentUrl} title={currentUrl} onLoad={() => patchActiveTab((tab) => ({ ...tab, iframeLoaded: true }))} />
+            {frameSrc ? (
+              <iframe
+                key={currentUrl}
+                src={frameSrc}
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads"
+                referrerPolicy="no-referrer-when-downgrade"
+                title={currentUrl}
+                onLoad={() => patchActiveTab((tab) => ({ ...tab, iframeLoaded: true }))}
+              />
+            ) : null}
             {activeTab.iframeSlow && !activeTab.iframeLoaded ? (
               <div className="browser-frame-notice">
                 <Icon icon="solar:shield-warning-bold-duotone" width={40} height={40} />

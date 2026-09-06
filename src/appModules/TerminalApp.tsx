@@ -929,55 +929,39 @@ async function runCurl(args: string[]) {
   const timeout = window.setTimeout(() => controller.abort(), 10000);
 
   try {
-    const result = await fetchWithCorsFallback(url.toString(), controller.signal);
-    const contentType = result.response.headers.get("content-type") ?? "unknown";
-    const text = await result.response.text();
+    const response = await fetch(url.toString(), { signal: controller.signal });
+    const contentType = response.headers.get("content-type") ?? "unknown";
+    let text = "";
+    if (response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          text += decoder.decode(value, { stream: true });
+          if (text.length > 8000) break;
+        }
+        if (text.length <= 8000) text += decoder.decode();
+      } finally {
+        void reader.cancel().catch(() => undefined);
+      }
+    } else {
+      text = await response.text();
+    }
     const body = text.length > 8000 ? `${text.slice(0, 8000)}\n${useLanguageStore.getState().t("terminalTruncated")}` : text;
     return [
-      `HTTP ${result.response.status} ${result.response.statusText}${result.viaProxy ? ` (${result.viaProxy})` : ""}`.trim(),
+      `HTTP ${response.status} ${response.statusText}`.trim(),
       `${useLanguageStore.getState().t("terminalContentTypePrefix")}${contentType}`,
-      `${useLanguageStore.getState().t("terminalSourcePrefix")}${result.finalUrl}`,
+      `${useLanguageStore.getState().t("terminalSourcePrefix")}${url.toString()}`,
       "",
       ...(body ? body.split("\n") : [useLanguageStore.getState().t("terminalEmptyResponse")]),
     ];
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return [useLanguageStore.getState().t("terminalCurlTimeout")];
-    return [
-      useLanguageStore.getState().t("terminalCurlFailed1"),
-      useLanguageStore.getState().t("terminalCurlFailed2"),
-    ];
+    return [useLanguageStore.getState().t("apiRequestFailed")];
   } finally {
     window.clearTimeout(timeout);
-  }
-}
-
-async function fetchWithCorsFallback(url: string, signal: AbortSignal) {
-  try {
-    const response = await fetch(url, { signal });
-    return { response, viaProxy: null as string | null, finalUrl: url };
-  } catch {
-    const proxyCandidates = [
-      {
-        label: "via cors.isomorphic-git.org",
-        requestUrl: `https://cors.isomorphic-git.org/${url}`,
-      },
-      {
-        label: "via allorigins",
-        requestUrl: `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-      },
-    ];
-
-    for (const proxy of proxyCandidates) {
-      try {
-        const response = await fetch(proxy.requestUrl, { signal });
-        if (!response.ok) continue;
-        return { response, viaProxy: proxy.label, finalUrl: url };
-      } catch {
-        continue;
-      }
-    }
-
-    throw new Error("curl proxy fallback failed");
   }
 }
 
