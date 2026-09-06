@@ -72,7 +72,7 @@ export function TasksApp() {
   return (
     <div className="tasks-app">
       <form className="tasks-form" onSubmit={(event) => { event.preventDefault(); addTask(); }}>
-        <input value={draft} placeholder={t("tasksPlaceholder")} onChange={(event) => setDraft(event.target.value)} />
+        <input value={draft} placeholder={t("tasksPlaceholder")} aria-label={t("tasksPlaceholder")} onChange={(event) => setDraft(event.target.value)} />
         <input type="date" value={draftDue} onChange={(event) => setDraftDue(event.target.value)} aria-label={t("tasksDue")} />
         <select value={draftPriority} onChange={(event) => setDraftPriority(event.target.value as TaskPriority)} aria-label={t("tasksPriority")}>
           <option value="low">{t("tasksPriorityLow")}</option>
@@ -83,7 +83,7 @@ export function TasksApp() {
       </form>
 
       <div className="tasks-toolbar">
-        <input value={query} placeholder={t("tasksSearch")} onChange={(event) => setQuery(event.target.value)} />
+        <input value={query} placeholder={t("tasksSearch")} aria-label={t("tasksSearch")} onChange={(event) => setQuery(event.target.value)} />
         <div className="tasks-filters">
           {([
             ["all", t("tasksFilterAll")],
@@ -118,9 +118,9 @@ export function TasksApp() {
               </small>
             </span>
             <div className="task-actions">
-              <button type="button" onClick={(event) => { event.preventDefault(); moveTask(task.id, -1); }}>↑</button>
-              <button type="button" onClick={(event) => { event.preventDefault(); moveTask(task.id, 1); }}>↓</button>
-              <button type="button" onClick={(event) => { event.preventDefault(); setTasks((current) => current.filter((item) => item.id !== task.id)); }}>×</button>
+              <button type="button" aria-label={t("taskMoveUp")} onClick={(event) => { event.preventDefault(); moveTask(task.id, -1); }}>↑</button>
+              <button type="button" aria-label={t("taskMoveDown")} onClick={(event) => { event.preventDefault(); moveTask(task.id, 1); }}>↓</button>
+              <button type="button" aria-label={t("delete")} onClick={(event) => { event.preventDefault(); setTasks((current) => current.filter((item) => item.id !== task.id)); }}>×</button>
             </div>
           </label>
         )) : <div className="empty-state"><p>{t("noTasks")}</p></div>}

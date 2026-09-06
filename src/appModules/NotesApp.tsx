@@ -6,6 +6,9 @@ import { useLanguageStore } from "../languageStore";
 import { clearNoteWindowDirty, getNoteWindowFile, setNoteWindowDirty, setNoteWindowFile } from "../shell/windowLifecycle";
 import { useDesktopStore } from "../windowStore";
 
+const markedModulePromise = import("marked");
+const domPurifyModulePromise = import("dompurify");
+
 export function NotesApp({ windowId }: { windowId?: string }) {
   const t = useLanguageStore((state) => state.t);
   const files = useFsStore((state) => state.files);
@@ -43,16 +46,19 @@ export function NotesApp({ windowId }: { windowId?: string }) {
 
   useEffect(() => {
     if (viewMode === "edit") return;
-    let mounted = true;
-    void Promise.all([import("marked"), import("dompurify")]).then(([markedModule, domPurifyModule]) => {
-      if (!mounted) return;
-      const html = markedModule.marked.parse(draft, { async: false }) as string;
-      setPreviewHtml(domPurifyModule.default.sanitize(html));
-    }).catch(() => {
-      if (mounted) setPreviewHtml(`<p>${t("markdownPreviewUnavailable")}</p>`);
-    });
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void Promise.all([markedModulePromise, domPurifyModulePromise]).then(([markedModule, domPurifyModule]) => {
+        if (cancelled) return;
+        const html = markedModule.marked.parse(draft, { async: false }) as string;
+        setPreviewHtml(domPurifyModule.default.sanitize(html));
+      }).catch(() => {
+        if (!cancelled) setPreviewHtml(`<p>${t("markdownPreviewUnavailable")}</p>`);
+      });
+    }, 250);
     return () => {
-      mounted = false;
+      cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [draft, t, viewMode]);
 

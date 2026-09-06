@@ -39,12 +39,10 @@ export function CalendarApp() {
   }, [events]);
 
   function moveMonth(delta: number) {
-    setCursor((current) => {
-      const next = new Date(current.getFullYear(), current.getMonth() + delta, 1);
-      const nextMax = daysInMonth(next.getFullYear(), next.getMonth());
-      setSelectedDay((day) => Math.min(day, nextMax));
-      return next;
-    });
+    const next = new Date(cursor.getFullYear(), cursor.getMonth() + delta, 1);
+    const nextMax = daysInMonth(next.getFullYear(), next.getMonth());
+    setCursor(next);
+    setSelectedDay(Math.min(selectedDay, nextMax));
   }
 
   function goToday() {

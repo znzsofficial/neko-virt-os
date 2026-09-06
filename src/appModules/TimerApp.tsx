@@ -48,16 +48,14 @@ export function TimerApp() {
   useEffect(() => {
     if (!countdownRunning) return;
     const interval = setInterval(() => {
-      setCountdownLeft((current) => {
-        if (current <= 1) {
-          setCountdownRunning(false);
-          return 0;
-        }
-        return current - 1;
-      });
+      setCountdownLeft((current) => (current <= 1 ? 0 : current - 1));
     }, 1000);
     return () => clearInterval(interval);
   }, [countdownRunning]);
+
+  useEffect(() => {
+    if (countdownLeft === 0 && countdownRunning) setCountdownRunning(false);
+  }, [countdownLeft, countdownRunning]);
 
   useEffect(() => {
     if (countdownLeft !== 0 || notifiedRef.current) return;

@@ -59,16 +59,14 @@ export function useLocalMediaPlaylist(kind: "audio" | "video", mediaRef: RefObje
   }
 
   function removeItem(id: string) {
-    setItems((current) => {
-      const removed = current.find((item) => item.id === id);
-      if (removed) URL.revokeObjectURL(removed.url);
-      const nextItems = current.filter((item) => item.id !== id);
-      if (currentItemId === id) {
-        setCurrentItemId(nextItems[0]?.id ?? null);
-        setPlaying(false);
-      }
-      return nextItems;
-    });
+    const removed = items.find((item) => item.id === id);
+    const nextItems = items.filter((item) => item.id !== id);
+    if (currentItemId === id) {
+      setCurrentItemId(nextItems[0]?.id ?? null);
+      setPlaying(false);
+    }
+    setItems(nextItems);
+    if (removed) URL.revokeObjectURL(removed.url);
   }
 
   return {

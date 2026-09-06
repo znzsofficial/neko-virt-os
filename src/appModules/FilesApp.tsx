@@ -93,29 +93,51 @@ export function FilesApp() {
   const t = useLanguageStore((state) => state.t);
   const language = useLanguageStore((state) => state.language);
 
-  const selectedFile = files.find((file) => file.id === selectedFileId) ?? null;
-  const activeFiles = files.filter((file) => !file.trashed);
-  const trashedFiles = files.filter((file) => file.trashed);
-  const currentFolder = activeFiles.find((file) => file.id === currentFolderId && file.kind === "folder") ?? null;
-  const recentFiles = activeFiles.slice().sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 8);
+  const selectedFile = useMemo(
+    () => files.find((file) => file.id === selectedFileId) ?? null,
+    [files, selectedFileId],
+  );
+  const activeFiles = useMemo(() => files.filter((file) => !file.trashed), [files]);
+  const trashedFiles = useMemo(() => files.filter((file) => file.trashed), [files]);
+  const currentFolder = useMemo(
+    () => activeFiles.find((file) => file.id === currentFolderId && file.kind === "folder") ?? null,
+    [activeFiles, currentFolderId],
+  );
+  const recentFiles = useMemo(
+    () => activeFiles.slice().sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 8),
+    [activeFiles],
+  );
   const effectiveSortMode = section === "recent" ? "updated" : sortMode;
   const listFolderId = section === "home" ? null : currentFolderId;
-  const visibleFiles = sortFiles(
-    (section === "recent"
-      ? recentFiles
-      : section === "trash"
-        ? trashedFiles
-        : activeFiles.filter((file) => (file.parentId ?? null) === listFolderId)
-    ).filter((file) => file.name.toLowerCase().includes(query.trim().toLowerCase())),
-    effectiveSortMode,
+  const visibleFiles = useMemo(
+    () =>
+      sortFiles(
+        (section === "recent"
+          ? recentFiles
+          : section === "trash"
+            ? trashedFiles
+            : activeFiles.filter((file) => (file.parentId ?? null) === listFolderId)
+        ).filter((file) => file.name.toLowerCase().includes(query.trim().toLowerCase())),
+        effectiveSortMode,
+      ),
+    [activeFiles, effectiveSortMode, listFolderId, query, recentFiles, section, trashedFiles],
   );
   const previewText = selectedFile?.kind === "text" ? selectedFile.content : "";
-  const wordCount = previewText.trim() ? previewText.trim().split(/\s+/).length : 0;
-  const charSetSize = new Set(previewText).size;
-  const folderChildrenCount = selectedFile?.kind === "folder"
-    ? activeFiles.filter((file) => (file.parentId ?? null) === selectedFile.id).length
-    : 0;
-  const folderChain = currentFolderId && section === "files" ? buildFolderChain(currentFolderId, activeFiles) : [];
+  const wordCount = useMemo(
+    () => (previewText.trim() ? previewText.trim().split(/\s+/).length : 0),
+    [previewText],
+  );
+  const charSetSize = useMemo(() => new Set(previewText).size, [previewText]);
+  const folderChildrenCount = useMemo(
+    () => (selectedFile?.kind === "folder"
+      ? activeFiles.filter((file) => (file.parentId ?? null) === selectedFile.id).length
+      : 0),
+    [activeFiles, selectedFile],
+  );
+  const folderChain = useMemo(
+    () => (currentFolderId && section === "files" ? buildFolderChain(currentFolderId, activeFiles) : []),
+    [activeFiles, currentFolderId, section],
+  );
   const canGoBack = section === "files" && folderHistoryIndex > 0;
   const canGoForward = section === "files" && folderHistoryIndex < folderHistory.length - 1;
   const multiCount = selectedIds.length;
@@ -357,28 +379,34 @@ export function FilesApp() {
     });
   }, [files, visibleFiles]);
 
+  function handleGlobalKeyDown(event: KeyboardEvent) {
+    if (isEditableTarget(event.target) || renamingFileId || creatingFile) return;
+    if (event.key === "Escape") {
+      setSelectedIds(selectedFileId ? [selectedFileId] : []);
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a" && section !== "trash") {
+      event.preventDefault();
+      const ids = visibleFiles.map((file) => file.id);
+      setSelection(ids, selectedFileId ?? ids[0] ?? null);
+      return;
+    }
+    if (event.key !== "Delete" && event.key !== "Backspace") return;
+    if (section === "trash") return;
+    if (!selectedIds.length && !selectedFileId) return;
+    event.preventDefault();
+    void deleteSelection();
+  }
+  const globalKeyDownRef = useRef(handleGlobalKeyDown);
+  globalKeyDownRef.current = handleGlobalKeyDown;
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (isEditableTarget(event.target) || renamingFileId || creatingFile) return;
-      if (event.key === "Escape") {
-        setSelectedIds(selectedFileId ? [selectedFileId] : []);
-        return;
-      }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a" && section !== "trash") {
-        event.preventDefault();
-        const ids = visibleFiles.map((file) => file.id);
-        setSelection(ids, selectedFileId ?? ids[0] ?? null);
-        return;
-      }
-      if (event.key !== "Delete" && event.key !== "Backspace") return;
-      if (section === "trash") return;
-      if (!selectedIds.length && !selectedFileId) return;
-      event.preventDefault();
-      void deleteSelection();
+      globalKeyDownRef.current(event);
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  });
+  }, []);
 
   function startRename(fileToRename = selectedFile) {
     if (!fileToRename || multiCount > 1) return;
