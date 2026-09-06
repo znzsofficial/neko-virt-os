@@ -4,6 +4,7 @@ import {
   findEntryByNameInFolder,
   getFileNameError,
   getMoveError,
+  getUniqueFileName,
   isFolderDescendant,
   splitFsPath,
 } from "./fileUtils";
@@ -40,6 +41,13 @@ describe("getFileNameError", () => {
     expect(getFileNameError("bad:name", sample, undefined, "root-a")).toBe("invalid_characters");
   });
 
+  it("rejects dot names, control characters, and overlong names", () => {
+    expect(getFileNameError(".", sample, undefined, "root-a")).toBe("invalid_characters");
+    expect(getFileNameError("..", sample, undefined, "root-a")).toBe("invalid_characters");
+    expect(getFileNameError("bad\u0000name", sample, undefined, "root-a")).toBe("invalid_characters");
+    expect(getFileNameError("a".repeat(256), sample, undefined, "root-a")).toBe("invalid_characters");
+  });
+
   it("detects duplicates in the same folder", () => {
     expect(getFileNameError("readme.md", sample, undefined, "root-a")).toBe("duplicate_name");
     expect(getFileNameError("readme.md", sample, "sibling", "root-a")).toBeNull();
@@ -55,6 +63,28 @@ describe("getMoveError / isFolderDescendant", () => {
 
   it("allows moving a file into another folder when name is free", () => {
     expect(getMoveError(sample, "leaf", "root-a")).toBeNull();
+  });
+});
+
+describe("getUniqueFileName", () => {
+  it("returns the target unchanged when not taken", () => {
+    expect(getUniqueFileName("hello.txt", [])).toBe("hello.txt");
+    expect(getUniqueFileName("hello.txt", ["HELLO.MD", "readme.md"])).toBe("hello.txt");
+  });
+
+  it("suffixes (restored N) before the extension, case-insensitively", () => {
+    expect(getUniqueFileName("hello.txt", ["HELLO.TXT"])).toBe("hello (restored 1).txt");
+    expect(
+      getUniqueFileName("hello.txt", ["hello.txt", "hello (restored 1).txt", "HELLO (RESTORED 2).TXT"]),
+    ).toBe("hello (restored 3).txt");
+  });
+
+  it("treats dot-prefixed names as extension-less", () => {
+    expect(getUniqueFileName(".hidden", [".hidden"])).toBe(".hidden (restored 1)");
+  });
+
+  it("dedupes folder names without extension", () => {
+    expect(getUniqueFileName("Docs", ["docs", "Docs (restored 1)"])).toBe("Docs (restored 2)");
   });
 });
 

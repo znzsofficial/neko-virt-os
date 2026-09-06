@@ -38,4 +38,32 @@ describe("dialogStore queue", () => {
     useDialogStore.getState().settle(null);
     await expect(cancelled).resolves.toBeNull();
   });
+
+  it("ignores a second settle in the same tick and keeps the queued dialog intact", async () => {
+    const first = appConfirm({ title: "a", message: "1" });
+    const second = appAlert({ title: "b", message: "2" });
+
+    useDialogStore.getState().settle(true);
+    useDialogStore.getState().settle(false);
+
+    await expect(first).resolves.toBe(true);
+    const state = useDialogStore.getState();
+    expect(state.current?.kind).toBe("alert");
+    expect(state.queue).toHaveLength(0);
+
+    useDialogStore.getState().settle(true);
+    await second;
+    expect(useDialogStore.getState().current).toBeNull();
+  });
+
+  it("still settles sequential dialogs across separate ticks", async () => {
+    const first = appConfirm({ title: "a", message: "1" });
+    useDialogStore.getState().settle(true);
+    await expect(first).resolves.toBe(true);
+
+    const second = appConfirm({ title: "b", message: "2" });
+    useDialogStore.getState().settle(false);
+    await expect(second).resolves.toBe(false);
+    expect(useDialogStore.getState().current).toBeNull();
+  });
 });
