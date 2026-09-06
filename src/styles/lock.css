@@ -15,6 +15,9 @@
   cursor: pointer;
   user-select: none;
 }
+.os-lock-screen:focus {
+  outline: none;
+}
 .os-lock-content {
   display: grid;
   gap: 10px;

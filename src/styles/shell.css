@@ -96,7 +96,7 @@
   backdrop-filter: blur(14px);
   box-shadow: 0 10px 28px color-mix(in oklch, var(--widget-hue, var(--os-primary)) 12%, transparent);
   color: var(--os-ink);
-  cursor: default;
+  cursor: pointer;
   padding: 12px;
 }
 .desktop-widget.tint-sky { --widget-hue: oklch(0.72 0.14 230); }
@@ -1069,4 +1069,16 @@ html[data-high-contrast="on"] .control-center-panel {
 .os.is-vr-desktop {
   /* Keep shell mounted but non-interactive under the XR overlay. */
   pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .system-window,
+  .system-window .window-frame,
+  .taskbar,
+  .taskbar-item,
+  .taskbar-item::after,
+  .window-switcher-panel {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+  }
 }

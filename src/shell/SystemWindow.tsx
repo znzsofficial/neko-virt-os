@@ -1,14 +1,14 @@
 import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
-import { Suspense, useEffect, useState, type MouseEvent } from "react";
+import { memo, Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
 import { flushSync } from "react-dom";
 import { Rnd } from "react-rnd";
 import { appComponentRegistry } from "../appRegistry";
-import { appTitleKeys, getAppIcon } from "../appText";
+import { getAppIcon } from "../appText";
 import { useLanguageStore } from "../languageStore";
 import { useOsUiStore } from "../osUiStore";
 import type { WindowState } from "../types";
-import { snapWindowBounds, useDesktopStore } from "../windowStore";
+import { SNAP_THRESHOLD, getWindowTitle, snapWindowBounds, useDesktopStore } from "../windowStore";
 import { requestCloseWindow } from "./windowLifecycle";
 
 function getImmersiveBounds(): { x: number; y: number; width: number; height: number } {
@@ -20,7 +20,7 @@ function getImmersiveBounds(): { x: number; y: number; width: number; height: nu
   };
 }
 
-export function SystemWindow({ window }: { window: WindowState }) {
+export const SystemWindow = memo(function SystemWindow({ window }: { window: WindowState }) {
   const activeWindowId = useDesktopStore((state) => state.activeWindowId);
   const closeWindow = useDesktopStore((state) => state.closeWindow);
   const focusWindow = useDesktopStore((state) => state.focusWindow);
@@ -34,9 +34,11 @@ export function SystemWindow({ window }: { window: WindowState }) {
   const isActive = activeWindowId === window.id;
   const windowIcon = getAppIcon(window.appId, window.icon);
   const t = useLanguageStore((state) => state.t);
-  const windowTitle = t(appTitleKeys[window.appId]);
+  const windowTitle = getWindowTitle(window, t);
   const [isMinimizing, setIsMinimizing] = useState(false);
   const [liveBounds, setLiveBounds] = useState(() => ({ x: window.x, y: window.y, width: window.width, height: window.height }));
+  const titlebarRef = useRef<HTMLElement | null>(null);
+  const frameRef = useRef<HTMLElement | null>(null);
   const canFullscreen = window.appId === "mmd-studio";
 
   useEffect(() => {
@@ -55,6 +57,19 @@ export function SystemWindow({ window }: { window: WindowState }) {
     globalThis.window.addEventListener("resize", onResize);
     return () => globalThis.window.removeEventListener("resize", onResize);
   }, [isImmersive]);
+
+  useEffect(() => {
+    if (!isActive || window.minimized || isImmersive) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && frameRef.current?.contains(active)) return;
+    titlebarRef.current?.focus({ preventScroll: true });
+  }, [isActive, isImmersive, window.minimized]);
+
+  useEffect(() => {
+    if (isActive) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && frameRef.current?.contains(active)) active.blur();
+  }, [isActive]);
 
   function requestMinimize() {
     setIsMinimizing(true);
@@ -98,12 +113,12 @@ export function SystemWindow({ window }: { window: WindowState }) {
       data-app-id={window.appId}
       position={{ x: liveBounds.x, y: liveBounds.y }}
       size={{ width: liveBounds.width, height: liveBounds.height }}
+      minWidth={380}
+      minHeight={250}
       disableDragging={window.minimized || isImmersive}
       dragHandleClassName="window-titlebar"
       cancel=".window-content, .window-actions, .window-actions *, input, textarea, button, select, option, a, iframe, label"
       enableResizing={!window.maximized && !window.minimized && !isImmersive}
-      minWidth={380}
-      minHeight={250}
       style={{ zIndex: window.minimized ? 0 : isImmersive ? 1000 : window.z }}
       onMouseDown={() => {
         if (!window.minimized) focusWindow(window.id);
@@ -115,15 +130,15 @@ export function SystemWindow({ window }: { window: WindowState }) {
       }}
       onDragStop={(_, data) => {
         if (isImmersive) return;
-        if (data.y <= 14) {
+        if (data.y <= SNAP_THRESHOLD) {
           toggleMaximize(window.id);
           return;
         }
-        if (data.x <= 14) {
+        if (data.x <= SNAP_THRESHOLD) {
           snapWindow(window.id, "left");
           return;
         }
-        if (data.x + window.width >= globalThis.window.innerWidth - 14) {
+        if (data.x + window.width >= globalThis.window.innerWidth - SNAP_THRESHOLD) {
           snapWindow(window.id, "right");
           return;
         }
@@ -153,6 +168,7 @@ export function SystemWindow({ window }: { window: WindowState }) {
       }}
     >
       <article
+        ref={frameRef}
         className="window-frame"
         data-context-kind="window"
         data-context-id={window.id}
@@ -160,6 +176,8 @@ export function SystemWindow({ window }: { window: WindowState }) {
       >
         {!isImmersive ? (
           <header
+            ref={titlebarRef}
+            tabIndex={-1}
             className="window-titlebar"
             onMouseDown={(event) => {
               if (event.button !== 0) return;
@@ -184,14 +202,14 @@ export function SystemWindow({ window }: { window: WindowState }) {
               onClick={(event) => event.stopPropagation()}
               onDoubleClick={(event) => event.stopPropagation()}
             >
-              <button type="button" className="window-action is-minimize" aria-label={`${t("minimizeWindowLabel")}${windowTitle}`} onClick={requestMinimize}>
+              <button type="button" className="window-action is-minimize" aria-label={`${t("minimizeWindowLabel")} ${windowTitle}`} onClick={requestMinimize}>
                 <Icon icon="lucide:minus" width={16} height={16} />
               </button>
               {canFullscreen ? (
                 <button
                   type="button"
                   className="window-action is-fullscreen"
-                  aria-label={`${t("fullscreenWindowLabel")}${windowTitle}`}
+                  aria-label={`${t("fullscreenWindowLabel")} ${windowTitle}`}
                   onClick={() => {
                     focusWindow(window.id);
                     toggleImmersive(window.id);
@@ -203,7 +221,7 @@ export function SystemWindow({ window }: { window: WindowState }) {
               <button
                 type="button"
                 className="window-action is-maximize"
-                aria-label={`${window.maximized ? t("restoreWindowLabel") : t("maximizeWindowLabel")}${windowTitle}`}
+                aria-label={`${window.maximized ? t("restoreWindowLabel") : t("maximizeWindowLabel")} ${windowTitle}`}
                 onClick={() => toggleMaximize(window.id)}
               >
                 <Icon icon={window.maximized ? "lucide:copy" : "lucide:square"} width={14} height={14} />
@@ -211,7 +229,7 @@ export function SystemWindow({ window }: { window: WindowState }) {
               <button
                 type="button"
                 className="window-action is-close"
-                aria-label={`${t("closeWindowLabel")}${windowTitle}`}
+                aria-label={`${t("closeWindowLabel")} ${windowTitle}`}
                 onClick={() => requestCloseWindow(window, closeWindow)}
               >
                 <Icon icon="lucide:x" width={16} height={16} />
@@ -223,7 +241,7 @@ export function SystemWindow({ window }: { window: WindowState }) {
       </article>
     </Rnd>
   );
-}
+});
 
 function renderApp(window: WindowState) {
   const RegisteredApp = appComponentRegistry[window.appId];

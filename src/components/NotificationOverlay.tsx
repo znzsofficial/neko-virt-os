@@ -5,6 +5,7 @@ import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
 import { useOsUiStore } from "../osUiStore";
 import { useDesktopStore } from "../windowStore";
+import { pluralize } from "../shell/phrase";
 import type { AppId, NotificationCategory } from "../types";
 import type { TranslationKey } from "../languageStore";
 
@@ -45,7 +46,7 @@ export function NotificationOverlay() {
       <div className="notification-overlay" aria-live="assertive">
         {notifications.length ? (
           <div className="notification-toolbar">
-            <span>{`${t("notificationCountPrefix")}${notifications.length}${t("notificationCountSuffix")}`}</span>
+            <span>{`${t("notificationCountPrefix")}${notifications.length}${pluralize(t, notifications.length, "notificationCountOne", "notificationCountSuffix")}`}</span>
             <button type="button" className="notification-clear" onClick={clearNotifications}>
               {t("clearNotifications")}
             </button>
@@ -54,24 +55,31 @@ export function NotificationOverlay() {
         {notifications.map((n) => (
           <div
             key={n.id}
-            className={clsx("notification-toast", n.type, n.appId && "is-clickable", n.leaving && "is-leaving")}
-            onClick={() => {
-              if (!n.appId) return;
-              activateNotification(n.appId);
-              dismissNotification(n.id);
-            }}
+            className={clsx("notification-toast", n.type, n.leaving && "is-leaving")}
           >
-            <div className="notification-icon">
-              {n.type === "success" && <Icon icon="solar:check-circle-bold" width={20} height={20} />}
-              {n.type === "error" && <Icon icon="solar:danger-bold" width={20} height={20} />}
-              {n.type === "warning" && <Icon icon="solar:info-square-bold" width={20} height={20} />}
-              {(!n.type || n.type === "info") && <Icon icon="solar:bell-bold" width={20} height={20} />}
-            </div>
-            <div className="notification-content">
-              <h3>{n.title}</h3>
-              <p>{n.message}</p>
-              <small>{t(categoryKeys[n.category ?? "system"])}</small>
-            </div>
+            <button
+              type="button"
+              className="notification-toast-action"
+              disabled={!n.appId}
+              aria-label={n.appId ? `${t("notificationToastOpen")}: ${n.title}` : undefined}
+              onClick={() => {
+                if (!n.appId) return;
+                activateNotification(n.appId);
+                dismissNotification(n.id);
+              }}
+            >
+              <span className="notification-icon">
+                {n.type === "success" && <Icon icon="solar:check-circle-bold" width={20} height={20} />}
+                {n.type === "error" && <Icon icon="solar:danger-bold" width={20} height={20} />}
+                {n.type === "warning" && <Icon icon="solar:info-square-bold" width={20} height={20} />}
+                {(!n.type || n.type === "info") && <Icon icon="solar:bell-bold" width={20} height={20} />}
+              </span>
+              <span className="notification-content">
+                <strong>{n.title}</strong>
+                <span>{n.message}</span>
+                <small>{t(categoryKeys[n.category ?? "system"])}</small>
+              </span>
+            </button>
             <button
               className="notification-close"
               onClick={(event) => {

@@ -3,6 +3,7 @@ import { clsx } from "clsx";
 import { getAppIcon } from "../appText";
 import { useLanguageStore } from "../languageStore";
 import type { WindowState } from "../types";
+import { getWindowTitle } from "../windowStore";
 
 export function WindowSwitcher({ windows, selectedIndex }: { windows: WindowState[]; selectedIndex: number }) {
   const t = useLanguageStore((state) => state.t);
@@ -14,7 +15,7 @@ export function WindowSwitcher({ windows, selectedIndex }: { windows: WindowStat
           {windows.map((window, index) => (
             <div key={window.id} className={clsx("window-switcher-item", index === selectedIndex && "is-selected", window.minimized && "is-minimized")} data-app-id={window.appId}>
               <Icon icon={getAppIcon(window.appId, window.icon)} width={28} height={28} />
-              <strong>{window.title}</strong>
+              <strong>{getWindowTitle(window, t)}</strong>
               <span>{window.minimized ? t("minimized") : t("running")}</span>
             </div>
           ))}

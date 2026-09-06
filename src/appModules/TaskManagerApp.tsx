@@ -7,7 +7,7 @@ import { useFsStore } from "../fs";
 import { useLanguageStore } from "../languageStore";
 import { requestCloseWindow } from "../shell/windowLifecycle";
 import { type BrowserPerformance, type DeviceSnapshot, formatBytes, getDeviceRows, readHighEntropyDeviceInfo, type StorageSnapshot } from "../system/systemInfo";
-import { useDesktopStore } from "../windowStore";
+import { getWindowTitle, useDesktopStore } from "../windowStore";
 
 export function TaskManagerApp() {
   const t = useLanguageStore((state) => state.t);
@@ -46,6 +46,7 @@ export function TaskManagerApp() {
       return {
         ...window,
         icon: getAppIcon(window.appId, window.icon),
+        title: getWindowTitle(window, t),
         description: app ? t(appDescriptionKeys[app.id]) : t("taskManagerFallbackProcess"),
         status: window.minimized ? t("taskManagerSuspended") : activeWindowId === window.id ? t("taskManagerActive") : t("taskManagerBackground"),
         footprint: `${Math.max(12, Math.round((window.width * window.height) / 26000))} ${t("taskManagerUiUnits")}`,

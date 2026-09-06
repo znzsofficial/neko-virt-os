@@ -5,8 +5,8 @@ export const initialWindows: WindowState[] = [
   {
     id: "win-notes",
     appId: "notes",
-    title: "笔记",
     icon: "solar:notes-bold-duotone",
+    instanceNumber: 1,
     x: 900,
     y: 120,
     width: 545,

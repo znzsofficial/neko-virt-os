@@ -5,6 +5,7 @@ import { setOwnedLocalStorageItem } from "./system/persistenceGate";
 
 export type Language = "zh" | "en";
 export type TranslationKey = keyof typeof zh;
+type Translate = (key: TranslationKey) => string;
 
 const LANGUAGE_STORAGE_KEY = "neko-virt-os.language.v1";
 
@@ -17,18 +18,27 @@ function readLanguage(): Language {
   }
 }
 
+const translateZh: Translate = (key) => zh[key];
+const translateEn: Translate = (key) => en[key];
+
+function translateFor(language: Language): Translate {
+  return language === "zh" ? translateZh : translateEn;
+}
+
+const initialLanguage = readLanguage();
+
 export const useLanguageStore = create<{
   language: Language;
   setLanguage: (language: Language) => void;
-  t: (key: TranslationKey) => string;
-}>((set, get) => ({
-  language: readLanguage(),
+  t: Translate;
+}>((set) => ({
+  language: initialLanguage,
   setLanguage: (language) => {
     setOwnedLocalStorageItem(LANGUAGE_STORAGE_KEY, language);
     document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
-    set({ language });
+    set({ language, t: translateFor(language) });
   },
-  t: (key) => (get().language === "zh" ? zh[key] : en[key]),
+  t: translateFor(initialLanguage),
 }));
 
-document.documentElement.lang = readLanguage() === "zh" ? "zh-CN" : "en";
+document.documentElement.lang = initialLanguage === "zh" ? "zh-CN" : "en";

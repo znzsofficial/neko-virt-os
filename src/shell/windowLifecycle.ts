@@ -1,34 +1,19 @@
 import { appConfirm } from "../dialogStore";
 import { useLanguageStore } from "../languageStore";
+import { clearNoteWindowState, isNoteWindowDirty } from "../notesWindowState";
 import { useMmdStudioStore } from "../appModules/mmdStudio/mmdStudioStore";
 import type { WindowState } from "../types";
 
-const noteDirtyWindows = new Map<string, boolean>();
-const noteWindowFiles = new Map<string, string>();
-
-export function setNoteWindowDirty(windowId: string, dirty: boolean) {
-  noteDirtyWindows.set(windowId, dirty);
-}
-
-export function setNoteWindowFile(windowId: string, fileId: string) {
-  noteWindowFiles.set(windowId, fileId);
-}
-
-export function getNoteWindowFile(windowId: string) {
-  return noteWindowFiles.get(windowId) ?? null;
-}
-
-export function clearNoteWindowDirty(windowId: string) {
-  noteDirtyWindows.delete(windowId);
-}
-
-export function clearNoteWindowFile(windowId: string) {
-  noteWindowFiles.delete(windowId);
-}
-
-export function isNoteWindowDirty(windowId: string) {
-  return Boolean(noteDirtyWindows.get(windowId));
-}
+export {
+  setNoteWindowDirty,
+  setNoteWindowFile,
+  getNoteWindowFile,
+  clearNoteWindowDirty,
+  clearNoteWindowFile,
+  clearNoteWindowState,
+  clearAllNoteWindowState,
+  isNoteWindowDirty,
+} from "../notesWindowState";
 
 function mmdStudioNeedsCloseConfirm() {
   try {
@@ -59,7 +44,6 @@ export async function requestCloseWindow(windowState: WindowState, closeWindow: 
     });
     if (!shouldClose) return;
   }
-  clearNoteWindowDirty(windowState.id);
-  clearNoteWindowFile(windowState.id);
+  clearNoteWindowState(windowState.id);
   closeWindow(windowState.id);
 }

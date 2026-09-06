@@ -11,10 +11,11 @@ import { getFileOpenApp } from "../fs";
 import { useFsStore } from "../fs";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
+import { useOsUiStore } from "../osUiStore";
 import { useDesktopStore } from "../windowStore";
 import { useDesktopPinsStore } from "./desktopPinsStore";
 import { openFilesFolder } from "./filesBridge";
-import { phrase } from "./phrase";
+import { phrase, pluralize } from "./phrase";
 
 export function Desktop() {
   const [selectedDesktopItems, setSelectedDesktopItems] = useState<string[]>([]);
@@ -121,38 +122,42 @@ export function Desktop() {
   // Selection box and delete key logic
   useEffect(() => {
     function handleGlobalKeyDown(event: KeyboardEvent) {
-      if (event.key === "Delete" && selectedDesktopItems.length > 0) {
-        const fileIdsToDelete = selectedDesktopItems
-          .filter((item) => item.startsWith("file:"))
-          .map((item) => item.replace("file:", ""));
-        
-        if (fileIdsToDelete.length > 0) {
-          const filesToDelete = files.filter((f) => fileIdsToDelete.includes(f.id));
-          const names = filesToDelete.map((f) => f.name).join(", ");
-          void appConfirm({
-            title: t("dialogConfirmTitle"),
-            message: phrase(t, "confirmDeletePrefix", names, "confirmDeleteSuffix"),
-            confirmLabel: t("delete"),
-            danger: true,
-          }).then((ok) => {
-            if (!ok) return;
-            void Promise.all(filesToDelete.map(async (f) => deleteFileById(f.id))).then(() => {
-              addNotification({
-                title: t("filesDeleted"),
-                message: phrase(t, "filesDeletedPrefix", filesToDelete.length, "filesDeletedSuffix"),
-                type: "success",
-                category: "files",
-                appId: "files",
-              });
+      if (event.key !== "Delete") return;
+      if (useOsUiStore.getState().sessionLocked) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.("input, textarea, select, [contenteditable=true]")) return;
+      if (document.querySelector(".app-dialog-backdrop, .mmd-modal-backdrop")) return;
+      if (selectedDesktopItems.length === 0) return;
+      const fileIdsToDelete = selectedDesktopItems
+        .filter((item) => item.startsWith("file:"))
+        .map((item) => item.replace("file:", ""));
+
+      if (fileIdsToDelete.length > 0) {
+        const filesToDelete = files.filter((f) => fileIdsToDelete.includes(f.id));
+        const names = filesToDelete.map((f) => f.name).join(", ");
+        void appConfirm({
+          title: t("dialogConfirmTitle"),
+          message: phrase(t, "confirmDeletePrefix", names, "confirmDeleteSuffix"),
+          confirmLabel: t("delete"),
+          danger: true,
+        }).then((ok) => {
+          if (!ok) return;
+          void Promise.all(filesToDelete.map(async (f) => deleteFileById(f.id))).then(() => {
+            addNotification({
+              title: t("filesDeleted"),
+              message: phrase(t, "filesDeletedPrefix", filesToDelete.length, "filesDeletedSuffix"),
+              type: "success",
+              category: "files",
+              appId: "files",
             });
-            setSelectedDesktopItems([]);
           });
-        }
+          setSelectedDesktopItems([]);
+        });
       }
     }
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [selectedDesktopItems, files, deleteFileById]);
+  }, [selectedDesktopItems, files, deleteFileById, addNotification, t]);
 
   function handleDesktopMouseDown(event: MouseEvent<HTMLElement>) {
     if (event.button !== 0) return;
@@ -339,7 +344,7 @@ export function Desktop() {
             }
             const movedCount = results.filter((result) => result.file).length;
             if (movedCount) {
-              addNotification({ title: t("itemMoved"), message: `${movedCount} ${t("itemsCount")}`, type: "success", category: "files", appId: "files" });
+              addNotification({ title: t("itemMoved"), message: `${movedCount}${pluralize(t, movedCount, "movedItemsOne", "movedItemsOther")}`, type: "success", category: "files", appId: "files" });
             }
             if (desktopLayoutMode === "grid") {
               const dropBounds = getDesktopBoundsSize(desktopIconsRef.current);
@@ -408,6 +413,9 @@ export function Desktop() {
           return (
             <div
               key={`desktop-app:${app.id}`}
+              role="button"
+              tabIndex={0}
+              aria-pressed={selectedDesktopItems.includes(itemId) || undefined}
               className={clsx("desktop-icon", selectedDesktopItems.includes(itemId) && "is-selected")}
               data-app-id={app.id}
               style={{ position: "absolute", left: pos.x, top: pos.y }}
@@ -419,6 +427,11 @@ export function Desktop() {
               onMouseDown={(e) => handleIconMouseDown(itemId, e)}
               onContextMenu={(e) => handleIconContextMenu(itemId, e)}
               onDoubleClick={() => openApp(app.id)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                openApp(app.id);
+              }}
             >
               <Icon icon={app.icon} width={30} height={30} />
               <span>{t(appTitleKeys[app.id])}</span>
@@ -431,6 +444,9 @@ export function Desktop() {
           return (
             <div
               key={`desktop-file:${file.id}`}
+              role="button"
+              tabIndex={0}
+              aria-pressed={selectedDesktopItems.includes(itemId) || undefined}
               className={clsx("desktop-icon", "desktop-file", selectedDesktopItems.includes(itemId) && "is-selected", desktopDragTarget === `desktop:${file.id}` && "is-drag-target", desktopInvalidDragTarget === `desktop:${file.id}` && "is-invalid-drag-target")}
               style={{ position: "absolute", left: pos.x, top: pos.y }}
               data-context-kind="file"
@@ -442,6 +458,17 @@ export function Desktop() {
               onMouseDown={(e) => handleIconMouseDown(itemId, e)}
               onContextMenu={(e) => handleIconContextMenu(itemId, e)}
               onDoubleClick={() => {
+                selectFile(file.id);
+                if (file.kind === "folder") {
+                  openFilesFolder(file.id);
+                  openApp("files");
+                  return;
+                }
+                openApp(getFileOpenApp(file));
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
                 selectFile(file.id);
                 if (file.kind === "folder") {
                   openFilesFolder(file.id);

@@ -8,3 +8,12 @@ export function phrase(
 ) {
   return `${t(prefix)}${value}${t(suffix)}`;
 }
+
+export function pluralize(
+  t: (key: TranslationKey) => string,
+  count: number,
+  one: TranslationKey,
+  other: TranslationKey,
+) {
+  return count === 1 ? t(one) : t(other);
+}

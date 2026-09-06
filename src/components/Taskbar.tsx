@@ -1,14 +1,14 @@
 import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { appTitleKeys, getAppIcon } from "../appText";
+import { getAppIcon } from "../appText";
 import { ControlCenter } from "./ControlCenter";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
 import { useOsUiStore } from "../osUiStore";
 import { buildMonthCells, WEEKDAY_KEYS } from "../shared/calendar/monthGrid";
 import { formatClockTime } from "../system/systemPrefs";
-import { useDesktopStore } from "../windowStore";
+import { getWindowTitle, useDesktopStore } from "../windowStore";
 
 export function Taskbar() {
   const windows = useDesktopStore((state) => state.windows);
@@ -28,31 +28,13 @@ export function Taskbar() {
   const historyCount = useNotificationStore((state) => state.history.length);
   const liveCount = useNotificationStore((state) => state.notifications.length);
   const t = useLanguageStore((state) => state.t);
-  const [timeStr, setTimeStr] = useState("");
   const [clockOpen, setClockOpen] = useState(false);
   const clockRef = useRef<HTMLDivElement>(null);
   const controlRef = useRef<HTMLDivElement>(null);
-  const [cursor, setCursor] = useState(() => new Date());
-  const today = new Date();
-  const cells = useMemo(
-    () => buildMonthCells(cursor.getFullYear(), cursor.getMonth()),
-    [cursor],
-  );
   const workspaceWindows = useMemo(
     () => windows.filter((window) => (window.workspaceId ?? 0) === activeWorkspace),
     [windows, activeWorkspace],
   );
-
-  useEffect(() => {
-    function updateClock() {
-      const now = new Date();
-      setTimeStr(formatClockTime(now, hour12));
-      setCursor((current) => current.getMonth() === now.getMonth() && current.getFullYear() === now.getFullYear() ? current : new Date(now.getFullYear(), now.getMonth(), 1));
-    }
-    updateClock();
-    const interval = setInterval(updateClock, 1000);
-    return () => clearInterval(interval);
-  }, [hour12]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -63,10 +45,6 @@ export function Taskbar() {
     window.addEventListener("mousedown", handlePointerDown);
     return () => window.removeEventListener("mousedown", handlePointerDown);
   }, [setControlCenterOpen]);
-
-  function moveMonth(delta: number) {
-    setCursor((current) => new Date(current.getFullYear(), current.getMonth() + delta, 1));
-  }
 
   return (
     <footer
@@ -92,11 +70,11 @@ export function Taskbar() {
               data-context-kind="taskbar-window"
               data-context-id={window.id}
               data-app-id={window.appId}
-              title={t(appTitleKeys[window.appId])}
+              title={getWindowTitle(window, t)}
               onClick={() => toggleTaskbarWindow(window.id)}
             >
               <Icon icon={getAppIcon(window.appId, window.icon)} width={18} height={18} />
-              {taskbarShowLabels ? <span>{t(appTitleKeys[window.appId])}</span> : null}
+              {taskbarShowLabels ? <span>{getWindowTitle(window, t)}</span> : null}
             </button>
           ))}
         </div>
@@ -150,30 +128,71 @@ export function Taskbar() {
             aria-haspopup="dialog"
             aria-expanded={clockOpen}
           >
-            <span>{timeStr}</span>
+            <Clock hour12={hour12} />
           </button>
-          {clockOpen ? (
-            <div className="tray-clock-panel" role="dialog" aria-label={t("appCalendar")}>
-              <div className="tray-clock-header">
-                <button type="button" className="button-ghost" onClick={() => moveMonth(-1)}>{t("previous")}</button>
-                <div>
-                  <strong>{cursor.toLocaleDateString([], { month: "long", year: "numeric" })}</strong>
-                  <p>{today.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" })}</p>
-                </div>
-                <button type="button" className="button-ghost" onClick={() => moveMonth(1)}>{t("next")}</button>
-              </div>
-              <div className="tray-clock-bigtime">{formatClockTime(today, hour12)}</div>
-              <div className="calendar-grid tray-clock-grid">
-                {WEEKDAY_KEYS.map((dayKey) => <strong key={dayKey}>{t(dayKey)}</strong>)}
-                {cells.map((day, index) => {
-                  const isToday = day === today.getDate() && cursor.getMonth() === today.getMonth() && cursor.getFullYear() === today.getFullYear();
-                  return <span key={`${day}-${index}`} className={clsx(day && "has-day", isToday && "is-today")}>{day}</span>;
-                })}
-              </div>
-            </div>
-          ) : null}
+          {clockOpen ? <ClockPanel /> : null}
         </div>
       </div>
     </footer>
+  );
+}
+
+function Clock({ hour12 }: { hour12: boolean }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+  return <span>{formatClockTime(now, hour12)}</span>;
+}
+
+function ClockPanel() {
+  const t = useLanguageStore((state) => state.t);
+  const language = useLanguageStore((state) => state.language);
+  const hour12 = useOsUiStore((state) => state.systemPrefs.hour12);
+  const locale = language === "zh" ? "zh-CN" : "en-US";
+  const [cursor, setCursor] = useState(() => new Date());
+  const [now, setNow] = useState(() => new Date());
+  const cells = useMemo(
+    () => buildMonthCells(cursor.getFullYear(), cursor.getMonth()),
+    [cursor],
+  );
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const current = new Date();
+      setNow(current);
+      setCursor((prev) =>
+        prev.getMonth() === current.getMonth() && prev.getFullYear() === current.getFullYear()
+          ? prev
+          : new Date(current.getFullYear(), current.getMonth(), 1),
+      );
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  function moveMonth(delta: number) {
+    setCursor((current) => new Date(current.getFullYear(), current.getMonth() + delta, 1));
+  }
+
+  return (
+    <div className="tray-clock-panel" role="dialog" aria-label={t("appCalendar")}>
+      <div className="tray-clock-header">
+        <button type="button" className="button-ghost" onClick={() => moveMonth(-1)}>{t("previous")}</button>
+        <div>
+          <strong>{cursor.toLocaleDateString(locale, { month: "long", year: "numeric" })}</strong>
+          <p>{now.toLocaleDateString(locale, { weekday: "long", month: "short", day: "numeric" })}</p>
+        </div>
+        <button type="button" className="button-ghost" onClick={() => moveMonth(1)}>{t("next")}</button>
+      </div>
+      <div className="tray-clock-bigtime">{formatClockTime(now, hour12)}</div>
+      <div className="calendar-grid tray-clock-grid">
+        {WEEKDAY_KEYS.map((dayKey) => <strong key={dayKey}>{t(dayKey)}</strong>)}
+        {cells.map((day, index) => {
+          const isToday = day === now.getDate() && cursor.getMonth() === now.getMonth() && cursor.getFullYear() === now.getFullYear();
+          return <span key={`${day}-${index}`} className={clsx(day && "has-day", isToday && "is-today")}>{day}</span>;
+        })}
+      </div>
+    </div>
   );
 }

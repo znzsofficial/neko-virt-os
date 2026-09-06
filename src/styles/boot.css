@@ -69,3 +69,10 @@
     transform: translateX(200%);
   }
 }
+@media (prefers-reduced-motion: reduce) {
+  .boot-cat,
+  .boot-progress-bar {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+  }
+}

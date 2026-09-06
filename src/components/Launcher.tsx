@@ -44,6 +44,9 @@ export function Launcher() {
           aria-label={t("launcherSearchPlaceholder")}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") closeLauncher();
+          }}
           placeholder={t("launcherSearchPlaceholder")}
         />
       </label>
@@ -69,6 +72,7 @@ function LauncherSection({
   onTogglePinned: (appId: AppId) => void;
   t: (key: TranslationKey) => string;
 }) {
+  const pinnedAppIds = useLauncherStore((state) => state.pinnedAppIds);
   if (!sectionApps.length) return null;
   return (
     <section className="launcher-section">
@@ -92,6 +96,7 @@ function LauncherSection({
               type="button"
               className="launcher-pin"
               aria-label={t("pinnedApplication")}
+              aria-pressed={pinnedAppIds.includes(app.id)}
               onClick={() => onTogglePinned(app.id)}
             >
               <Icon icon="solar:pin-bold-duotone" width={16} height={16} />

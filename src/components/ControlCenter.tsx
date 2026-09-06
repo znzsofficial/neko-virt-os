@@ -39,6 +39,19 @@ export function ControlCenter() {
     void refreshVrCapability();
   }, [open, vrEnabled]);
 
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.("input, textarea, select, [contenteditable=true]")) return;
+      if (document.querySelector(".app-dialog-backdrop, .mmd-modal-backdrop")) return;
+      setControlCenterOpen(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, setControlCenterOpen]);
+
   if (!open) return null;
 
   function switchWorkspace(workspace: WorkspaceId) {

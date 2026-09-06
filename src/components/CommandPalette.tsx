@@ -7,8 +7,10 @@ import { appDescriptionKeys, appTitleKeys, getAppIcon } from "../appText";
 import { getFileOpenApp, queueBrowserOpenUrl, useFsStore } from "../fs";
 import { readLocalBookmarks, readLocalCalendarEvents, readLocalTasks } from "../system/localData";
 import { useLanguageStore, type TranslationKey } from "../languageStore";
+import { useOsUiStore } from "../osUiStore";
 import { openFilesFolder } from "../shell/filesBridge";
-import { useDesktopStore } from "../windowStore";
+import { useDesktopStore, getWindowTitle } from "../windowStore";
+import type { WorkspaceId } from "../types";
 type CommandItem = {
   id: string;
   group: TranslationKey;
@@ -42,10 +44,11 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     const windowCommands = windows.map((window) => ({
       id: `window:${window.id}`,
       group: "commandWindows" as const,
-      title: window.title,
+      title: getWindowTitle(window, t),
       subtitle: window.minimized ? t("minimized") : t("running"),
       icon: getAppIcon(window.appId, window.icon),
       run: () => {
+        useOsUiStore.getState().setActiveWorkspace((window.workspaceId ?? 0) as WorkspaceId);
         restoreWindow(window.id);
         focusWindow(window.id);
       },

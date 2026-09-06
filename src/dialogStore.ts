@@ -23,6 +23,7 @@ type DialogStore = {
 };
 
 let nextId = 1;
+let settlingCurrent = false;
 
 function promote(set: (partial: Partial<DialogStore> | ((state: DialogStore) => Partial<DialogStore>)) => void, get: () => DialogStore) {
   const state = get();
@@ -45,9 +46,14 @@ export const useDialogStore = create<DialogStore>((set, get) => ({
       promote(set, get);
     }),
   settle: (value) => {
+    if (settlingCurrent) return;
     const state = get();
     const current = state.current;
     if (!current) return;
+    settlingCurrent = true;
+    queueMicrotask(() => {
+      settlingCurrent = false;
+    });
     current.resolve(value);
     const [next, ...queue] = state.queue;
     set({ current: next ?? null, queue });

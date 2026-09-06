@@ -1,18 +1,24 @@
 import { Icon } from "@iconify-icon/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLanguageStore } from "../languageStore";
 import { useOsUiStore } from "../osUiStore";
 import { formatClockTime } from "../system/systemPrefs";
 
 export function LockScreen() {
   const t = useLanguageStore((state) => state.t);
+  const language = useLanguageStore((state) => state.language);
   const unlockSession = useOsUiStore((state) => state.unlockSession);
   const hour12 = useOsUiStore((state) => state.systemPrefs.hour12);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    dialogRef.current?.focus();
   }, []);
 
   useEffect(() => {
@@ -28,9 +34,12 @@ export function LockScreen() {
 
   return (
     <div
+      ref={dialogRef}
       className="os-lock-screen"
       role="dialog"
+      aria-modal="true"
       aria-label={t("lockSession")}
+      tabIndex={-1}
       onContextMenu={(event) => event.preventDefault()}
       onClick={() => unlockSession()}
     >
@@ -40,7 +49,7 @@ export function LockScreen() {
           {formatClockTime(now, hour12)}
         </div>
         <p className="os-lock-date">
-          {now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}
+          {now.toLocaleDateString(language === "zh" ? "zh-CN" : "en-US", { weekday: "long", month: "long", day: "numeric" })}
         </p>
         <button
           type="button"

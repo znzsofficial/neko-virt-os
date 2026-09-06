@@ -15,13 +15,13 @@ export type WorkspaceId = 0 | 1 | 2;
 export type WindowState = WindowBounds & {
   id: string;
   appId: AppId;
-  title: string;
   icon: string;
   z: number;
   minimized: boolean;
   maximized: boolean;
   workspaceId?: WorkspaceId;
   restoreBounds?: WindowBounds;
+  instanceNumber?: number;
 };
 
 export type DesktopLayoutMode = "grid" | "free";

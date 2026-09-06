@@ -105,6 +105,7 @@ export function AppDialogHost() {
           <input
             ref={inputRef}
             className="app-dialog-input"
+            aria-label={t("dialogPromptInputLabel")}
             value={value}
             placeholder={current.placeholder}
             spellCheck={false}

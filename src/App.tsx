@@ -1,7 +1,7 @@
 import { Icon } from "@iconify-icon/react";
 import { clsx } from "clsx";
 import { useHotkeys } from "react-hotkeys-hook";
-import { lazy, Suspense, useEffect, useState, type MouseEvent } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { setOwnedLocalStorageItem } from "./system/persistenceGate";
 import { AppDialogHost } from "./components/AppDialogHost";
 import { FpsOverlay } from "./components/FpsOverlay";
@@ -16,10 +16,11 @@ import { useOsUiStore } from "./osUiStore";
 import { ContextMenu } from "./shell/ContextMenu";
 import { Desktop } from "./shell/Desktop";
 import { SystemWindow } from "./shell/SystemWindow";
+import { requestCloseWindow } from "./shell/windowLifecycle";
 import { useIdleLock } from "./hooks/useIdleLock";
 import { applyThemeSettings, initializeThemeSync, readThemeSettings, THEME_STORAGE_KEY } from "./system/theme";
 import type { ContextMenuState } from "./types";
-import { useDesktopStore } from "./windowStore";
+import { getMaximizedBounds, useDesktopStore } from "./windowStore";
 import { VrDesktopOverlay } from "./vrDesktop/VrDesktopOverlay";
 import { refreshVrCapability, useVrDesktopStore } from "./vrDesktop/vrDesktopStore";
 
@@ -33,6 +34,7 @@ export function App() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switcherIndex, setSwitcherIndex] = useState(0);
+  const switcherCancelledRef = useRef(false);
   const windows = useDesktopStore((state) => state.windows);
   const activeWindowId = useDesktopStore((state) => state.activeWindowId);
   const launcherOpen = useDesktopStore((state) => state.launcherOpen);
@@ -48,11 +50,34 @@ export function App() {
   const initFs = useFsStore((state) => state.init);
   const t = useLanguageStore((state) => state.t);
   useIdleLock();
-  const workspaceWindows = windows.filter((window) => (window.workspaceId ?? 0) === activeWorkspace);
-  const switcherWindows = workspaceWindows.slice().sort((a, b) => b.z - a.z);
+  const workspaceWindows = useMemo(
+    () => windows.filter((window) => (window.workspaceId ?? 0) === activeWorkspace),
+    [windows, activeWorkspace],
+  );
+  const switcherWindows = useMemo(
+    () => workspaceWindows.slice().sort((a, b) => b.z - a.z),
+    [workspaceWindows],
+  );
   const isImmersive = Boolean(immersiveWindowId);
 
   useHotkeys("ctrl+k, meta+k", () => setCommandOpen((open) => !open), { preventDefault: true, enableOnFormTags: true });
+
+  useHotkeys("ctrl+alt+w", () => {
+    const { windows: currentWindows, activeWindowId: currentActiveId, closeWindow } = useDesktopStore.getState();
+    const target = currentWindows.find((win) => win.id === currentActiveId);
+    if (!target) return;
+    void requestCloseWindow(target, closeWindow);
+  }, { preventDefault: true });
+
+  useHotkeys("ctrl+alt+m", () => {
+    const { activeWindowId: currentActiveId, minimizeWindow } = useDesktopStore.getState();
+    if (currentActiveId) minimizeWindow(currentActiveId);
+  }, { preventDefault: true });
+
+  useHotkeys("ctrl+alt+up", () => {
+    const { activeWindowId: currentActiveId, toggleMaximize } = useDesktopStore.getState();
+    if (currentActiveId) toggleMaximize(currentActiveId);
+  }, { preventDefault: true });
 
   useEffect(() => {
     if (!immersiveWindowId) return;
@@ -120,19 +145,34 @@ export function App() {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && switcherOpen) {
+        event.preventDefault();
+        switcherCancelledRef.current = true;
+        setSwitcherOpen(false);
+        return;
+      }
+      if (sessionLocked) return;
       if (event.key !== "Tab" || (!event.altKey && !event.metaKey)) return;
       if (!switcherWindows.length) return;
       event.preventDefault();
+      switcherCancelledRef.current = false;
       setSwitcherOpen(true);
       setSwitcherIndex((current) => {
         const activeIndex = switcherWindows.findIndex((window) => window.id === activeWindowId);
         const base = current >= 0 && current < switcherWindows.length ? current : Math.max(0, activeIndex);
-        return (base + 1) % switcherWindows.length;
+        const step = event.shiftKey ? -1 : 1;
+        return (base + step + switcherWindows.length) % switcherWindows.length;
       });
     }
 
     function handleKeyUp(event: KeyboardEvent) {
       if (event.key !== "Alt" && event.key !== "Meta") return;
+      if (sessionLocked) return;
+      if (switcherCancelledRef.current) {
+        switcherCancelledRef.current = false;
+        setSwitcherOpen(false);
+        return;
+      }
       const target = switcherWindows[switcherIndex];
       setSwitcherOpen(false);
       if (!target) return;
@@ -146,7 +186,64 @@ export function App() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [activeWindowId, focusWindow, restoreWindow, switcherIndex, switcherWindows]);
+  }, [activeWindowId, focusWindow, restoreWindow, sessionLocked, switcherIndex, switcherWindows, switcherOpen]);
+
+  useEffect(() => {
+    if (!sessionLocked) return;
+    setSwitcherOpen(false);
+    setSwitcherIndex(0);
+  }, [sessionLocked]);
+
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      const ui = useOsUiStore.getState();
+      if (ui.immersiveWindowId || ui.sessionLocked) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.("input, textarea, select, [contenteditable=true]")) return;
+      if (document.querySelector(".app-dialog-backdrop, .mmd-modal-backdrop")) return;
+      if (switcherOpen) {
+        event.preventDefault();
+        switcherCancelledRef.current = true;
+        setSwitcherOpen(false);
+        return;
+      }
+      if (contextMenu) {
+        event.preventDefault();
+        setContextMenu(null);
+        return;
+      }
+      if (launcherOpen) {
+        event.preventDefault();
+        closeLauncher();
+        return;
+      }
+      if (ui.controlCenterOpen) {
+        event.preventDefault();
+        ui.setControlCenterOpen(false);
+        return;
+      }
+      if (ui.notificationCenterOpen) {
+        event.preventDefault();
+        ui.setNotificationCenterOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [closeLauncher, contextMenu, launcherOpen, switcherOpen]);
+
+  useEffect(() => {
+    function handleViewportResize() {
+      const { windows: currentWindows, updateWindow } = useDesktopStore.getState();
+      const bounds = getMaximizedBounds();
+      currentWindows.forEach((win) => {
+        if (win.maximized) updateWindow(win.id, bounds);
+      });
+    }
+    window.addEventListener("resize", handleViewportResize);
+    return () => window.removeEventListener("resize", handleViewportResize);
+  }, []);
 
   if (booting) {
     return (

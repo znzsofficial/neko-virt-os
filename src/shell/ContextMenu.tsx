@@ -7,6 +7,7 @@ import { getFileOpenApp } from "../fs";
 import { useFsStore } from "../fs";
 import { useLanguageStore } from "../languageStore";
 import { useNotificationStore } from "../notificationStore";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ContextMenuState, WorkspaceId } from "../types";
 import { useDesktopStore } from "../windowStore";
 import { useDesktopPinsStore } from "./desktopPinsStore";
@@ -45,11 +46,76 @@ export function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose
   const app = apps.find((item) => item.id === menu.id);
   const file = files.find((item) => item.id === menu.id);
   const windowState = windows.find((item) => item.id === menu.id);
-  const left = Math.min(menu.x, globalThis.window.innerWidth - 196);
-  const top = Math.min(menu.y, globalThis.window.innerHeight - 190);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  if (restoreFocusRef.current === null) {
+    restoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }
+  useEffect(() => {
+    menuRef.current?.focus({ preventScroll: true });
+    const element = restoreFocusRef.current;
+    return () => {
+      const active = document.activeElement;
+      const focusInsideMenu = active instanceof HTMLElement && menuRef.current?.contains(active);
+      if (active !== document.body && !focusInsideMenu) return;
+      element?.focus?.();
+    };
+  }, []);
+  const [position, setPosition] = useState(() => ({
+    left: Math.min(menu.x, globalThis.window.innerWidth - 196),
+    top: Math.min(menu.y, globalThis.window.innerHeight - 190),
+  }));
+  useLayoutEffect(() => {
+    const node = menuRef.current;
+    if (!node) return;
+    setPosition({
+      left: Math.max(0, Math.min(menu.x, globalThis.window.innerWidth - node.offsetWidth)),
+      top: Math.max(0, Math.min(menu.y, globalThis.window.innerHeight - node.offsetHeight)),
+    });
+  }, [menu.x, menu.y]);
 
   function run(action: () => void | Promise<void>) {
     void Promise.resolve(action()).finally(onClose);
+  }
+
+  function focusMenuItem(offset: number | "first" | "last") {
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []).filter((item) => !item.disabled);
+    if (!items.length) return;
+    const currentIndex = items.findIndex((item) => item === document.activeElement);
+    const nextIndex = offset === "first"
+      ? 0
+      : offset === "last"
+        ? items.length - 1
+        : (currentIndex + offset + items.length) % items.length;
+    items[nextIndex]?.focus();
+  }
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      focusMenuItem(1);
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      focusMenuItem(-1);
+      return;
+    }
+    if (event.key === "Home") {
+      event.preventDefault();
+      focusMenuItem("first");
+      return;
+    }
+    if (event.key === "End") {
+      event.preventDefault();
+      focusMenuItem("last");
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    }
   }
 
   async function renameFileFromMenu() {
@@ -170,8 +236,12 @@ export function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose
 
   return (
     <div
+      ref={menuRef}
       className="context-menu"
-      style={{ left, top }}
+      style={{ left: position.left, top: position.top }}
+      tabIndex={-1}
+      autoFocus
+      onKeyDown={handleMenuKeyDown}
       onMouseDown={(event) => event.stopPropagation()}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -262,6 +332,7 @@ export function ContextMenu({ menu, onClose }: { menu: ContextMenuState; onClose
             <button
               key={workspace}
               role="menuitem"
+              disabled={workspace === (windowState.workspaceId ?? 0)}
               onClick={() => run(() => moveWindowToWorkspace(windowState.id, workspace))}
             >
               <Icon icon="solar:layers-minimalistic-bold-duotone" width={16} height={16} />
