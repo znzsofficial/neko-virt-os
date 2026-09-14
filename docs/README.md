@@ -8,6 +8,7 @@
 |------|------|
 | [mmd-studio.md](./mmd-studio.md) | MMD 工作室：能力、约定、WebGL/WebGPU TSL、Gizmo、物理、后处理 |
 | [three-mmd-loader-maintenance.md](./three-mmd-loader-maintenance.md) | three-mmd-loader 本地补丁、根因、上游 Issue/PR 与升级收尾步骤 |
+| [deployment.md](./deployment.md) | Pages 部署路径与 wrangler ≥4.130 代理委托坑 |
 | [settings-roadmap.md](./settings-roadmap.md) | 系统设置分区与进度 |
 
 ## 快速约定
