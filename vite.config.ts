@@ -15,7 +15,6 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       input: {
         main: "index.html",
-        mmdVr: "mmd-vr.html",
       },
       output: {
         manualChunks(id) {

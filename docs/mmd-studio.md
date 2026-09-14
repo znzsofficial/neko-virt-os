@@ -11,8 +11,6 @@ NekoVirtOS 内的浏览器 MMD 工作台：多模型预览、动作/表情/镜�
 - **成片路径：WebGL**
 - **WebGPU：实验预览** — 官方 `@yohawing/three-mmd-loader/webgpu` **TSL pipeline**（toon + sparse morph；`pipeline.render`）；无 postprocessing / 无 WebGL map 阴影；TSL self-shadow 默认关（cast-only）
 - **后处理：WebGL-only**
-- **VR 桌面**：**不**共用本模块 WebGPU 会话；见 [vr-desktop-roadmap.md](./vr-desktop-roadmap.md)
-- **MMD VR 展示器**：独立 `mmd-vr.html` 页面、WebGL renderer 与 XR 会话；**不**从 Studio 进入或传递场景。展示器仍复用 `mmdRuntime`，但不加载 Studio Canvas / UI；见 [mmd-vr-showcase-roadmap.md](./mmd-vr-showcase-roadmap.md)
 - **依赖**：`@yohawing/three-mmd-loader@0.8.3`（mmd-anim WASM 0.5.1）；Bullet：`public/mmd/0.8.3/mmd_bullet.{js,wasm}`
 
 ### 0.7.0 注意
@@ -197,7 +195,7 @@ docs/mmd-studio.md
 - 这会持续增加显存带宽与 CPU/GPU 占用，在高 DPR、PostFX 和大型纹理包下明显降低 context-loss 余量。
 - 位置：`MmdCanvas.tsx` renderer config / `useFrame`、`mmdRuntime.ts#update`。
 - 修复方向：正常预览关闭 preserved buffer，截图走显式 render target；暂停时 demand render；仅播放、录制、物理 settling、控制器交互或动态效果时连续渲染。
-- 经验参照（MMD VR 已实现「暂停 && 物理关时跳过 `runtime.update`」，见 `MmdVrStage.tsx`）：模型异步加载期间首帧会先把 `lastEvaluatedTimeRef` 置为当前时间，若加载完成后不补一次求值，`evaluationTime` 未变 → `update` 被永久跳过 → 骨骼从未求值、材质 enhance 从未初始化；修复是在加载完成回调里把 `lastEvaluatedTimeRef` 重置为 `-Infinity` 强制下一帧求值。若未来在 Studio 做 demand-render，必须采用同样的「加载完成后标记需求值」方案。且 Studio 暂停时 morph 权重与材质 override 依赖 `update` 内 `applyMorphOverrides`/材质同步实时生效，跳过整段会破坏侧栏即时预览；若要跳过，只能在 `mmdRuntime.update` 内按「时间未变 && 物理关」跳过 WASM 骨骼求值、保留 morph/材质/相机应用。
+- 经验参照（「暂停 && 物理关时跳过 `runtime.update`」曾在 MMD VR 展示器中实现，该模块现已移出本仓库）：模型异步加载期间首帧会先把 `lastEvaluatedTimeRef` 置为当前时间，若加载完成后不补一次求值，`evaluationTime` 未变 → `update` 被永久跳过 → 骨骼从未求值、材质 enhance 从未初始化；修复是在加载完成回调里把 `lastEvaluatedTimeRef` 重置为 `-Infinity` 强制下一帧求值。若未来在 Studio 做 demand-render，必须采用同样的「加载完成后标记需求值」方案。且 Studio 暂停时 morph 权重与材质 override 依赖 `update` 内 `applyMorphOverrides`/材质同步实时生效，跳过整段会破坏侧栏即时预览；若要跳过，只能在 `mmdRuntime.update` 内按「时间未变 && 物理关」跳过 WASM 骨骼求值、保留 morph/材质/相机应用。
 
 #### 11. 录制音频 graph 和 track 没有完整释放（已确认）
 
@@ -294,5 +292,4 @@ docs/mmd-studio.md
 
 ## 相关文档
 
-- [VR 桌面](./vr-desktop-roadmap.md)  
 - [设置](./settings-roadmap.md)  

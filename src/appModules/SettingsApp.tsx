@@ -77,7 +77,6 @@ export function SettingsApp() {
   const setWidgetsCollapsed = useOsUiStore((state) => state.setWidgetsCollapsed);
   const desktopLayoutMode = useDesktopStore((state) => state.desktopLayoutMode);
   const setDesktopLayoutMode = useDesktopStore((state) => state.setDesktopLayoutMode);
-  const openApp = useDesktopStore((state) => state.openApp);
   const importInputRef = useRef<HTMLInputElement>(null);
   const networkControllerRef = useRef<AbortController | null>(null);
   const networkGenerationRef = useRef(0);
@@ -376,7 +375,7 @@ export function SettingsApp() {
     ["notifications", "notificationDndToggle"], ["notifications", "settingsDndSchedule"], ["notifications", "settingsBannerDuration"], ["notifications", "settingsNotifyCategories"],
     ["network", "settingsNetworkRunDiagnostics"], ["network", "settingsNetworkStatus"], ["network", "settingsNetworkPublicIp"],
     ["data", "settingsExport"], ["data", "settingsImport"], ["data", "clearCache"], ["data", "virtualFiles"], ["data", "siteData"],
-    ["developer", "settingsAnimationQuality"], ["developer", "settingsShowFps"], ["developer", "settingsDebugBorders"], ["developer", "settingsVrDesktop"],
+    ["developer", "settingsAnimationQuality"], ["developer", "settingsShowFps"], ["developer", "settingsDebugBorders"],
     ["about", "aboutOpenSource"], ["about", "version"], ["about", "processor"],
   ], []);
   const searchResults = filterSettingsSearch(searchItems, searchQuery, t);
@@ -496,7 +495,7 @@ export function SettingsApp() {
         ) : null}
 
         {section === "developer" ? (
-          <DeveloperSettings t={t} developerPrefs={developerPrefs} setDeveloperPrefs={setDeveloperPrefs} openApp={openApp} />
+          <DeveloperSettings t={t} developerPrefs={developerPrefs} setDeveloperPrefs={setDeveloperPrefs} />
         ) : null}
 
         {section === "about" ? (

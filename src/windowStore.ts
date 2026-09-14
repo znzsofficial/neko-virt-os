@@ -61,10 +61,6 @@ export const useDesktopStore = create<DesktopStore>()(
     desktopLayoutMode: loadDesktopLayoutMode(),
     desktopIconPositions: loadIconPositions(),
     openApp: (appId) => {
-      if (appId === "mmd-vr") {
-        window.location.assign("./mmd-vr.html");
-        return null;
-      }
       if (appId === "about") {
         requestSettingsSection("about");
       }

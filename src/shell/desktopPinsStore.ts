@@ -12,7 +12,6 @@ const DEFAULT_PINNED: AppId[] = [
   "timer",
   "palette",
   "mmd-studio",
-  "mmd-vr",
   "settings",
   "task-manager",
 ];

@@ -2,20 +2,19 @@
 
 # NekoVirtOS
 
-**A local-first browser desktop, MMD studio, and standalone WebXR showcase.**
+**A local-first browser desktop with an integrated MMD studio.**
 
 [![React 19](https://img.shields.io/badge/React-19-087ea4?logo=react&logoColor=white)](https://react.dev/)
 [![TypeScript 7](https://img.shields.io/badge/TypeScript-7-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Three.js](https://img.shields.io/badge/Three.js-WebGL-111111?logo=threedotjs&logoColor=white)](https://threejs.org/)
-[![WebXR](https://img.shields.io/badge/WebXR-Quest-5b4bdb?logo=meta&logoColor=white)](https://immersiveweb.dev/)
 [![Local First](https://img.shields.io/badge/Data-local--first-168363?logo=indexeddb&logoColor=white)](#local-data)
 [![Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-d22128?logo=apache&logoColor=white)](./LICENSE)
 
-[Live site](https://os.nekolaska.vip) · [MMD Studio guide](./docs/mmd-studio.md) · [VR roadmap](./docs/mmd-vr-showcase-roadmap.md) · [Documentation](./docs/README.md)
+[Live site](https://os.nekolaska.vip) · [MMD Studio guide](./docs/mmd-studio.md) · [Documentation](./docs/README.md)
 
 </div>
 
-NekoVirtOS combines a desktop-style local workspace with MMD production tools and an independent VR viewer. Models, motions, media, files, and UI state stay in the browser; no backend account is required.
+NekoVirtOS combines a desktop-style local workspace with MMD production tools. Models, motions, media, files, and UI state stay in the browser; no backend account is required.
 
 ## What It Includes
 
@@ -32,13 +31,7 @@ NekoVirtOS combines a desktop-style local workspace with MMD production tools an
 - Animation, camera, lighting, environment maps, post-processing, gizmos, capture, and Bullet physics.
 - WebGL production path plus the experimental WebGPU/TSL rendering path documented in the studio guide.
 
-### MMD VR Showcase
-
-- Standalone WebGL + WebXR entry designed around Meta Quest constraints.
-- In-headset HUD, quality presets, model transform controls, height adjustment, snap turning, and exposure/lighting looks.
-- Meta Quest hand tracking with articulated hands, pinch-based HUD interaction, and hand-to-model physics collision.
-- Optional controller collision, contact haptics, physics quality controls, and session-safe model disposal.
-- Independent renderer and XR session: the showcase does not load the desktop or Studio UI into VR.
+The former MMD VR showcase lives on in a separate standalone project and is not part of this repository.
 
 ## Stack
 
@@ -46,7 +39,7 @@ NekoVirtOS combines a desktop-style local workspace with MMD production tools an
 | --- | --- |
 | Application | React 19, TypeScript, Vite |
 | State and data | Zustand, Dexie, IndexedDB, localStorage |
-| 3D and XR | Three.js, React Three Fiber, React Three XR |
+| 3D | Three.js, React Three Fiber |
 | MMD | `@yohawing/three-mmd-loader`, Bullet WASM |
 | UI | Iconify, react-rnd, Noto Sans SC Variable |
 | Hosting | Cloudflare Pages |
@@ -63,7 +56,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-The development server exposes the desktop at `/` and the standalone showcase at `/mmd-vr.html`.
+The development server exposes the desktop at `/`.
 
 ## Commands
 
@@ -77,14 +70,6 @@ The development server exposes the desktop at `/` and the standalone showcase at
 | `pnpm deploy` | Build and deploy `dist` to Cloudflare Pages |
 
 CI runs a frozen install, the complete test suite, and the production build on pushes and pull requests.
-
-## WebXR Requirements
-
-- Immersive VR requires a browser and device supporting WebXR `immersive-vr`.
-- Production XR must run from a secure HTTPS origin; supported browsers generally allow `localhost` during development.
-- Quest behavior, controller haptics, tracking, thermals, and mobile GPU limits require validation on the target headset.
-- Hand tracking is requested as an optional WebXR capability. Its availability depends on the headset and browser; the in-headset HUD can enable or disable its visuals, interaction, and physics collision.
-- Desktop browser tests cannot replace headset testing. Current validation items are tracked in the [MMD VR roadmap](./docs/mmd-vr-showcase-roadmap.md).
 
 ## Local Data
 

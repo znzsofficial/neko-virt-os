@@ -11,8 +11,6 @@ import { SYSTEM_PREFS_KEY } from "./systemPrefs";
 import { THEME_STORAGE_KEY } from "./theme";
 import { DESKTOP_LAYOUT_MODE_KEY } from "./desktopPrefs";
 import { NOTIFY_PREFS_KEY, WIDGETS_KEY, WORKSPACE_KEY } from "./notificationPrefs";
-import { VR_DESKTOP_PREFS_KEY } from "../vrDesktop/vrDesktopPrefs";
-import { MMD_VR_PREFS_KEY } from "../mmdVrShowcase/mmdVrStore";
 
 const LANGUAGE_KEY = "neko-virt-os.language.v1";
 
@@ -76,54 +74,6 @@ function createBackup(): SettingsBackup {
     workspace: 2,
     widgetsCollapsed: true,
     desktopLayoutMode: "free",
-    vrDesktopPrefs: {
-      enabled: true,
-      softEdges: true,
-      renderQuality: "high",
-      showFps: true,
-      dprPref: "1.25",
-      panelScalePref: "high",
-      frameRatePref: "high",
-      antialiasPref: "on",
-      framebufferScalePref: "1",
-      foveationPref: "medium",
-      floorDetailPref: "high",
-      themeColor: "cyan",
-    },
-    mmdVrPrefs: {
-      renderQuality: "high",
-      showFps: true,
-      loop: false,
-      dprPref: "1.25",
-      frameRatePref: "120",
-      antialiasPref: "on",
-      shadowsPref: "on",
-      gridPref: "off",
-      walkSpeedPref: "fast",
-      lightPreset: "contrast",
-      framebufferScalePref: "1",
-      foveationPref: "medium",
-      shadowResolutionPref: "high",
-      heightOffset: 50,
-      viewDistance: 80,
-      snapTurnDegrees: 45,
-      exposure: 1.2,
-      stageSkyEnabled: false,
-      stageFogEnabled: false,
-      stageRimLightEnabled: false,
-      stageLightPoolEnabled: false,
-      handTracking: true,
-      advancedRenderOverrides: true,
-      detailedPhysicsDiagnostics: true,
-      panelFollowUser: true,
-      physicsColliderRadius: 0.12,
-      physicsQuality: "high",
-      physicsBoneFeedback: "hard",
-      physicsColliderFriction: "high",
-      physicsColliderRestitution: "low",
-      physicsHapticLevel: "normal",
-      physicsDynamicSelfCollision: true,
-    },
   };
 }
 
@@ -137,11 +87,6 @@ describe("settings backup v2", () => {
 
     expect({ ...collected, exportedAt: backup.exportedAt }).toEqual(backup);
     expect(storage.getItem(DESKTOP_LAYOUT_MODE_KEY)).toBe("free");
-    expect(storage.getItem(VR_DESKTOP_PREFS_KEY)).toContain('"renderQuality":"high"');
-    expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"shadowResolutionPref":"high"');
-    expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"heightOffset":50');
-    expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"snapTurnDegrees":45');
-    expect(storage.getItem(MMD_VR_PREFS_KEY)).toContain('"handTracking":true');
   });
 
   it("keeps widgets collapsed when no widget preference has been stored", () => {
@@ -158,62 +103,6 @@ describe("settings backup v2", () => {
     }), createStorage())).toThrow();
     expect(() => parseSettingsBackup(JSON.stringify({ ...backup, unexpected: true }), createStorage())).toThrow();
     expect(() => parseSettingsBackup(JSON.stringify({ ...backup, version: 3 }), createStorage())).toThrow();
-  });
-
-  it("defaults newly optional MMD VR fields", () => {
-    const backup = createBackup();
-    const { themeColor: _desktopTheme, ...vrDesktopPrefs } = backup.vrDesktopPrefs;
-    const {
-      snapTurnDegrees: _snapTurnDegrees,
-      exposure: _exposure,
-      stageSkyEnabled: _stageSkyEnabled,
-      stageFogEnabled: _stageFogEnabled,
-      stageRimLightEnabled: _stageRimLightEnabled,
-      stageLightPoolEnabled: _stageLightPoolEnabled,
-      ...mmdVrPrefs
-    } = backup.mmdVrPrefs;
-    const parsed = parseSettingsBackup(JSON.stringify({ ...backup, vrDesktopPrefs, mmdVrPrefs }), createStorage());
-
-    expect(parsed.mmdVrPrefs.snapTurnDegrees).toBe(30);
-    expect(parsed.mmdVrPrefs.exposure).toBe(1);
-    expect(parsed.mmdVrPrefs).toMatchObject({
-      stageSkyEnabled: true,
-      stageFogEnabled: true,
-      stageRimLightEnabled: true,
-      stageLightPoolEnabled: true,
-    });
-  });
-
-  it("round-trips independent MMD VR visual switches", () => {
-    const backup = createBackup();
-    backup.mmdVrPrefs.stageRimLightEnabled = false;
-    backup.mmdVrPrefs.stageLightPoolEnabled = true;
-
-    const parsed = parseSettingsBackup(JSON.stringify(backup), createStorage());
-
-    expect(parsed.mmdVrPrefs).toMatchObject({
-      lightPreset: "contrast",
-      stageRimLightEnabled: false,
-      stageLightPoolEnabled: true,
-    });
-  });
-
-  it("migrates legacy MMD VR refresh tiers without changing VR Desktop preferences", () => {
-    const backup = createBackup();
-    const {
-      advancedRenderOverrides: _advancedRenderOverrides,
-      detailedPhysicsDiagnostics: _detailedPhysicsDiagnostics,
-      ...mmdVrPrefs
-    } = backup.mmdVrPrefs;
-    const parsed = parseSettingsBackup(JSON.stringify({
-      ...backup,
-      mmdVrPrefs: { ...mmdVrPrefs, frameRatePref: "mid" },
-    }), createStorage());
-
-    expect(parsed.mmdVrPrefs.frameRatePref).toBe("90");
-    expect(parsed.mmdVrPrefs.advancedRenderOverrides).toBe(false);
-    expect(parsed.mmdVrPrefs.detailedPhysicsDiagnostics).toBe(false);
-    expect(parsed.vrDesktopPrefs.frameRatePref).toBe("high");
   });
 
   it("migrates v1 by merging missing fields from current preferences", () => {
@@ -235,7 +124,6 @@ describe("settings backup v2", () => {
     expect(migrated.notificationPrefs.categories.system).toBe(false);
     expect(migrated.notificationPrefs.categories.files).toBe(current.notificationPrefs.categories.files);
     expect(migrated.desktopLayoutMode).toBe("free");
-    expect(migrated.vrDesktopPrefs).toEqual(current.vrDesktopPrefs);
   });
 
   it("rolls back all target keys when a write fails", () => {
@@ -248,8 +136,6 @@ describe("settings backup v2", () => {
       [WORKSPACE_KEY]: "0",
       [WIDGETS_KEY]: "0",
       [DESKTOP_LAYOUT_MODE_KEY]: "grid",
-      [VR_DESKTOP_PREFS_KEY]: "old-vr",
-      [MMD_VR_PREFS_KEY]: "old-mmd-vr",
     };
     const storage = createStorage(original, 5);
 

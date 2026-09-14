@@ -13,19 +13,6 @@ import {
   normalizeDesktopLayoutMode,
 } from "./desktopPrefs";
 import {
-  VR_DESKTOP_PREFS_KEY,
-  VR_DESKTOP_PREFS_LEGACY_KEY,
-  normalizeVrDesktopPrefs,
-  type VrDesktopPrefs,
-} from "../vrDesktop/vrDesktopPrefs";
-import {
-  MMD_VR_PREFS_KEY,
-  MMD_VR_PREFS_LEGACY_KEY,
-  normalizeMmdVrFrameRate,
-  normalizeMmdVrPrefs,
-  type MmdVrPrefs,
-} from "../mmdVrShowcase/mmdVrStore";
-import {
   DEVELOPER_PREFS_KEY,
   applyDeveloperPrefs,
   normalizeDeveloperPrefs,
@@ -89,56 +76,6 @@ const systemPrefsSchema = z.strictObject({
   taskbarAutoHide: z.boolean(),
 });
 
-const vrDesktopPrefsSchema = z.strictObject({
-  enabled: z.boolean(),
-  softEdges: z.boolean(),
-  renderQuality: z.enum(["high", "balanced", "low"]),
-  showFps: z.boolean(),
-  dprPref: z.enum(["auto", "1", "1.25", "1.5"]),
-  panelScalePref: z.enum(["auto", "low", "medium", "high"]),
-  frameRatePref: z.enum(["auto", "high", "mid", "low"]),
-  antialiasPref: z.enum(["auto", "on", "off"]),
-  framebufferScalePref: z.enum(["auto", "0.7", "0.85", "1"]).default("auto"),
-  foveationPref: z.enum(["auto", "off", "medium", "high"]).default("auto"),
-  floorDetailPref: z.enum(["auto", "low", "medium", "high"]).default("auto"),
-  themeColor: z.enum(["blue", "cyan", "purple", "green", "red"]).default("blue"),
-});
-
-const mmdVrPrefsSchema = z.strictObject({
-  renderQuality: z.enum(["high", "balanced", "low"]),
-  showFps: z.boolean(),
-  loop: z.boolean(),
-  dprPref: z.enum(["auto", "1", "1.25", "1.5"]),
-  frameRatePref: z.enum(["auto", "72", "80", "90", "120", "high", "mid", "low"]).transform(normalizeMmdVrFrameRate),
-  antialiasPref: z.enum(["auto", "on", "off"]),
-  shadowsPref: z.enum(["auto", "on", "off"]),
-  gridPref: z.enum(["auto", "on", "off"]),
-  walkSpeedPref: z.enum(["auto", "slow", "normal", "fast"]),
-  lightPreset: z.enum(["stage", "soft", "contrast", "daylight", "warm", "rim"]),
-  framebufferScalePref: z.enum(["auto", "0.7", "0.85", "1"]),
-  foveationPref: z.enum(["auto", "off", "medium", "high"]),
-  shadowResolutionPref: z.enum(["auto", "low", "medium", "high"]),
-  heightOffset: z.number().min(-5).max(50).default(0),
-  viewDistance: z.number().min(10).max(100).default(40),
-  snapTurnDegrees: z.union([z.literal(15), z.literal(30), z.literal(45)]).default(30),
-  exposure: z.number().min(0.7).max(1.3).default(1),
-  stageSkyEnabled: z.boolean().default(true),
-  stageFogEnabled: z.boolean().default(true),
-  stageRimLightEnabled: z.boolean().optional(),
-  stageLightPoolEnabled: z.boolean().optional(),
-  handTracking: z.boolean().default(true),
-  advancedRenderOverrides: z.boolean().default(false),
-  detailedPhysicsDiagnostics: z.boolean().default(false),
-  panelFollowUser: z.boolean().default(true),
-  physicsColliderRadius: z.number().refine((value) => [0.04, 0.08, 0.12, 0.16].includes(value)).default(0.08),
-  physicsQuality: z.enum(["low", "medium", "high"]).default("medium"),
-  physicsBoneFeedback: z.enum(["soft", "normal", "hard"]).default("normal"),
-  physicsColliderFriction: z.enum(["low", "medium", "high"]).default("medium"),
-  physicsColliderRestitution: z.enum(["none", "low", "high"]).default("none"),
-  physicsHapticLevel: z.enum(["off", "low", "normal"]).default("low"),
-  physicsDynamicSelfCollision: z.boolean().default(false),
-}).transform((prefs) => normalizeMmdVrPrefs(prefs));
-
 const settingsBackupV2Schema = z.strictObject({
   version: z.literal(SETTINGS_BACKUP_VERSION),
   exportedAt: z.number().int().nonnegative(),
@@ -150,8 +87,6 @@ const settingsBackupV2Schema = z.strictObject({
   workspace: z.union([z.literal(0), z.literal(1), z.literal(2)]),
   widgetsCollapsed: z.boolean(),
   desktopLayoutMode: z.enum(["grid", "free"]),
-  vrDesktopPrefs: vrDesktopPrefsSchema,
-  mmdVrPrefs: mmdVrPrefsSchema.default(() => normalizeMmdVrPrefs()),
 });
 
 const settingsBackupV1Schema = z.looseObject({
@@ -177,8 +112,6 @@ export type SettingsBackup = {
   workspace: WorkspaceId;
   widgetsCollapsed: boolean;
   desktopLayoutMode: DesktopLayoutMode;
-  vrDesktopPrefs: VrDesktopPrefs;
-  mmdVrPrefs: MmdVrPrefs;
 };
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -207,16 +140,6 @@ function readNotificationPrefs(storage: StorageLike) {
   return normalizeNotificationPrefs(value && typeof value === "object" ? value : {});
 }
 
-function readVrDesktopPrefs(storage: StorageLike) {
-  const value = parseJson(storage, VR_DESKTOP_PREFS_KEY) ?? parseJson(storage, VR_DESKTOP_PREFS_LEGACY_KEY);
-  return normalizeVrDesktopPrefs(value && typeof value === "object" ? value : {});
-}
-
-function readMmdVrPrefs(storage: StorageLike) {
-  const value = parseJson(storage, MMD_VR_PREFS_KEY) ?? parseJson(storage, MMD_VR_PREFS_LEGACY_KEY);
-  return normalizeMmdVrPrefs(value && typeof value === "object" ? value : {});
-}
-
 export function collectSettingsBackup(storage: StorageLike = localStorage): SettingsBackup {
   const themeValue = parseJson(storage, THEME_STORAGE_KEY);
   const developerValue = parseJson(storage, DEVELOPER_PREFS_KEY);
@@ -240,8 +163,6 @@ export function collectSettingsBackup(storage: StorageLike = localStorage): Sett
     // user opts in. Preserve an explicit stored value during backup/export.
     widgetsCollapsed: storage.getItem(WIDGETS_KEY) !== "0",
     desktopLayoutMode: normalizeDesktopLayoutMode(storage.getItem(DESKTOP_LAYOUT_MODE_KEY)),
-    vrDesktopPrefs: readVrDesktopPrefs(storage),
-    mmdVrPrefs: readMmdVrPrefs(storage),
   };
 }
 
@@ -303,8 +224,6 @@ const targetKeys = [
   WORKSPACE_KEY,
   WIDGETS_KEY,
   DESKTOP_LAYOUT_MODE_KEY,
-  VR_DESKTOP_PREFS_KEY,
-  MMD_VR_PREFS_KEY,
 ] as const;
 
 export function applySettingsBackup(
@@ -323,8 +242,6 @@ export function applySettingsBackup(
     [WORKSPACE_KEY, String(validated.workspace)],
     [WIDGETS_KEY, validated.widgetsCollapsed ? "1" : "0"],
     [DESKTOP_LAYOUT_MODE_KEY, validated.desktopLayoutMode],
-    [VR_DESKTOP_PREFS_KEY, JSON.stringify(validated.vrDesktopPrefs)],
-    [MMD_VR_PREFS_KEY, JSON.stringify(validated.mmdVrPrefs)],
   ]);
 
   try {

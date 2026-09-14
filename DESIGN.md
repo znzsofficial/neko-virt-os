@@ -105,7 +105,7 @@ NekoVirtOS is a browser-based local workstation. Its desktop grammar is Windows-
 
 The current visual system is an operational 2D shell, not a marketing page. It uses a cool near-neutral architectural base, a user-selectable system accent, compact controls, and restrained layering. Solid tonal surfaces carry application work; translucency and blur are reserved for shell flyouts, the taskbar, the launcher, and other surfaces whose relationship to the desktop matters.
 
-The first version supports responsive browser layouts, but it remains a desktop interaction model. A separate MMD VR preparation page and WebGL/WebXR session are intentionally outside this system and must not inherit the 2D desktop material layer.
+The first version supports responsive browser layouts, but it remains a desktop interaction model.
 
 ### Current Scope
 
@@ -113,7 +113,7 @@ The first version supports responsive browser layouts, but it remains a desktop 
 - The taskbar defaults to icons only for new users; labels remain available as a persisted setting.
 - Desktop widgets are optional and default to collapsed; they can be enabled from Settings.
 - Desktop layout switching is available from the desktop context menu and Settings, not as permanent desktop chrome.
-- The control center exposes immediate notification state, workspaces, notifications, Settings, VR entry, MMD VR entry, and lock actions. Theme and density remain in Settings.
+- The control center exposes immediate notification state, workspaces, notifications, Settings, and lock actions. Theme and density remain in Settings.
 
 ### Planned Phases
 
@@ -125,8 +125,6 @@ The first version supports responsive browser layouts, but it remains a desktop 
 ## Colors
 
 The working palette is low-chroma neutral surfaces plus one active system accent. The default accent is coral; users can select other accent families, and the theme module recomputes both the primary state tokens and the neutral surface hue for light or dark mode.
-
-The MMD VR preparation page uses this same system accent as its source of truth. Its preparation swatches update the shared accent setting, while the WebGL/WebXR HUD and stage derive a Quest-safe palette from that setting. The XR session, layout, lighting presets, and performance controls remain independent of the 2D desktop shell.
 
 ### Primary
 
@@ -245,7 +243,7 @@ The desktop contains wallpaper, left-aligned icons, optional files, selection fe
 
 ### Control Center
 
-The control center is a single neutral flyout. Immediate state is limited to Do Not Disturb and workspace selection. Theme and density are Settings concerns. Secondary rows link to notification history, Settings, optional VR Desktop, the independent MMD VR page, and session lock.
+The control center is a single neutral flyout. Immediate state is limited to Do Not Disturb and workspace selection. Theme and density are Settings concerns. Secondary rows link to notification history, Settings, and session lock.
 
 ### Settings
 
@@ -257,10 +255,8 @@ Settings is a continuous working surface with a compact navigation rail, search,
 
 - **Do** use Windows desktop syntax for the default 2D shell: Start, taskbar, tray, titlebar controls, snap actions, and context menus.
 - **Do** keep shell surfaces neutral and use the selected accent for actions, focus, selection, and small markers.
-- **Do** let the MMD VR preparation swatches edit the shared system accent; the MMD WebGL HUD and stage should follow it without importing desktop window, taskbar, or launcher chrome.
 - **Do** preserve visible focus, keyboard window switching, reduced-motion behavior, and large-target accessibility settings.
 - **Do** keep wallpaper asynchronous work generation-safe and make the currently displayed wallpaper explicit in persisted settings.
-- **Do** keep the MMD VR page and WebXR session isolated from desktop shell CSS and state.
 - **Do** expose optional widgets and taskbar labels as user preferences instead of forcing dashboard content into the default desktop.
 
 ### Don't:
@@ -270,4 +266,4 @@ Settings is a continuous working surface with a compact navigation rail, search,
 - **Don't** use multi-color gradient cards as the default control-center or application-surface language.
 - **Don't** let wallpaper or translucent shell material bleed into Settings or ordinary working panels.
 - **Don't** present the responsive desktop adaptation as an iPadOS/touch mode until the interaction model changes to full-screen apps and touch-first multitasking.
-- **Don't** move application logic, filesystem behavior, MMD Studio, or the independent MMD VR entry into the desktop material layer merely to achieve visual consistency.
+- **Don't** move application logic, filesystem behavior, or MMD Studio into the desktop material layer merely to achieve visual consistency.

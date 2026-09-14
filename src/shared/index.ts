@@ -51,21 +51,6 @@ export {
 } from "./browser/storage";
 
 export {
-  createLocalPrefsStorage,
-  type LocalPrefsOptions,
-  type LocalPrefsStorage,
-} from "./localPrefs";
-
-export {
-  createPanelTexture,
-  hitTestByUv,
-  paintFpsBadge,
-  paintSecondaryButton,
-  roundRectPath,
-  type PanelPaintContext,
-} from "./panelTexture";
-
-export {
   getPendingTasks,
   readTasks,
   writeTasks,

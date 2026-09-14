@@ -112,9 +112,6 @@
 |------|------|------|
 | Controller collider wrapper | `src/appModules/mmdStudio/mmdPhysics.ts` | 向物理 context 追加控制器刚体，读取 contact 并区分左右控制器 |
 | Contact / backend 回归测试 | `src/appModules/mmdStudio/mmdPhysics.test.ts` | 覆盖 direct buffers、contact forwarding、contact 上限和 patched backend 行为 |
-| VR 触觉状态 | `src/mmdVrShowcase/mmdVrHaptics.ts` | 管理左右手接触、震动强度和 gate |
-| 触觉执行 | `src/mmdVrShowcase/components/MmdVrControllerColliders.tsx` | 驱动 WebXR haptic actuator |
-| VR contact 采样 | `src/mmdVrShowcase/components/MmdVrStage.tsx` | 从物理 backend 采样 controller contact |
 | Unit-scale physics step | `src/appModules/mmdStudio/mmdRuntime.ts`、`mmdRuntimeEntry.ts` | 模型显示缩放与 PMX 原尺寸物理 world 的集成处理 |
 
 ### 受控的物理重建
@@ -252,7 +249,7 @@
 ```bash
 pnpm install --frozen-lockfile
 pnpm exec tsc -b --pretty false
-pnpm test -- src/appModules/mmdStudio/mmdPhysics.test.ts src/mmdVrShowcase/mmdVrHaptics.test.ts src/mmdVrShowcase/mmdVrStore.test.ts src/appModules/mmdStudio/mmdRuntime.test.ts
+pnpm test -- src/appModules/mmdStudio/mmdPhysics.test.ts src/appModules/mmdStudio/mmdRuntime.test.ts
 pnpm test
 pnpm build
 git diff --check

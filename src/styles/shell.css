@@ -1066,10 +1066,6 @@ html[data-high-contrast="on"] .control-center-panel {
   pointer-events: none;
   backdrop-filter: blur(8px);
 }
-.os.is-vr-desktop {
-  /* Keep shell mounted but non-interactive under the XR overlay. */
-  pointer-events: none;
-}
 @media (prefers-reduced-motion: reduce) {
   .system-window,
   .system-window .window-frame,
