@@ -31,8 +31,6 @@ NekoVirtOS combines a desktop-style local workspace with MMD production tools. M
 - Animation, camera, lighting, environment maps, post-processing, gizmos, capture, and Bullet physics.
 - WebGL production path plus the experimental WebGPU/TSL rendering path documented in the studio guide.
 
-The former MMD VR showcase lives on in a separate standalone project and is not part of this repository.
-
 ## Stack
 
 | Area | Technology |
