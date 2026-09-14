@@ -29,7 +29,7 @@ pnpm deploy
 - Keep the loader entry in `pnpm-workspace.yaml` and `patches/@yohawing__three-mmd-loader@0.8.3.patch`. The published package still lacks `debugPhysicsContactsForRigidBodyRange()`; the patch filters the native debug contact buffer by rigid-body range and is required for Studio controller contact diagnostics.
 - When upgrading the loader, follow `docs/three-mmd-loader-maintenance.md`: verify upstream API coverage, update versioned assets and notices/docs, run `pnpm install`, then rerun focused physics tests, the full suite, TypeScript, and the build. Do not remove the patch merely because the upstream version changed.
 - The loader clone at `E:\WebProjects\three-mmd-loader` uses npm and `package-lock.json`; do not use pnpm there.
-- `mediabunny` is currently `^1.55.3`; WebCodecs export uses `Quality({ bitrate })`, not a top-level bitrate option.
+- `mediabunny` is currently `^1.56.2`; WebCodecs export uses `Quality({ bitrate })`, not a top-level bitrate option.
 
 ## Studio Physics And Controller Invariants
 

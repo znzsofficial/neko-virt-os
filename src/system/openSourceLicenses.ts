@@ -7,8 +7,8 @@ export type OpenSourcePackage = {
 };
 
 export const OPEN_SOURCE_PACKAGES: readonly OpenSourcePackage[] = [
-  { name: "react", version: "19.2.8", license: "MIT" },
-  { name: "react-dom", version: "19.2.8", license: "MIT" },
+  { name: "react", version: "19.3.0", license: "MIT" },
+  { name: "react-dom", version: "19.3.0", license: "MIT" },
   { name: "three", version: "0.186.0", license: "MIT" },
   { name: "@react-three/fiber", version: "9.7.0", license: "MIT" },
   { name: "@react-three/drei", version: "10.7.8", license: "MIT" },
@@ -16,7 +16,7 @@ export const OPEN_SOURCE_PACKAGES: readonly OpenSourcePackage[] = [
   { name: "postprocessing", version: "6.39.5", license: "Zlib" },
   { name: "@yohawing/three-mmd-loader", version: "0.8.3", license: "MIT" },
   { name: "@fontsource-variable/noto-sans-sc", version: "5.3.0", license: "OFL-1.1", note: "Noto Sans SC by Google" },
-  { name: "mediabunny", version: "1.55.3", license: "MPL-2.0" },
+  { name: "mediabunny", version: "1.56.2", license: "MPL-2.0" },
   { name: "zustand", version: "5.0.15", license: "MIT" },
   { name: "dexie", version: "4.4.6", license: "Apache-2.0" },
   { name: "zod", version: "4.6.4", license: "MIT" },
