@@ -23,10 +23,10 @@ index 75621cc232d2eeaee3bd133886ef0f7075e31dca..69fb6a232f34db90ddb7b1abcbfb455b
 +    }
  }
 diff --git a/dist/physics/mmdAnimBullet.d.ts b/dist/physics/mmdAnimBullet.d.ts
-index a72d76137c529c8aeefcf15d1d30b421fdbd16f6..47fd83d4b29150bcd0bf826cb1f36b8dfe664d33 100644
+index cfc853282900018d84687bbcf5a40b20dfba95f9..30edcc5e02093852fd9da914979e717ad34e602f 100644
 --- a/dist/physics/mmdAnimBullet.d.ts
 +++ b/dist/physics/mmdAnimBullet.d.ts
-@@ -30,6 +30,7 @@ export interface MmdAnimBulletContactPoint {
+@@ -44,6 +44,7 @@ export interface MmdAnimBulletContactPoint {
  export interface MmdAnimBulletPhysicsBackend extends MmdPhysicsBackend {
      debugContactCount(): number;
      debugPhysicsContacts(): readonly MmdAnimBulletContactPoint[];
@@ -84,3 +84,36 @@ index 35ad7804839e458df2f66bb413622f48815ead55..aecb4897f0fa360a682e2f33d83be0ab
      ensureModel(context) {
          const bodies = context.rigidBodies;
          if (!bodies)
+diff --git a/dist/webgpu/self-shadow-pass.js b/dist/webgpu/self-shadow-pass.js
+index 81417e6443d0fbce5d857dd81e4f26a03997e2d5..d7dfdbe05ed655616df23f887ecb3f6803607cd1 100644
+--- a/dist/webgpu/self-shadow-pass.js
++++ b/dist/webgpu/self-shadow-pass.js
+@@ -1,5 +1,5 @@
+ import * as THREE from "three/webgpu";
+-import { getShadowMaterial, getShadowRenderObjectFunction, vec3 } from "three/tsl";
++import { vec3 } from "three/tsl";
+ import { MMD_SELF_SHADOW_LAYER } from "../three/shadow.js";
+ import { createMmdTslShadowVisibilityNode } from "./shadow-visibility.js";
+ /**
+@@ -27,14 +27,19 @@ export function createMmdTslSelfShadowPass(renderer, light) {
+     const reversedDepth = renderer.reversedDepthBuffer === true;
+     const visibilityNode = createMmdTslShadowVisibilityNode(light, depthTexture, { reversedDepth });
+     const shadowModeUniform = visibilityNode.mmdTslShadowMode;
+-    const shadowMaterial = getShadowMaterial(light);
+-    const shadowRenderObjectFunction = getShadowRenderObjectFunction(renderer, light.shadow, renderer.shadowMap.type, false);
++    // three r186 internalized getShadowMaterial/getShadowRenderObjectFunction
++    // (no public replacement). NekoVirtOS keeps TSL self-shadow disabled, and the
++    // pass degrades to a no-op below when these handles are unavailable.
++    const shadowMaterial = null;
++    const shadowRenderObjectFunction = null;
+     const rendererState = { clearColor: new THREE.Color() };
+     const resetRendererAndSceneState = THREE.RendererUtils.resetRendererAndSceneState;
+     const restoreRendererAndSceneState = THREE.RendererUtils.restoreRendererAndSceneState;
+     let disposed = false;
+     function prepareShadowRender(currentRenderer, scene, currentLight) {
+         if (disposed ||
++            !shadowMaterial ||
++            !shadowRenderObjectFunction ||
+             currentRenderer !== renderer ||
+             currentLight !== light ||
+             currentLight.castShadow !== true) {

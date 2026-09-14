@@ -22,9 +22,9 @@
 - `@yohawing/three-mmd-loader@0.8.3`
 - `mmd-anim WASM 0.5.1`
 - Bullet 运行资产：`public/mmd/0.8.3/mmd_bullet.js`、`public/mmd/0.8.3/mmd_bullet.wasm`；版本化目录保证 ABI 配套的 JS/WASM 同步更新
-- pnpm patch：`patches/@yohawing__three-mmd-loader@0.8.3.patch`（仅保留 rigid-body range contact 查询）
+- pnpm patch：`patches/@yohawing__three-mmd-loader@0.8.3.patch`（rigid-body range contact 查询 + three r186 TSL self-shadow 兼容降级，见下文）
 - `pnpm-workspace.yaml` 中的 `patchedDependencies` 负责应用补丁
-- 当前 lockfile patch hash：`e7a769fb2ed8b60ecdd5edf97dc0eb28df96a7f844e94114a580287251fe887e`
+- 当前 lockfile patch hash：`a5b0eff3a72c54ca4776e77506eacd9496b41f2167766998a467465e1d6c8f95`
 
 上游仓库提交了 `package-lock.json`，其开发文档和 CI 均使用 npm。不要在 `E:\WebProjects\three-mmd-loader` 中使用 pnpm 更新依赖或 lockfile。NekoVirtOS 仍使用 pnpm。
 
@@ -226,6 +226,24 @@
 - 生产 controller wrapper 现在写入矩阵前归一化前三列，保留模型空间平移和旋转方向，只移除 scale。controller sphere 半径仍独立通过 `/ modelScale` 换算，因此碰撞体大小和位置语义不变。
 - 最终真机确认：正常生产模式下复杂模型缩放、裙子下落、主动控制器碰撞、contact 计数和震动均正常。
 - 该问题属于 NekoVirtOS controller integration，不应混入 loader PR #38 或 PR #40。
+
+## 已解决：three r186 与 loader WebGPU self-shadow 的 TSL 兼容
+
+### 背景
+
+- NekoVirtOS 于 2026-09-14 将 three 从 0.185.1 升级到 0.186.0，以获得 WebXR MSAA（`WebGLRenderer` 以 `antialias: true` 创建时，r186 会在 WebGL2 的 `XRProjectionLayer` 上自动设置 MSAA samples，与既有 `antialiasPref` 偏好轴直接配合）。
+- r186 将 `getShadowMaterial()` / `getShadowRenderObjectFunction()` 从 `three/tsl` 公共导出中移除并私有化（`_getShadowMaterial` 等，无公开替代）。
+- loader 0.8.3 的 `dist/webgpu/self-shadow-pass.js`（实验性 TSL self-shadow，NekoVirtOS 策略强制关闭）静态导入这两个符号，导致 rolldown 构建报 `MISSING_EXPORT`。
+
+### 补丁语义
+
+- patch 追加 `self-shadow-pass.js` 修改：移除两个失效导入，`shadowMaterial` / `shadowRenderObjectFunction` 置 `null`，并在 `prepareShadowRender()` 的早退守卫中加入非空检查。
+- 降级行为：pass 的 `render()` / `compileAsync()` 返回 `false`，`setMode` / `visibilityNode` / `dispose` 仍可用；`pipeline.js` 对 pass 的全部调用点本就接受 `false` / optional chaining，且仅当 `needsSelfShadowVisibility` 为真时才创建 pass。
+- NekoVirtOS 的 Studio 策略是 TSL self-shadow 恒为关（`mmdRuntime.ts` / `mmdTslPipeline.ts`），因此该降级对当前产品面无行为差异；仅当上游跟进 r186 后才恢复完整 self-shadow 能力。
+
+### 后续
+
+- 上游发布适配 three r186 的版本（或恢复 TSL shadow 公共导出）后，移除补丁中的 self-shadow 段落并重跑本文验证命令。
 
 ## 已执行验证
 
