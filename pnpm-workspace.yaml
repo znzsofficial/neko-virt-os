@@ -3,10 +3,8 @@ minimumReleaseAgeExclude:
   - '@types/react-dom@19.2.5'
   - mediabunny@1.55.3
   - vite@8.2.2
-  - '@yohawing/three-mmd-loader@0.8.2'
+  - '@yohawing/three-mmd-loader@0.8.3'
   - nanoid@6.0.1
-  - dompurify@3.4.14
-  - marked@18.0.11
 patchedDependencies:
   '@pmndrs/xr@6.6.30': patches/@pmndrs__xr@6.6.30.patch
-  '@yohawing/three-mmd-loader@0.8.2': patches/@yohawing__three-mmd-loader@0.8.2.patch
+  '@yohawing/three-mmd-loader@0.8.3': patches/@yohawing__three-mmd-loader@0.8.3.patch
