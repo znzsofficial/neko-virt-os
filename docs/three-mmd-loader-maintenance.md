@@ -19,10 +19,10 @@
 
 当前 NekoVirtOS 依赖：
 
-- `@yohawing/three-mmd-loader@0.8.2`
-- `mmd-anim WASM 0.4.1`
-- Bullet 运行资产：`public/mmd/0.8.2/mmd_bullet.js`、`public/mmd/0.8.2/mmd_bullet.wasm`；版本化目录保证 ABI 配套的 JS/WASM 同步更新
-- pnpm patch：`patches/@yohawing__three-mmd-loader@0.8.2.patch`（仅保留 rigid-body range contact 查询）
+- `@yohawing/three-mmd-loader@0.8.3`
+- `mmd-anim WASM 0.5.1`
+- Bullet 运行资产：`public/mmd/0.8.3/mmd_bullet.js`、`public/mmd/0.8.3/mmd_bullet.wasm`；版本化目录保证 ABI 配套的 JS/WASM 同步更新
+- pnpm patch：`patches/@yohawing__three-mmd-loader@0.8.3.patch`（仅保留 rigid-body range contact 查询）
 - `pnpm-workspace.yaml` 中的 `patchedDependencies` 负责应用补丁
 - 当前 lockfile patch hash：`e7a769fb2ed8b60ecdd5edf97dc0eb28df96a7f844e94114a580287251fe887e`
 
@@ -298,9 +298,13 @@ git push fork main
 ### 0.8.2 升级结果
 
 - 2026-08-17 的 `v0.8.2` 已包含 PR #38 和 PR #40。
-- NekoVirtOS 已升级到 `@yohawing/three-mmd-loader@0.8.2`，并替换 `public/mmd/0.8.2/` 的配套 Bullet JS/WASM。
-- 官方包仍没有 `debugPhysicsContactsForRigidBodyRange()`，因此 0.8.2 patch 只保留这一项 JS 过滤。
-- 上游若发布带 range query 的新版本，再删除 `patchedDependencies` 条目和 `patches/@yohawing__three-mmd-loader@0.8.2.patch`。
+
+### 0.8.3 升级结果
+
+- 2026-09-13 的 `v0.8.3` 新增 `MmdAnimRuntime.setHostRig`/`setHostPose` retarget、外部世界矩阵物理回调，修复清空 host rig 后外部物理绑定，并升级 mmd-anim 至 0.5.1。NekoVirtOS 目前未使用这些新 API。
+- NekoVirtOS 已升级到 `@yohawing/three-mmd-loader@0.8.3`，并替换 `public/mmd/0.8.3/` 的配套 Bullet JS/WASM。0.8.3 的 WASM 与 0.8.2 不同（Rust 1.88.0 构建）。
+- 官方包仍没有 `debugPhysicsContactsForRigidBodyRange()`（已核对 0.8.3 发布包），因此 patch 只保留这一项 JS 过滤；patch 触及的 physics 文件在 0.8.2 与 0.8.3 间上下文一致，仅重命名沿用。
+- 上游若发布带 range query 的新版本，再删除 `patchedDependencies` 条目和 `patches/@yohawing__three-mmd-loader@0.8.3.patch`。
 
 ### 新版本发布后
 

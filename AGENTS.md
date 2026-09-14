@@ -26,9 +26,9 @@ pnpm deploy
 
 ## MMD Loader And Assets
 
-- The runtime is pinned to `@yohawing/three-mmd-loader@0.8.2`.
-- Keep the matching Bullet files in `public/mmd/0.8.2/mmd_bullet.js` and `public/mmd/0.8.2/mmd_bullet.wasm`, and keep the path in `src/appModules/mmdStudio/mmdPhysics.ts` synchronized.
-- Keep the loader entry in `pnpm-workspace.yaml` and `patches/@yohawing__three-mmd-loader@0.8.2.patch`. The published package still lacks `debugPhysicsContactsForRigidBodyRange()`; the patch filters the native debug contact buffer by rigid-body range and is required for controller/hand contact diagnostics and haptics.
+- The runtime is pinned to `@yohawing/three-mmd-loader@0.8.3`.
+- Keep the matching Bullet files in `public/mmd/0.8.3/mmd_bullet.js` and `public/mmd/0.8.3/mmd_bullet.wasm`, and keep the path in `src/appModules/mmdStudio/mmdPhysics.ts` synchronized.
+- Keep the loader entry in `pnpm-workspace.yaml` and `patches/@yohawing__three-mmd-loader@0.8.3.patch`. The published package still lacks `debugPhysicsContactsForRigidBodyRange()`; the patch filters the native debug contact buffer by rigid-body range and is required for controller/hand contact diagnostics and haptics.
 - When upgrading the loader, follow `docs/three-mmd-loader-maintenance.md`: verify upstream API coverage, update versioned assets and notices/docs, run `pnpm install`, then rerun focused physics/haptics tests, the full suite, TypeScript, and the build. Do not remove the patch merely because the upstream version changed.
 - The loader clone at `E:\WebProjects\three-mmd-loader` uses npm and `package-lock.json`; do not use pnpm there.
 - `mediabunny` is currently `^1.55.3`; WebCodecs export uses `Quality({ bitrate })`, not a top-level bitrate option.

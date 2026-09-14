@@ -4,7 +4,7 @@ This file records notices for third-party code copied into the repository rather
 
 ## @yohawing/three-mmd-loader
 
-The files `public/mmd/0.8.2/mmd_bullet.js` and `public/mmd/0.8.2/mmd_bullet.wasm` are distributed from `@yohawing/three-mmd-loader` version 0.8.2.
+The files `public/mmd/0.8.3/mmd_bullet.js` and `public/mmd/0.8.3/mmd_bullet.wasm` are distributed from `@yohawing/three-mmd-loader` version 0.8.3.
 
 MIT License
 

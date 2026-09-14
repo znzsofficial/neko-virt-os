@@ -463,6 +463,10 @@ describe("patched mmd-anim Bullet backend", () => {
         return pointer;
       },
       _free: () => undefined,
+      _mmd_anim_bullet_get_version: () => 0,
+      _mmd_anim_bullet_get_last_error: () => 0,
+      _mmd_anim_bullet_world_get_gravity: () => 0,
+      _mmd_anim_bullet_world_set_gravity: () => 0,
       _mmd_anim_bullet_world_create: (outWorld: number) => {
         heapU32[outWorld >>> 2] = 1;
         return 0;
@@ -526,6 +530,10 @@ describe("patched mmd-anim Bullet backend", () => {
         return pointer;
       },
       _free: () => undefined,
+      _mmd_anim_bullet_get_version: () => 0,
+      _mmd_anim_bullet_get_last_error: () => 0,
+      _mmd_anim_bullet_world_get_gravity: () => 0,
+      _mmd_anim_bullet_world_set_gravity: () => 0,
       _mmd_anim_bullet_world_create: (outWorld: number) => {
         heapU32[outWorld >>> 2] = 1;
         return 0;
@@ -582,6 +590,10 @@ describe("patched mmd-anim Bullet backend", () => {
         return pointer;
       },
       _free: () => undefined,
+      _mmd_anim_bullet_get_version: () => 0,
+      _mmd_anim_bullet_get_last_error: () => 0,
+      _mmd_anim_bullet_world_get_gravity: () => 0,
+      _mmd_anim_bullet_world_set_gravity: () => 0,
       _mmd_anim_bullet_world_create: (outWorld: number) => {
         heapU32[outWorld >>> 2] = 1;
         return 0;
